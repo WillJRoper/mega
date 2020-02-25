@@ -1218,6 +1218,11 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
                             # Reassign the IDs such that they are sequential for halos with 10 or more particles
                             part_haloids[halo_pids[subhalo_pids], 1] = sub_newID
 
+                            if subhalo_energy > 0:
+                                sreal = False
+                            else:
+                                sreal = True
+
                             # Open root group
                             snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
                             halo = snap[str(newID)]
@@ -1234,10 +1239,11 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
                                                    compression='gzip', data=mean_subhalo_pos)  # mean position
                             subhalo.create_dataset('subhalo_mean_vel', shape=mean_subhalo_vel.shape, dtype=float,
                                                    compression='gzip', data=mean_subhalo_vel)  # mean velocity
-                            subhalo.attrs['subhalo_nPart'] = subhalo_npart  # number of particles in halo
+                            subhalo.attrs['halo_nPart'] = subhalo_npart  # number of particles in halo
                             subhalo.attrs['halo_energy'] = subhalo_energy  # halo energy
                             subhalo.attrs['KE'] = sKE  # kinetic energy
                             subhalo.attrs['GE'] = sGE  # gravitational binding energy
+                            subhalo.attrs['Real'] = sreal
 
                             # # Assign the full halo IDs array to the snapshot group
                             # halo.create_dataset('Subhalo_IDs', shape=final_part_subhaloids.shape, dtype=int,
