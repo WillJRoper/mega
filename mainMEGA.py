@@ -15,6 +15,9 @@ walltime_start = time.time()
 paramfile = sys.argv[1]
 inputs, flags, params = utilities.read_param(paramfile)
 
+# Get the snapshot IDs
+snaplist = np.loadtxt('snaplist.txt', fmt='%s')
+
 
 def main_kd(snap):
     kd.hosthalofinder(snap, llcoeff=params['llcoef'], sub_llcoeff=params['sub_llcoef'], gadgetpath=inputs['data'],
@@ -34,100 +37,80 @@ def main_mt(snap):
 
 if flags['serial']:
 
-    # Create a snapshot list (past to present day) for looping
-    snaplist = []
-    for snap in range(0, 62):
-        if snap < 10:
-            snaplist.append('00' + str(snap))
-        elif snap >= 10:
-            snaplist.append('0' + str(snap))
+    # ===================== Run The Halo Finder =====================
+    if flags['halo']:
+        for snap in snaplist:
+            main_kd(snap)
 
-    if __name__ == '__main__':
+    # ===================== Find Direct Progenitors and Descendents =====================
+    if flags['graphdirect']:
+        for snap in snaplist:
+            main_mg(snap, 0)
+    if flags['subgraphdirect']:
+        for snap in snaplist:
+            main_mg(snap, 1)
 
-        # ===================== Run The Halo Finder =====================
-        if flags['halo']:
-            for snap in snaplist:
-                main_kd(snap)
+    # ===================== Build The Graphs =====================
+    if flags['graph']:
+        mg.get_graph_members(treepath=inputs['directgraphSavePath'] + '/Mgraph_',
+                             graphpath=inputs['graphSavePath'] +'/FullMgraphs',
+                             halopath=inputs['haloSavePath'] + '/halos_')
 
-        # ===================== Find Direct Progenitors and Descendents =====================
-        if flags['graphdirect']:
-            for snap in snaplist:
-                main_mg(snap, 0)
-        if flags['subgraphdirect']:
-            for snap in snaplist:
-                main_mg(snap, 1)
+    # ===================== Split Graphs Into Trees =====================
+    if flags['treehalos']:
+        ld.mainLumberjack(halopath=inputs['haloSavePath'], newhalopath=inputs['treehaloSavePath'])
 
-        # ===================== Build The Graphs =====================
-        if flags['graph']:
-            mg.get_graph_members(treepath=inputs['directgraphSavePath'] + '/Mgraph_',
-                                 graphpath=inputs['graphSavePath'] +'/FullMgraphs',
-                                 halopath=inputs['haloSavePath'] + '/halos_')
+    # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
+    if flags['treedirect']:
+        for snap in snaplist:
+            main_mt(snap)
+        mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
 
-        # ===================== Split Graphs Into Trees =====================
-        if flags['treehalos']:
-            ld.mainLumberjack(halopath=inputs['haloSavePath'], newhalopath=inputs['treehaloSavePath'])
-
-        # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
-        if flags['treedirect']:
-            for snap in snaplist:
-                main_mt(snap)
-            mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
-
-        # ===================== Build The Trees =====================
-        if flags['tree']:
-            mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
-                                 graphpath=inputs['treeSavePath'] + '/FullMtrees',
-                                 halopath=inputs['treehaloSavePath'] + '/halos_')
+    # ===================== Build The Trees =====================
+    if flags['tree']:
+        mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
+                             graphpath=inputs['treeSavePath'] + '/FullMtrees',
+                             halopath=inputs['treehaloSavePath'] + '/halos_')
 
 elif flags['multiprocessing']:
 
-    # Create a snapshot list (past to present day) for looping
-    snaplist = []
-    for snap in range(0, 62):
-        if snap < 10:
-            snaplist.append('00' + str(snap))
-        elif snap >= 10:
-            snaplist.append('0' + str(snap))
+    # ===================== Run The Halo Finder =====================
+    if flags['halo']:
+        pool = mp.Pool(int(mp.cpu_count() - 6))
+        pool.map(main_kd, snaplist)
 
-    if __name__ == '__main__':
+        pool.close()
+        pool.join()
 
-        # ===================== Run The Halo Finder =====================
-        if flags['halo']:
-            pool = mp.Pool(int(mp.cpu_count() - 6))
-            pool.map(main_kd, snaplist)
+    # ===================== Find Direct Progenitors and Descendents =====================
+    if flags['graphdirect']:
+        for snap in snaplist:
+            main_mg(snap, 0)
+    if flags['subgraphdirect']:
+        for snap in snaplist:
+            main_mg(snap, 1)
 
-            pool.close()
-            pool.join()
+    # ===================== Build The Graphs =====================
+    if flags['graph']:
+        mg.get_graph_members(treepath=inputs['directgraphSavePath'] + '/Mgraph_',
+                             graphpath=inputs['graphSavePath'] +'/FullMgraphs',
+                             halopath=inputs['haloSavePath'] + '/halos_')
 
-        # ===================== Find Direct Progenitors and Descendents =====================
-        if flags['graphdirect']:
-            for snap in snaplist:
-                main_mg(snap, 0)
-        if flags['subgraphdirect']:
-            for snap in snaplist:
-                main_mg(snap, 1)
+    # ===================== Split Graphs Into Trees =====================
+    if flags['treehalos']:
+        ld.mainLumberjack(halopath=inputs['haloSavePath'], newhalopath=inputs['treehaloSavePath'])
 
-        # ===================== Build The Graphs =====================
-        if flags['graph']:
-            mg.get_graph_members(treepath=inputs['directgraphSavePath'] + '/Mgraph_',
-                                 graphpath=inputs['graphSavePath'] +'/FullMgraphs',
-                                 halopath=inputs['haloSavePath'] + '/halos_')
+    # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
+    if flags['treedirect']:
+        for snap in snaplist:
+            main_mt(snap)
+        mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
 
-        # ===================== Split Graphs Into Trees =====================
-        if flags['treehalos']:
-            ld.mainLumberjack(halopath=inputs['haloSavePath'], newhalopath=inputs['treehaloSavePath'])
-
-        # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
-        if flags['treedirect']:
-            for snap in snaplist:
-                main_mt(snap)
-            mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
-
-        # ===================== Build The Trees =====================
-        if flags['tree']:
-            mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
-                                 graphpath=inputs['treeSavePath'] + '/FullMtrees',
-                                 halopath=inputs['treehaloSavePath'] + '/halos_')
+    # ===================== Build The Trees =====================
+    if flags['tree']:
+        mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
+                             graphpath=inputs['treeSavePath'] + '/FullMtrees',
+                             halopath=inputs['treehaloSavePath'] + '/halos_')
 
 
 print('Total: ', time.time() - walltime_start)
