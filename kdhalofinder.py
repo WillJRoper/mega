@@ -1,6 +1,5 @@
 from scipy.spatial import cKDTree
 from collections import defaultdict
-import readgadgetdata
 import pickle
 import numpy as np
 import multiprocessing as mp
@@ -12,55 +11,10 @@ import numba as nb
 import random
 import sys
 import os
+import utilities
 
 
-def read_sim(snapshot, PATH, llcoeff):
-    """ Reads in gadget-2 simulation data and computes the host halo linking length. (For more information see Docs)
-
-    :param snapshot: The snapshot ID as a string (e.g. '061')
-    :param PATH: The filepath to the directory containing the simulation data.
-    :param llcoeff: The host halo linking length coefficient.
-
-    :return: pid: An array containing the particle IDs.
-             pos: An array of the particle position vectors.
-             vel: An array of the particle velocity vectors.
-             npart: The number of particles used in the simulation.
-             boxsize: The length of the simulation box along a single axis.
-             redshift: The redshift of the current snapshot.
-             t: The elapsed time of the current snapshot.
-             rhocrit: The critical density at the current snapshot.
-             pmass: The mass of a dark matter particle.
-             h: 'Little h', The hubble parameter parametrisation.
-             linkl: The linking length.
-
-    """
-
-    # =============== Load Simulation Data ===============
-
-    # Load snapshot data from gadget-2 file *** Note: will need to be changed for use with other simulations data ***
-    snap = readgadgetdata.readsnapshot(snapshot, PATH)
-    pid, pos, vel = snap[0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
-    head = snap[3:]  # header values
-    npart = head[0]  # number of particles in simulation
-    boxsize = head[3]  # simulation box length(/size) along each axis
-    redshift = head[1]
-    t = head[2]  # elapsed time of the snapshot
-    rhocrit = head[4]  # Critical density
-    pmass = head[5]  # Particle mass
-    h = head[6]  # 'little h' (hubble parameter parametrisation)
-
-    # =============== Compute Linking Length ===============
-
-    # Compute the mean separation
-    mean_sep = boxsize / npart**(1./3.)
-
-    # Compute the linking length for host halos
-    linkl = llcoeff * mean_sep
-
-    return pid, pos, vel, npart, boxsize, redshift, t, rhocrit, pmass, h, linkl
-
-
-def find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart):
+def find_halos(pos, npart, boxsize, batchsize, linkl):
     """ A function which creates a KD-Tree using scipy.CKDTree and queries it to find particles
     neighbours within a linking length. From This neighbour information particles are assigned
     halo IDs and then returned.
@@ -98,10 +52,6 @@ def find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart):
 
     # Assign the query object to a variable to save time on repeated calls
     query_func = tree.query_ball_point
-
-    # Overwrite npart for debugging purposes if called in arguments
-    if debug_npart is not None:
-        npart = debug_npart
 
     # =============== Assign Particles To Initial Halos ===============
 
@@ -646,7 +596,7 @@ halo_energy_calc = halo_energy_calc_exact
 
 
 def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotdata/snapdir_', batchsize=2000000,
-                   debug_npart=None, savepath='halo_snapshots', vlcoeff=1.0):
+                   savepath='halo_snapshots', vlcoeff=1.0, decrement=0.05, verbose=False):
     """ Run the halo finder, sort the output results, find subhalos and save to a HDF5 file.
 
     :param snapshot: The snapshot ID.
@@ -661,8 +611,9 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
 
     # =============== Load Simulation Data, Compute The Linking Length And Sort Simulation Data ===============
 
-    pid, pos, vel, npart, boxsize, redshift, t, rhocrit, pmass, h, linkl = read_sim(snapshot,
-                                                                                    PATH=gadgetpath, llcoeff=llcoeff)
+    pid, pos, vel, npart, boxsize, redshift, t, rhocrit, pmass, h, linkl = utilities.read_binary(snapshot,
+                                                                                                 PATH=gadgetpath,
+                                                                                                 llcoeff=llcoeff)
 
     # Change variable types to save memory
     pid.astype(np.int32)
@@ -705,7 +656,7 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     # Run the halo finder for this snapshot at the host linking length and
     # assign the results to the relevant variables
     assin_start = time.time()
-    part_haloids, assigned_parts = find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart)
+    part_haloids, assigned_parts = find_halos(pos, npart, boxsize, batchsize, linkl)
     print(snapshot, 'Initial assignment: ', time.time()-assin_start)
 
     # Find the halos with 10 or more particles by finding the unique IDs in the particle
@@ -891,7 +842,7 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
 
             while KE/GE >= 1 and halo_npart >= 10 and new_vlcoeff > 0.8:
 
-                new_vlcoeff -= 0.05
+                new_vlcoeff -= decrement
 
                 print('--')
 
@@ -1126,7 +1077,7 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
 
                         while sKE / sGE > 1 and subhalo_npart >= 10 and new_subvlcoeff >= 0.8:
 
-                            new_subvlcoeff -= 0.1
+                            new_subvlcoeff -= decrement
 
                             # Define the velocity space linking length
                             sub_vlinkl = new_subvlcoeff / vlcoeff * vlinkl_halo_indp * (1600 / 200) ** (1 / 6) \

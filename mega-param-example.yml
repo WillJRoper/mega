@@ -1,0 +1,36 @@
+# LABEL: An example MEGA input file
+
+inputs:
+
+  data:                <filepath>     # The filepath containing particle data
+  snapList:            <filepath>     # The filepath pointing to the snapshot list file
+  haloSavePath:        <filepath>     # The filepath and basename for halo outputs
+  graphSavePath:       <filepath>     # The filepath and basename for graph outputs
+
+flags:
+
+  # Flags for processes, NOTE: To enable a process all above processes must be enabled
+  halo:                1              # Flag for creating halo catalog
+  subs:                1              # Find substructure within halos
+  graphdirect:         1              # Flag for getting graph direct progenitor and descendant data
+  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
+  graph:               1              # Flag for building complete graphs
+  subgraph:            1              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
+
+  # Subhalos aren't currently included in trees
+  treehalos:           0              # Flag for splitting halos in tree halo catalog
+  treedirect:          0              # Flag for getting tree direct progenitor and descendant data
+  tree:                0              # Flag for building complete trees
+
+  # Flags for how to run MEGA (only enable 1)
+  useserial:           1              # Run in serial
+  usemultiprocessing:  0              # Use python parallelisation with multiprocessing
+  usempi:              0              # Use mpi (UNUSED CURRENTLY)
+
+  # Input type flags (only enable 1)
+  hdf5Input:           1              # Flag for HDF5 inputs, if False binary format is assumed
+
+parameters:
+
+  batchsize:           2000000        # The number of particles that are tested in the KDTree at once
+  ini_alpha_v:         10             # The initial velocity linking length coefficient for phase-space iteration
