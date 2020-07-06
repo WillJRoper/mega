@@ -11,6 +11,7 @@ inputs:
   directtreeSavePath:  <filepath>     # The filepath and basename for tree direct progenitor and descendant outputs
   treeSavePath:        <filepath>     # The filepath and basename for tree output
 
+
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
@@ -27,14 +28,16 @@ flags:
   tree:                0              # Flag for building complete trees
 
   # Flags for how to run MEGA (only enable 1)
-  useserial:           1              # Run in serial
-  usemultiprocessing:  0              # Use python parallelisation with multiprocessing
-  usempi:              0              # Use mpi (UNUSED CURRENTLY)
+  useserial:           1              # Run in serial (single cpu)
+  usemultiprocessing:  0              # Use python parallelisation with multiprocessing (single cpu)
+  usempi:              0              # Use mpi (UNUSED CURRENTLY) (multiple cpus)
 
   # Input type flags (only enable 1)
   hdf5Input:           1              # Flag for HDF5 inputs, if False binary format is assumed
+  binaryInput:         1              # Flag for HDF5 inputs, if False binary format is assumed
 
   verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
+
 
 parameters:
 

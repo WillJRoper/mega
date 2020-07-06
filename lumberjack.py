@@ -1,6 +1,6 @@
 import numpy as np
 import h5py
-from kdhalofinder import read_sim#, halo_energy_calc_exact
+from kdhalofinder import read_sim
 from shutil import copyfile
 import multiprocessing as mp
 from itertools import combinations

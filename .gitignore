@@ -1,0 +1,11 @@
+bash_loop.sh
+input/*
+data/*
+energy_dicts
+logs/*
+vel_linkl
+__*
+mega-param_mpitest.yml
+mega-param_serialtest.yml
+snaplist.txt
+treedataloader.py
