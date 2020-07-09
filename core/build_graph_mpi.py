@@ -75,8 +75,8 @@ def get_graph(z0halo, snaplist, data_dict):
             for halo in halos:
 
                 # Get the progenitors
-                these_progs = get_linked_halo_data(data_dict['progs'], data_dict['prog_start_index'][halo[0]],
-                                                   data_dict['nprogs'][halo[0]])
+                these_progs = utilities.get_linked_halo_data(data_dict['progs'], data_dict['prog_start_index'][halo[0]],
+                                                             data_dict['nprogs'][halo[0]])
 
                 # Assign progenitors using a tuple to keep track of the snapshot ID
                 # in addition to the halo ID
@@ -98,8 +98,8 @@ def get_graph(z0halo, snaplist, data_dict):
             for halo in halos:
 
                 # Get the descendants
-                these_descs = get_linked_halo_data(data_dict['descs'], data_dict['desc_start_index'][halo[0]],
-                                                   data_dict['ndescs'][halo[0]])
+                these_descs = utilities.get_linked_halo_data(data_dict['descs'], data_dict['desc_start_index'][halo[0]],
+                                                             data_dict['ndescs'][halo[0]])
 
                 # Load descendants adding the snapshot * 100000 to keep track of the snapshot ID
                 # in addition to the halo ID
