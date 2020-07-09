@@ -86,10 +86,10 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     hdf.attrs['rhocrit'] = rhocrit
     hdf.attrs['pmass'] = pmass
     hdf.attrs['h'] = h
-    hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid)
-    hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int, data=sinds)
-    hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos)
-    hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel)
+    hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid, compression="gzip")
+    hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int, data=sinds, compression="gzip")
+    hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos, compression="gzip")
+    hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel, compression="gzip")
 
     hdf.close()
 
