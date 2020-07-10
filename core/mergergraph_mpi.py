@@ -200,7 +200,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         # Master process executes code below
         tasks = set(halo_ids)
-        newtaskID = np.max(halo_ids) + 1
         num_workers = size - 1
         closed_workers = 0
         while closed_workers < num_workers:
