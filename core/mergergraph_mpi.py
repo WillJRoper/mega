@@ -151,35 +151,48 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             halo_ids = hdf_current['Subhalos']['subhalo_IDs'][...]
             reals = hdf_current['Subhalos']['real_flag'][...]
 
-        # Load the progenitor snapshot
-        hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
+        if prog_snap != None:
 
-        # Extract the particle halo ID array and particle ID array
-        prog_haloids = hdf_prog['particle_halo_IDs'][:, density_rank]
+            # Load the progenitor snapshot
+            hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
 
-        # Get progenitor snapshot data
-        if density_rank == 0:
-            preals = hdf_prog['real_flag'][...]
-            prog_npart = hdf_prog['nparts'][...]
+            # Extract the particle halo ID array and particle ID array
+            prog_haloids = hdf_prog['particle_halo_IDs'][:, density_rank]
+
+            # Get progenitor snapshot data
+            if density_rank == 0:
+                preals = hdf_prog['real_flag'][...]
+                prog_npart = hdf_prog['nparts'][...]
+            else:
+                preals = hdf_prog['Subhalos']['real_flag'][...]
+                prog_npart = hdf_prog['Subhalos']['nparts'][...]
+
+            hdf_prog.close()
+
         else:
-            preals = hdf_prog['Subhalos']['real_flag'][...]
-            prog_npart = hdf_prog['Subhalos']['nparts'][...]
+            prog_haloids = np.array([])
+            preals = np.array([])
+            prog_npart = np.array([])
 
-        hdf_prog.close()
+        if desc_snap != None:
 
-        # Load the descenitor snapshot
-        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
+            # Load the descenitor snapshot
+            hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
 
-        # Extract the particle halo ID array and particle ID array
-        desc_haloids = hdf_desc['particle_halo_IDs'][:, density_rank]
+            # Extract the particle halo ID array and particle ID array
+            desc_haloids = hdf_desc['particle_halo_IDs'][:, density_rank]
 
-        # Get descenitor snapshot data
-        if density_rank == 0:
-            desc_npart = hdf_desc['nparts'][...]
+            # Get descenitor snapshot data
+            if density_rank == 0:
+                desc_npart = hdf_desc['nparts'][...]
+            else:
+                desc_npart = hdf_desc['Subhalos']['nparts'][...]
+
+            hdf_desc.close()
+
         else:
-            desc_npart = hdf_desc['Subhalos']['nparts'][...]
-
-        hdf_desc.close()
+            desc_haloids = np.array([])
+            desc_npart = np.array([])
 
         # =============== Find all Direct Progenitors And Descendant Of Halos In This Snapshot ===============
 
@@ -237,7 +250,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         results = None
         reals = None
-        haloids = None
+        halo_ids = None
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
