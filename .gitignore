@@ -8,3 +8,4 @@ __*
 snaplist.txt
 treedataloader.py
 mpi_halo_run.sh
+scaling/
