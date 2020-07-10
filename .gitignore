@@ -7,5 +7,4 @@ vel_linkl
 __*
 snaplist.txt
 treedataloader.py
-mpi_halo_run.sh
 scaling/
