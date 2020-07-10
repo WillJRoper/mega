@@ -3,7 +3,7 @@
 #SBATCH -p cosma6
 #SBATCH --job-name=MEGA-Graph-Test
 #SBATCH -t 0-12:00
-#SBATCH --ntasks 16
+#SBATCH --ntasks 32
 #SBATCH -o logs/out_std_graph.%J
 #SBATCH -e logs/err_std_graph.%J
 #SBATCH --exclusive
@@ -20,7 +20,8 @@ i=$(($SLURM_ARRAY_TASK_ID - 1))
 
 for i in {0..61}
 do
-    mpiexec -np 16 python $EXEC_DIR/mainMEGA.py $PARM_DIR/mega-param_graph_mpitest.yml $i
+    echo "$i"
+    mpiexec -np 32 python $EXEC_DIR/mainMEGA.py $PARM_DIR/mega-param_graph_mpitest.yml $i
 done
 echo "Job done, info follows..."
 sacct -j $SLURM_JOBID --format=JobID,JobName,Partition,MaxRSS,Elapsed,ExitCode
