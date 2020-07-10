@@ -407,37 +407,37 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         hdf.close()
 
-        # # Load the descendant snapshot
-        # hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
-        #
-        # # Set the reality flag in the halo catalog
-        # if density_rank == 0:
-        #     del hdf_desc['real_flag']
-        #     hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-        #                             compression='gzip')
-        # else:
-        #     sub_desc = hdf_desc['Subhalos']
-        #     del sub_desc['real_flag']
-        #     sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-        #                             compression='gzip')
-        #
-        # hdf_desc.close()
-        #
-        # # Load the descendant snapshot
-        # hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
-        #
-        # # Set the reality flag in the halo catalog
-        # if density_rank == 0:
-        #     del hdf_current['real_flag']
-        #     hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-        #                             compression='gzip')
-        # else:
-        #     sub_current = hdf_current['Subhalos']
-        #     del sub_current['real_flag']
-        #     sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-        #                             compression='gzip')
-        #
-        # hdf_current.close()
+        # Load the descendant snapshot
+        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
+
+        # Set the reality flag in the halo catalog
+        if density_rank == 0:
+            del hdf_desc['real_flag']
+            hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                    compression='gzip')
+        else:
+            sub_desc = hdf_desc['Subhalos']
+            del sub_desc['real_flag']
+            sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                    compression='gzip')
+
+        hdf_desc.close()
+
+        # Load the descendant snapshot
+        hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
+
+        # Set the reality flag in the halo catalog
+        if density_rank == 0:
+            del hdf_current['real_flag']
+            hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+                                    compression='gzip')
+        else:
+            sub_current = hdf_current['Subhalos']
+            del sub_current['real_flag']
+            sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+                                    compression='gzip')
+
+        hdf_current.close()
 
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
