@@ -175,6 +175,8 @@ elif flags['usempi']:
 
         main_mgmpi(snap, prog_snap, desc_snap, 0)
 
+    comm.barrier()
+
     if flags['subgraphdirect']:
         snap = snaplist[snap_ind]
 
