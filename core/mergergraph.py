@@ -14,10 +14,6 @@ import pickle
 import random
 import os
 import gc
-from blessings import Terminal
-
-
-term = Terminal()
 
 
 lock = Lock()

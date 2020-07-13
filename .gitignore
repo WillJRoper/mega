@@ -1,0 +1,10 @@
+bash_loop.sh
+input/*
+data/*
+energy_dicts
+logs/*
+vel_linkl
+__*
+snaplist.txt
+treedataloader.py
+scaling/

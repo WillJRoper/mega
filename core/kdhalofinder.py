@@ -1,8 +1,8 @@
 from scipy.spatial import cKDTree
 from collections import defaultdict
-import readgadgetdata
 import pickle
 import numpy as np
+from guppy import hpy; hp = hpy()
 import multiprocessing as mp
 import astropy.constants as const
 import astropy.units as u
@@ -12,55 +12,10 @@ import numba as nb
 import random
 import sys
 import os
+import utilities
 
 
-def read_sim(snapshot, PATH, llcoeff):
-    """ Reads in gadget-2 simulation data and computes the host halo linking length. (For more information see Docs)
-
-    :param snapshot: The snapshot ID as a string (e.g. '061')
-    :param PATH: The filepath to the directory containing the simulation data.
-    :param llcoeff: The host halo linking length coefficient.
-
-    :return: pid: An array containing the particle IDs.
-             pos: An array of the particle position vectors.
-             vel: An array of the particle velocity vectors.
-             npart: The number of particles used in the simulation.
-             boxsize: The length of the simulation box along a single axis.
-             redshift: The redshift of the current snapshot.
-             t: The elapsed time of the current snapshot.
-             rhocrit: The critical density at the current snapshot.
-             pmass: The mass of a dark matter particle.
-             h: 'Little h', The hubble parameter parametrisation.
-             linkl: The linking length.
-
-    """
-
-    # =============== Load Simulation Data ===============
-
-    # Load snapshot data from gadget-2 file *** Note: will need to be changed for use with other simulations data ***
-    snap = readgadgetdata.readsnapshot(snapshot, PATH)
-    pid, pos, vel = snap[0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
-    head = snap[3:]  # header values
-    npart = head[0]  # number of particles in simulation
-    boxsize = head[3]  # simulation box length(/size) along each axis
-    redshift = head[1]
-    t = head[2]  # elapsed time of the snapshot
-    rhocrit = head[4]  # Critical density
-    pmass = head[5]  # Particle mass
-    h = head[6]  # 'little h' (hubble parameter parametrisation)
-
-    # =============== Compute Linking Length ===============
-
-    # Compute the mean separation
-    mean_sep = boxsize / npart**(1./3.)
-
-    # Compute the linking length for host halos
-    linkl = llcoeff * mean_sep
-
-    return pid, pos, vel, npart, boxsize, redshift, t, rhocrit, pmass, h, linkl
-
-
-def find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart):
+def find_halos(pos, npart, boxsize, batchsize, linkl):
     """ A function which creates a KD-Tree using scipy.CKDTree and queries it to find particles
     neighbours within a linking length. From This neighbour information particles are assigned
     halo IDs and then returned.
@@ -95,15 +50,14 @@ def find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart):
     # *** Note: Contrary to CKDTree documentation compact_nodes=False and balanced_tree=False results in
     # faster queries (documentation recommends compact_nodes=True and balanced_tree=True)***
     tree = cKDTree(pos, leafsize=16, compact_nodes=False, balanced_tree=False, boxsize=[boxsize, boxsize, boxsize])
-
+    print(pos.shape, sys.getsizeof(tree))
+    print(hp.heap())
     # Assign the query object to a variable to save time on repeated calls
     query_func = tree.query_ball_point
 
-    # Overwrite npart for debugging purposes if called in arguments
-    if debug_npart is not None:
-        npart = debug_npart
-
     # =============== Assign Particles To Initial Halos ===============
+
+    assert batchsize < npart / 2, "batchsize must be less than half the total number of particles"
 
     # Define an array of limits for looping defined by the batchsize
     limits = np.linspace(0, npart, int(npart/batchsize), dtype=np.int32)
@@ -251,10 +205,10 @@ def find_subhalos(halo_pos, sub_linkl):
     # faster queries (documentation recommends compact_nodes=True and balanced_tree=True)***
     tree = cKDTree(halo_pos, leafsize=16, compact_nodes=False, balanced_tree=False)
 
-    if npart > 1000:
+    if npart > 10000:
 
         # Define an array of limits for looping defined by the batchsize
-        limits = np.linspace(0, npart, int(npart / 1000) + 1, dtype=int)
+        limits = np.linspace(0, npart, int(npart / 10000) + 1, dtype=int)
 
     else:
 
@@ -391,10 +345,10 @@ def find_phase_space_halos(halo_phases, linkl, vlinkl):
 
     npart = halo_phases.shape[0]
 
-    if npart > 1000:
+    if npart > 10000:
 
         # Define an array of limits for looping defined by the batchsize
-        limits = np.linspace(0, npart, int(npart / 1000) + 1, dtype=int)
+        limits = np.linspace(0, npart, int(npart / 10000) + 1, dtype=int)
 
     else:
 
@@ -513,7 +467,6 @@ def upper_tri_masking(A):
     return A[mask]
 
 
-@nb.njit(nogil=True, parallel=True)
 def kinetic(halo_vels, halo_npart, redshift, pmass):
 
     # Compute kinetic energy of the halo
@@ -525,7 +478,6 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
     return KE
 
 
-@nb.njit(nogil=True, parallel=True)
 def grav(rij_2, soft, pmass, redshift, h, G):
 
     # Compute the sum of the gravitational energy of each particle from
@@ -539,7 +491,6 @@ def grav(rij_2, soft, pmass, redshift, h, G):
     return GE
 
 
-@nb.njit(nogil=True, parallel=False)
 def get_seps_lm(halo_poss, halo_npart):
 
     # Compute the separations of all halo particles along each dimension
@@ -555,7 +506,6 @@ def get_seps_lm(halo_poss, halo_npart):
     return rij2
 
 
-@nb.njit(nogil=True, parallel=True)
 def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, h, G):
 
     GE = 0
@@ -573,7 +523,6 @@ def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, h, G):
     return GE
 
 
-@nb.jit(nogil=True, parallel=True)
 def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft):
 
     # Compute kinetic energy of the halo
@@ -645,8 +594,115 @@ def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, pmass, redshift, G
 halo_energy_calc = halo_energy_calc_exact
 
 
-def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotdata/snapdir_', batchsize=2000000,
-                   debug_npart=None, savepath='halo_snapshots', vlcoeff=1.0):
+def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, linkl, pmass, vlcoeff, decrement,
+                        redshift, G, h, soft):
+
+    # Extract halo data for this halo ID
+    s_sim_halo_pids = np.array(list(pids))  # particle ID NOTE: Overwrites IDs which started at 1
+    full_halo_poss = pos  # Positions *** NOTE: these are shifted below ***
+    full_halo_vels = vel  # Velocities *** NOTE: these are shifted below ***
+    full_halo_npart = s_sim_halo_pids.size
+
+    newID_iter = -9
+
+    # =============== Compute mean positions and velocities and wrap the halos ===============
+
+    # Compute the shifted mean position in the dimension ixyz
+    mean_halo_pos = full_halo_poss.mean(axis=0)
+
+    # Centre the halos about the mean in the dimension ixyz
+    full_halo_poss -= mean_halo_pos
+
+    # Define the velocity space linking length
+    vlinkl = vlcoeff * vlinkl_halo_indp * pmass**(1/3) * full_halo_npart**(1/3)
+
+    # Define the phase space vectors for this halo
+    halo_phases = np.concatenate((full_halo_poss, full_halo_vels), axis=1)
+
+    # Query this halo in velocity space to split apart halos which are found to be distinct in velocity space
+    result = find_phase_space_halos(halo_phases, linkl, vlinkl)
+    phase_part_haloids, phase_assigned_parts = result
+
+    # Find the halos with 10 or more particles by finding the unique IDs in the particle
+    # halo ids array and finding those IDs that are assigned to 10 or more particles
+    phase_unique, phase_counts = np.unique(phase_part_haloids, return_counts=True)
+    unique_phase_haloids = phase_unique[np.where(phase_counts >= 10)]
+
+    # Remove the null -2 value for single particle halos
+    unique_phase_haloids = unique_phase_haloids[np.where(unique_phase_haloids >= 0)]
+
+    extra_halo_pids = {}
+    extra_halo_poss = {}
+    extra_halo_vels = {}
+    iter_vlcoeffs = {}
+    results = {}
+
+    # Loop over the halos returned from velocity space
+    for pID in unique_phase_haloids:
+
+        if len(phase_assigned_parts[pID]) < 10:
+            continue
+
+        # Extract halo data for this velocity space defined halo ID
+        # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
+        phalo_pids = np.array(list(phase_assigned_parts[pID]), dtype=int)
+        sim_halo_pids = s_sim_halo_pids[phalo_pids]
+        halo_poss = full_halo_poss[phalo_pids, :]  # Positions *** NOTE: these are shifted below ***
+        halo_vels = full_halo_vels[phalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
+        halo_npart = phalo_pids.size
+
+        # =============== Compute mean positions and velocities and wrap the halos ===============
+
+        # Compute the shifted mean position
+        mean_halo_pos = halo_poss.mean(axis=0)
+
+        # Centre the halos about the mean in the dimension ixyz
+        halo_poss -= mean_halo_pos
+
+        # Compute the mean velocity
+        mean_halo_vel = halo_vels.mean(axis=0)
+
+        # Compute halo's energy
+        halo_energy, KE, GE = halo_energy_calc(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft)
+
+        if KE / GE <= 1 and vlcoeff >= 0.8:
+
+            # Define realness flag
+            real = True
+
+            # Wrap halo if it's outside the box
+            mean_halo_pos %= boxsize
+
+            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+                            'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
+                            'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
+
+        elif KE / GE >= 1 and vlcoeff > 0.8:
+
+            # Store halo for testing as another task
+            extra_halo_pids[newID_iter] = sim_halo_pids
+            extra_halo_poss[newID_iter] = halo_poss
+            extra_halo_vels[newID_iter] = halo_vels
+            iter_vlcoeffs[newID_iter] = vlcoeff - decrement
+            newID_iter -= 100
+
+        elif KE / GE > 1 and vlcoeff < 0.8:
+
+            # Define realness flag
+            real = False
+
+            # Wrap halo if it's outside the box
+            mean_halo_pos %= boxsize
+
+            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+                            'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
+                            'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
+
+    return thisTask, results, extra_halo_pids, extra_halo_poss, extra_halo_vels, iter_vlcoeffs
+
+
+def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
+                   batchsize, savepath, ini_vlcoeff, min_vlcoeff, decrement, verbose, internal_input, findsubs):
     """ Run the halo finder, sort the output results, find subhalos and save to a HDF5 file.
 
     :param snapshot: The snapshot ID.
@@ -661,18 +717,29 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
 
     # =============== Load Simulation Data, Compute The Linking Length And Sort Simulation Data ===============
 
-    pid, pos, vel, npart, boxsize, redshift, t, rhocrit, pmass, h, linkl = read_sim(snapshot,
-                                                                                    PATH=gadgetpath, llcoeff=llcoeff)
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+    # Get parameters for decomposition
+    mean_sep = hdf.attrs['mean_sep']
+    boxsize = hdf.attrs['boxsize']
+    npart = hdf.attrs['npart']
+    redshift = hdf.attrs['redshift']
+    t = hdf.attrs['t']
+    rhocrit = hdf.attrs['rhocrit']
+    pmass = hdf.attrs['pmass']
+    h = hdf.attrs['h']
+    pos = hdf['part_pos'][...]
+    vel = hdf['part_vel'][...]
+
+    hdf.close()
 
     # Change variable types to save memory
-    pid.astype(np.int32)
     pos.astype(np.float64)
     vel.astype(np.float64)
 
-    # Sort the simulation data arrays by the particle ID
-    sinds = pid.argsort()
-    pos = pos[sinds, :]
-    vel = vel[sinds, :]
+    # Compute the linking length for host halos
+    linkl = llcoeff * mean_sep
 
     # Compute the softening length
     soft = 0.05 * boxsize / npart**(1./3.)
@@ -697,7 +764,7 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     mean_den = mean_den.to(u.M_sun / u.km**3)
 
     # Define the velocity space linking length
-    vlinkl_halo_indp = (vlcoeff * np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6)
+    vlinkl_halo_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6)
                         * (1 + redshift) ** 0.5).value
 
     # =============== Run The Halo Finder And Reduce The Output ===============
@@ -705,7 +772,7 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     # Run the halo finder for this snapshot at the host linking length and
     # assign the results to the relevant variables
     assin_start = time.time()
-    part_haloids, assigned_parts = find_halos(pos, npart, boxsize, batchsize, linkl, debug_npart)
+    part_haloids, assigned_parts = find_halos(pos, npart, boxsize, batchsize, linkl)
     print(snapshot, 'Initial assignment: ', time.time()-assin_start)
 
     # Find the halos with 10 or more particles by finding the unique IDs in the particle
@@ -725,8 +792,11 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
 
     # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
     print(unique_haloids.size, 'halos found with 10 or more particles')
+    print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
     print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
+    print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
     print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
+    print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
     print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
     print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
 
@@ -769,12 +839,13 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     valpha_dict = {}
 
     unique_haloids = list(unique_haloids)
+    iter_vlcoeffs = dict(zip(unique_haloids, np.full(len(unique_haloids), ini_vlcoeff)))
     i = 0
 
     # Sort, derive and assign each of the halo's data to the relevant group within the HDF5 file
     newID = -1
     sub_newID = -1
-    newID_iter = 9999999999
+    newID_iter = -9
     while i < len(unique_haloids):
 
         ID = unique_haloids[i]
@@ -783,6 +854,8 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
         # print(ID, i)
         # if type(ID) == float:
         #     print(assigned_parts[ID])
+
+        vlcoeff = iter_vlcoeffs[ID]
 
         assert len(list(assigned_parts[ID])) >= 10, "Halos with less than 10 particles can't exist"
 
@@ -806,462 +879,72 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
         # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
         full_halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
-        # Compute the shifted mean position in the dimension ixyz
-        mean_halo_pos = full_halo_poss.mean(axis=0)
+        result_tup = get_real_host_halos(ID, s_halo_pids, full_halo_poss, full_halo_vels, boxsize, vlinkl_halo_indp,
+                                         linkl, pmass, iter_vlcoeffs[ID], decrement, redshift, G, h, soft)
+        thisTask, results, extra_halo_pids, _, _, this_vlcoeffs = result_tup
+        for iID in extra_halo_pids:
+            unique_haloids.append(newID_iter)
+            assigned_parts[newID_iter] = extra_halo_pids[iID]
+            iter_vlcoeffs[newID_iter] = this_vlcoeffs[iID]
+            newID_iter -= 100
 
-        # Centre the halos about the mean in the dimension ixyz
-        full_halo_poss -= mean_halo_pos
+        for resID in results:
 
-        # Define the velocity space linking length
-        vlinkl = vlinkl_halo_indp * pmass**(1/3) * full_halo_npart**(1/3)
-
-        # Define the phase space vectors for this halo
-        halo_phases = np.concatenate((full_halo_poss, full_halo_vels), axis=1)
-
-        pq_start = time.time()
-        # Query this halo in velocity space to split apart halos which are found to be distinct in velocity space
-        result = find_phase_space_halos(halo_phases, linkl, vlinkl)
-        phase_part_haloids, phase_assigned_parts = result
-        if (time.time() - pq_start) > 10:
-            print('phase query: ', newID + 1, full_halo_vels.shape[0], time.time() - pq_start)
-
-        # Find the halos with 10 or more particles by finding the unique IDs in the particle
-        # halo ids array and finding those IDs that are assigned to 10 or more particles
-        phase_unique, phase_counts = np.unique(phase_part_haloids, return_counts=True)
-        unique_phase_haloids = phase_unique[np.where(phase_counts >= 10)]
-
-        # Remove the null -2 value for single particle halos
-        unique_phase_haloids = unique_phase_haloids[np.where(unique_phase_haloids >= 0)]
-
-        if unique_phase_haloids.size == 0:
-            continue
-
-        # Loop over the halos returned from velocity space
-        for pID in unique_phase_haloids:
-
-            if len(phase_assigned_parts[pID]) == 0:
-                continue
-
-            # Extract halo data for this velocity space defined halo ID
-            # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-            phalo_pids = np.array(list(phase_assigned_parts[pID]), dtype=int)
-            halo_pids = s_halo_pids[phalo_pids]
+            # Extract halo data for this halo ID
+            halo_pids = results[resID]['pids']  # particle ID NOTE: Overwrites IDs which started at 1
             halo_poss = pos[halo_pids, :]  # Positions *** NOTE: these are shifted below ***
             halo_vels = vel[halo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-            halo_npart = halo_pids.size
-
-            # =============== Compute mean positions and velocities and wrap the halos ===============
-
-            # Define the comparison particle as the maximum position in the current dimension
-            max_part_pos = halo_poss.max(axis=0)
-
-            # Compute all the halo particle separations from the maximum position
-            sep = max_part_pos - halo_poss
-
-            # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-            # bring the particles at the lower boundary together with the particles at the upper boundary
-            # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-            # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-            halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
-
-            # Compute the shifted mean position
-            mean_halo_pos = halo_poss.mean(axis=0)
-
-            # Centre the halos about the mean in the dimension ixyz
-            halo_poss -= mean_halo_pos
-
-            # Compute halo's energy
-            halo_energy, KE, GE = halo_energy_calc(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft)
-
-            new_vlcoeff = vlcoeff
-            final_vlcoeff = vlcoeff
-
-            iter_halo_pids = halo_pids
-            iter_halo_poss = halo_poss
-            iter_halo_vels = halo_vels
-            itercount = 0
-
-            # iter_stage_log = {}
-
-            if halo_energy > 0:
-                energy_dict['after'][str(ID) + '.' + str(pID)] = {}
-                energy_dict['before'][str(ID) + '.' + str(pID)] = {}
-                energy_dict['before'][str(ID) + '.' + str(pID)]['M'] = halo_npart
-                energy_dict['before'][str(ID) + '.' + str(pID)]['E'] = KE / GE
-
-            while KE/GE >= 1 and halo_npart >= 10 and new_vlcoeff > 0.8:
-
-                new_vlcoeff -= 0.05
-
-                print('--')
-
-                final_vlcoeff = new_vlcoeff
-
-                # Define the phase space linking length
-                vlinkl = new_vlcoeff / vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_npart ** (1 / 3)
-
-                # Define the phase space vectors for this halo
-                halo_phases = np.concatenate((iter_halo_poss, iter_halo_vels), axis=1)
-
-                # Query this halo in phase space to split apart halos which are found to
-                # be distinct in phase space
-                result = find_phase_space_halos(halo_phases, linkl, vlinkl)
-                iter_part_haloids, iter_assigned_parts = result
-
-                # Find the halos with 10 or more particles by finding the unique IDs in the particle
-                # halo ids array and finding those IDs that are assigned to 10 or more particles
-                iter_unique, iter_counts = np.unique(iter_part_haloids, return_counts=True)
-                unique_iter_haloids = iter_unique[np.where(iter_counts >= 10)]
-                iter_counts = iter_counts[np.where(iter_counts >= 10)]
-
-                # Remove the null -2 value for single particle halos
-                iter_counts = iter_counts[np.where(unique_iter_haloids >= 0)]
-                unique_iter_haloids = unique_iter_haloids[np.where(unique_iter_haloids >= 0)]
-
-                if unique_iter_haloids.size != 0:
-
-                    # Sort IDs by count
-                    unique_iter_haloids = unique_iter_haloids[np.argsort(iter_counts)]
-
-                    iterID = unique_iter_haloids[0]
-                    for iID in unique_iter_haloids[1:]:
-                        unique_haloids.append(newID_iter)
-                        assigned_parts[newID_iter] = iter_halo_pids[np.array(list(iter_assigned_parts[iID]), dtype=int)]
-                        newID_iter += 100
-
-                    # Extract halo data for this phase space defined halo ID
-                    # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                    phalo_pids = np.array(list(iter_assigned_parts[iterID]), dtype=int)
-                    iter_halo_pids = iter_halo_pids[phalo_pids]
-                    iter_halo_poss = pos[iter_halo_pids, :]  # Positions *** NOTE: these are shifted below ***
-                    iter_halo_vels = vel[iter_halo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-                    halo_npart = iter_halo_pids.size
-
-                    # Define the comparison particle as the maximum position in the current dimension
-                    max_part_pos = iter_halo_poss.max(axis=0)
-
-                    # Compute all the halo particle separations from the maximum position
-                    sep = max_part_pos - iter_halo_poss
-
-                    # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-                    # bring the particles at the lower boundary together with the particles at the upper boundary
-                    # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-                    # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-                    iter_halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
-
-                    # Compute halo's energy
-                    halo_energy, KE, GE = halo_energy_calc(iter_halo_poss, iter_halo_vels, halo_npart,
-                                                           pmass, redshift, G, h, soft)
-
-                    print(halo_energy)
-                    print('--')
-
-                    energy_dict['after'][str(ID) + '.' + str(pID)]['M'] = halo_npart
-                    energy_dict['after'][str(ID) + '.' + str(pID)]['E'] = KE / GE
-
-                    itercount += 1
-
-                else:
-                    halo_npart = 0
-
-            if halo_npart >= 10:
-
-                if halo_energy > 0:
-                    notreal += 1
-                    real = False
-                else:
-                    real = True
-
-                valpha_dict[newID + 1] = final_vlcoeff
-
-                # Extract halo data for this phase space defined halo ID
-                # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                halo_pids = iter_halo_pids
-                halo_poss = pos[halo_pids, :]  # Positions *** NOTE: these are shifted below ***
-                halo_vels = vel[halo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-                halo_npart = halo_pids.size
-
-                # =============== Compute mean positions and velocities and wrap the halos ===============
-
-                # Define the comparison particle as the maximum position in the current dimension
-                max_part_pos = halo_poss.max(axis=0)
-
-                # Compute all the halo particle separations from the maximum position
-                sep = max_part_pos - halo_poss
-
-                # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-                # bring the particles at the lower boundary together with the particles at the upper boundary
-                # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-                # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-                halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
-
-                # Compute the shifted mean position in the dimension ixyz
-                mean_halo_pos = halo_poss.mean(axis=0)
-
-                # Centre the halos about the mean in the dimension ixyz
-                halo_poss -= mean_halo_pos
-
-                # May need to wrap if the halo extends over the upper edge of the box
-                mean_halo_pos = mean_halo_pos % boxsize
-
-                # Compute the mean velocity in the dimension ixyz
-                mean_halo_vel = halo_vels.mean(axis=0)
-
-                # Compute halo's energy
-                halo_energy, KE, GE = halo_energy_calc(halo_poss, halo_vels, halo_npart,
-                                                       pmass, redshift, G, h, soft)
-
-                # ============ If substructure or energy criteria has been satisfied write out the result =============
-
-                # Increment the newID such that the IDs are sequential
-                newID += 1
-
-                # Reassign the IDs such that they are sequential for halos with 10 or more particles
-                part_haloids[halo_pids, 0] = newID
-
-                # Open root group
-                snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
-
-                # Create datasets in the current halo's group in the HDF5 file
-                halo = snap.create_group(str(newID))  # create halo group
-                halo.create_dataset('Halo_Part_IDs', shape=[len(halo_pids)], dtype=int,
-                                    compression='gzip', data=halo_pids)  # halo particle ids
-                halo.create_dataset('Halo_Pos', shape=halo_poss.shape, dtype=float,
-                                    compression='gzip', data=halo_poss)  # halo centered positions
-                halo.create_dataset('Halo_Vel', shape=halo_vels.shape, dtype=float,
-                                    compression='gzip', data=halo_vels)  # halo centered velocities
-                halo.create_dataset('mean_pos', shape=mean_halo_pos.shape, dtype=float,
-                                    compression='gzip', data=mean_halo_pos)  # mean position
-                halo.create_dataset('mean_vel', shape=mean_halo_vel.shape, dtype=float,
-                                    compression='gzip', data=mean_halo_vel)  # mean velocity
-                halo.attrs['halo_nPart'] = halo_npart  # number of particles in halo
-                halo.attrs['Real'] = real  # realness flag
-                # halo.attrs['nSubhalo'] = unique_final_subhaloids.size  # number of subhalos
-                halo.attrs['halo_energy'] = halo_energy  # halo energy
-                halo.attrs['KE'] = KE  # kinetic energy
-                halo.attrs['GE'] = GE  # gravitational binding energy
-
-                snap.close()
-
-                # Query this halo in velocity space to split apart halos which are found to be
-                # distinct in velocity space
-                result = find_subhalos(halo_poss, sub_linkl)
-                part_subhaloids, assigned_subparts = result
-
-                # Find the halos with 10 or more particles by finding the unique IDs in the particle
-                # halo ids array and finding those IDs that are assigned to 10 or more particles
-                sub_unique, sub_counts = np.unique(part_subhaloids, return_counts=True)
-                unique_subhaloids = sub_unique[np.where(sub_counts >= 10)]
-                sub_counts = sub_counts[np.where(sub_counts >= 10)]
-
-                # Remove any single particle halos
-                unique_subhaloids = list(unique_subhaloids[np.where(unique_subhaloids >= 0)])
-
-                # Reset subhalo id array and dictionary
-                final_part_subhaloids = np.full(halo_npart, -2, dtype=int)
-                newsubID_iter = 9999999
-                si = 0
-
-                while si < len(unique_subhaloids):
-
-                    sID = unique_subhaloids[si]
-                    si += 1
-
-                    # Extract halo data for this velocity space defined halo ID
-                    # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                    full_subhalo_pids = np.array(list(assigned_subparts[sID]))
-                    subhalo_poss = halo_poss[full_subhalo_pids, :]  # Positions *** NOTE: these are shifted below ***
-                    subhalo_vels = halo_vels[full_subhalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-                    subhalo_npart = full_subhalo_pids.size
-
-                    # Define the velocity space linking length
-                    sub_vlinkl = vlinkl_halo_indp * (1600 / 200)**(1/6) * (pmass * subhalo_npart) ** (1 / 3)
-
-                    # Define the phase space vectors for this halo
-                    subhalo_phases = np.concatenate((subhalo_poss, subhalo_vels), axis=1)
-
-                    pq_start = time.time()
-                    # Query this halo in velocity space to split apart halos which are distinct in velocity space
-                    result = find_phase_space_halos(subhalo_phases, sub_linkl, sub_vlinkl)
-                    phase_part_subhaloids, phase_assigned_subparts = result
-                    if (time.time() - pq_start) > 10:
-                        print('phase query: ', newID + 1, sub_newID, subhalo_phases.shape[0], time.time() - pq_start)
-
-                    # Find the halos with 10 or more particles by finding the unique IDs in the particle
-                    # halo ids array and finding those IDs that are assigned to 10 or more particles
-                    phase_subunique, subphase_counts = np.unique(phase_part_subhaloids, return_counts=True)
-                    unique_phase_subhaloids = phase_subunique[np.where(subphase_counts >= 10)]
-                    subphase_counts = subphase_counts[np.where(subphase_counts >= 10)]
-
-                    # Remove the null -2 value for single particle halos
-                    subphase_counts = subphase_counts[np.where(unique_phase_subhaloids >= 0)]
-                    unique_phase_subhaloids = unique_phase_subhaloids[np.where(unique_phase_subhaloids >= 0)]
-
-                    for spID in unique_phase_subhaloids:
-
-                        # Extract specific halo data for halo ID
-                        # Particle ID, NOTE: Overwrites the C/FORTRAN IDs which start at 1
-                        subhalo_pids = full_subhalo_pids[list(phase_assigned_subparts[spID])]
-                        subhalo_poss = halo_poss[subhalo_pids, :]  # Positions *** NOTE: These are shifted below ***
-                        subhalo_vels = halo_vels[subhalo_pids, :]  # Velocities *** NOTE: These are shifted below ***
-                        subhalo_npart = len(subhalo_pids)
-
-                        # =============== Compute mean positions and velocities and wrap the halos ===============
-
-                        # Compute the shifted mean position in the dimension ixyz
-                        mean_subhalo_pos = subhalo_poss.mean(axis=0)
-
-                        # Centre the halos about the mean in the dimension ixyz
-                        subhalo_poss -= mean_subhalo_pos
-
-                        # Compute halo's energy
-                        subhalo_energy, sKE, sGE = halo_energy_calc(subhalo_poss, subhalo_vels, subhalo_npart,
-                                                                    pmass, redshift, G, h, soft)
-
-                        new_subvlcoeff = vlcoeff / 2
-
-                        iter_subhalo_pids = subhalo_pids
-                        iter_subhalo_poss = subhalo_poss
-                        iter_subhalo_vels = subhalo_vels
-
-                        while sKE / sGE > 1 and subhalo_npart >= 10 and new_subvlcoeff >= 0.8:
-
-                            new_subvlcoeff -= 0.1
-
-                            # Define the velocity space linking length
-                            sub_vlinkl = new_subvlcoeff / vlcoeff * vlinkl_halo_indp * (1600 / 200) ** (1 / 6) \
-                                         * (pmass * subhalo_npart) ** (1 / 3)
-
-                            # Define the phase space vectors for this halo
-                            subhalo_phases = np.concatenate((iter_subhalo_poss, iter_subhalo_vels), axis=1)
-
-                            # Query this halo in phase space to split apart halos which are found to
-                            # be distinct in phase space
-                            result = find_phase_space_halos(subhalo_phases, sub_linkl, sub_vlinkl)
-                            iter_part_subhaloids, iter_assigned_subparts = result
-
-                            # Find the halos with 10 or more particles by finding the unique IDs in the particle
-                            # halo ids array and finding those IDs that are assigned to 10 or more particles
-                            iter_unique, iter_subcounts = np.unique(iter_part_subhaloids, return_counts=True)
-                            unique_iter_subhaloids = iter_unique[np.where(iter_subcounts >= 10)]
-                            iter_subcounts = iter_subcounts[np.where(iter_subcounts >= 10)]
-
-                            # Remove the null -2 value for single particle halos
-                            iter_subcounts = iter_subcounts[np.where(unique_iter_subhaloids >= 0)]
-                            unique_iter_subhaloids = unique_iter_subhaloids[np.where(unique_iter_subhaloids >= 0)]
-
-                            if unique_iter_subhaloids.size != 0:
-
-                                # Sort IDs by count
-                                unique_iter_subhaloids = unique_iter_subhaloids[np.argsort(iter_subcounts)]
-
-                                iterID = unique_iter_subhaloids[0]
-                                for siID in unique_iter_subhaloids[1:]:
-                                    unique_subhaloids.append(newsubID_iter)
-                                    assigned_subparts[newsubID_iter] = iter_subhalo_pids[
-                                        np.array(list(iter_assigned_subparts[siID]), dtype=int)]
-                                    newsubID_iter += 100
-
-                                # Extract halo data for this phase space defined halo ID
-                                # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                                psubhalo_pids = np.array(list(iter_assigned_subparts[iterID]), dtype=int)
-                                iter_subhalo_pids = iter_subhalo_pids[psubhalo_pids]
-                                iter_subhalo_poss = halo_poss[iter_subhalo_pids, :]
-                                iter_subhalo_vels = halo_vels[iter_subhalo_pids, :]
-                                subhalo_npart = iter_subhalo_pids.size
-
-                                # Compute halo's energy
-                                subhalo_energy, sKE, sGE = halo_energy_calc(iter_subhalo_poss, iter_subhalo_vels,
-                                                                            subhalo_npart, pmass, redshift, G, h, soft)
-
-                            else:
-                                subhalo_npart = 0
-
-                        if subhalo_npart >= 10:
-
-                            # Extract halo data for this phase space defined halo ID
-                            # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                            subhalo_pids = iter_subhalo_pids
-                            subhalo_poss = halo_poss[subhalo_pids, :] + mean_halo_pos  # Positions *** NOTE: these are shifted below ***
-                            subhalo_vels = halo_vels[subhalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-                            subhalo_npart = subhalo_pids.size
-
-                            # Increment mass counter
-                            if 10 <= subhalo_npart < 20:
-                                plus10subs += 1
-                            elif 20 <= subhalo_npart < 100:
-                                plus20subs += 1
-                            elif 100 <= subhalo_npart < 1000:
-                                plus100subs += 1
-                            elif 1000 <= subhalo_npart < 10000:
-                                plus1000subs += 1
-                            elif subhalo_npart >= 10000:
-                                plus10000subs += 1
-
-                            # =============== Compute mean positions and velocities and wrap the halos ===============
-
-                            # Compute the shifted mean position in the dimension ixyz
-                            mean_subhalo_pos = subhalo_poss.mean(axis=0)
-
-                            # Centre the halos about the mean in the dimension ixyz
-                            subhalo_poss -= mean_subhalo_pos
-
-                            # Compute the mean velocity in the dimension ixyz
-                            mean_subhalo_vel = subhalo_vels.mean(axis=0)
-
-                            # Increment the newID such that the IDs are sequential
-                            sub_newID += 1
-
-                            # Reassign the IDs such that they are sequential for halos with 10 or more particles
-                            final_part_subhaloids[subhalo_pids] = sub_newID
-
-                            # Reassign the IDs such that they are sequential for halos with 10 or more particles
-                            part_haloids[halo_pids[subhalo_pids], 1] = sub_newID
-
-                            if subhalo_energy > 0:
-                                sreal = False
-                            else:
-                                sreal = True
-
-                            # Open root group
-                            snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
-                            halo = snap[str(newID)]
-
-                            # Create datasets in the current halo's group in the HDF5 file
-                            subhalo = halo.create_group(str(sub_newID))  # create halo group
-                            subhalo.create_dataset('Subhalo_Part_IDs', shape=[len(subhalo_pids)],
-                                                   dtype=int, compression='gzip', data=halo_pids[subhalo_pids])
-                            subhalo.create_dataset('Subhalo_Pos', shape=subhalo_poss.shape, dtype=float,
-                                                   compression='gzip', data=subhalo_poss)
-                            subhalo.create_dataset('Subhalo_Vel', shape=subhalo_vels.shape, dtype=float,
-                                                   compression='gzip', data=subhalo_vels)
-                            subhalo.create_dataset('subhalo_mean_pos', shape=mean_subhalo_pos.shape, dtype=float,
-                                                   compression='gzip', data=mean_subhalo_pos)  # mean position
-                            subhalo.create_dataset('subhalo_mean_vel', shape=mean_subhalo_vel.shape, dtype=float,
-                                                   compression='gzip', data=mean_subhalo_vel)  # mean velocity
-                            subhalo.attrs['halo_nPart'] = subhalo_npart  # number of particles in halo
-                            subhalo.attrs['halo_energy'] = subhalo_energy  # halo energy
-                            subhalo.attrs['KE'] = sKE  # kinetic energy
-                            subhalo.attrs['GE'] = sGE  # gravitational binding energy
-                            subhalo.attrs['Real'] = sreal
-
-                            # # Assign the full halo IDs array to the snapshot group
-                            # halo.create_dataset('Subhalo_IDs', shape=final_part_subhaloids.shape, dtype=int,
-                            #                     compression='gzip', data=final_part_subhaloids)
-
-                            snap.close()
+            halo_npart = s_halo_pids.size
+            real = results[resID]['real']
+            mean_halo_pos = results[resID]['mean_halo_pos']
+            mean_halo_vel = results[resID]['mean_halo_vel']
+            halo_energy = results[resID]['halo_energy']
+            KE = results[resID]['KE']
+            GE = results[resID]['GE']
+
+            # ============ If substructure or energy criteria has been satisfied write out the result =============
+
+            # Increment the newID such that the IDs are sequential
+            newID += 1
+
+            # Reassign the IDs such that they are sequential for halos with 10 or more particles
+            part_haloids[halo_pids, 0] = newID
+
+            # Open root group
+            hdf = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
+
+            # Create datasets in the current halo's group in the HDF5 file
+            halo = hdf.create_group(str(newID))  # create halo group
+            halo.create_dataset('Halo_Part_IDs', shape=[len(halo_pids)], dtype=int,
+                                compression='gzip', data=halo_pids)  # halo particle ids
+            halo.create_dataset('Halo_Pos', shape=halo_poss.shape, dtype=float,
+                                compression='gzip', data=halo_poss)  # halo centered positions
+            halo.create_dataset('Halo_Vel', shape=halo_vels.shape, dtype=float,
+                                compression='gzip', data=halo_vels)  # halo centered velocities
+            halo.create_dataset('mean_pos', shape=mean_halo_pos.shape, dtype=float,
+                                compression='gzip', data=mean_halo_pos)  # mean position
+            halo.create_dataset('mean_vel', shape=mean_halo_vel.shape, dtype=float,
+                                compression='gzip', data=mean_halo_vel)  # mean velocity
+            halo.attrs['halo_nPart'] = halo_npart  # number of particles in halo
+            halo.attrs['Real'] = real  # realness flag
+            # halo.attrs['nSubhalo'] = unique_final_subhaloids.size  # number of subhalos
+            halo.attrs['halo_energy'] = halo_energy  # halo energy
+            halo.attrs['KE'] = KE  # kinetic energy
+            halo.attrs['GE'] = GE  # gravitational binding energy
+
+            hdf.close()
 
     # Open root group
-    snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
+    hdf = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'r+')
 
     # Assign the full halo IDs array to the snapshot group
-    snap.create_dataset('Halo_IDs', shape=part_haloids.shape, dtype=int, compression='gzip', data=part_haloids)
+    hdf.create_dataset('Halo_IDs', shape=part_haloids.shape, dtype=int, compression='gzip', data=part_haloids)
 
-    snap.close()
+    hdf.close()
 
     # Find the halos with 10 or more particles by finding the unique IDs in the particle
     # halo ids array and finding those IDs that are assigned to 10 or more particles
-    unique, counts = np.unique(part_haloids, return_counts=True)
+    unique, counts = np.unique(part_haloids[:, 0], return_counts=True)
 
     unique_haloids = unique[np.where(counts >= 10)]
 
@@ -1269,10 +952,13 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
 
     # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-    print('Post Sub Structure Test')
+    print('Post Phase Space')
     print(unique_haloids.size, 'halos found with 10 or more particles')
+    print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
     print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
+    print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
     print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
+    print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
     print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
     print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
 
@@ -1304,14 +990,14 @@ def hosthalofinder(snapshot, llcoeff=0.2, sub_llcoeff=0.1, gadgetpath='snapshotd
     f.write('Halos found to be not real: ' + str(notreal))
     f.close()
 
-    if 'energy_dicts' not in os.listdir(os.getcwd()):
-        os.mkdir('energy_dicts')
-
-    with open('energy_dicts/energy_ba_' + snapshot + '.pck', 'wb') as pfile:
-        pickle.dump(energy_dict, pfile)
-
-    if 'vel_linkl' not in os.listdir(os.getcwd()):
-        os.mkdir('vel_linkl')
-
-    with open('vel_linkl/valpha_' + snapshot + '.pck', 'wb') as pfile:
-        pickle.dump(valpha_dict, pfile)
+    # if 'energy_dicts' not in os.listdir(os.getcwd()):
+    #     os.mkdir('energy_dicts')
+    #
+    # with open('energy_dicts/energy_ba_' + snapshot + '.pck', 'wb') as pfile:
+    #     pickle.dump(energy_dict, pfile)
+    #
+    # if 'vel_linkl' not in os.listdir(os.getcwd()):
+    #     os.mkdir('vel_linkl')
+    #
+    # with open('vel_linkl/valpha_' + snapshot + '.pck', 'wb') as pfile:
+    #     pickle.dump(valpha_dict, pfile)
