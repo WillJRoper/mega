@@ -914,7 +914,7 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
 
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
-                   batchsize, savepath, ini_vlcoeff, min_vlcoeff, decrement, verbose, internal_input, findsubs):
+                   batchsize, savepath, ini_vlcoeff, min_vlcoeff, decrement, verbose, internal_input, findsubs, ncells):
     """ Run the halo finder, sort the output results, find subhalos and save to a HDF5 file.
 
         NOTE: MPI task allocation adapted with thanks from:
@@ -932,7 +932,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
 
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
-    nbins = 100
 
     # =============== Domain Decomposition ===============
     if verbose:
@@ -964,11 +963,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
         # Compute the linking length for host halos
         linkl = llcoeff * mean_sep
 
-        # Ensure grid is larger than the linking length
-        assert boxsize / nbins > linkl, "The node size is smaller than the linking length, " \
-                                        "decrease the number of nodes along each axis"
-
-        nodes = utilities.decomp_nodes(npart, nbins)
+        nodes = utilities.decomp_nodes(npart, ncells)
 
         if verbose:
             print("Domain Decomposition and tree building:", time.time() - start_dd)
@@ -1065,7 +1060,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
                     # Get this task
                     thisTask = tasks.pop()
 
-                    comm.send((thisTask, pos[nodes[thisTask], :], npart), dest=source, tag=tags.START)
+                    comm.send((thisTask, pos[nodes[thisTask], :]), dest=source, tag=tags.START)
 
                 else:
 
@@ -1129,7 +1124,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
 
             if tag == tags.START:
 
-                result = spatial_node_task(thisTask[0], thisTask[1], tree, linkl, thisTask[2])
+                result = spatial_node_task(thisTask[0], thisTask[1], tree, linkl, npart)
                 comm.send(result, dest=0, tag=tags.DONE)
 
             elif tag == tags.EXIT:
