@@ -142,7 +142,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
     
     if rank == 0:
 
-        # =============== Current Snapshot ===============
+        # =============== Read Current Snapshot ===============
+
+        read_start = time.time()
 
         # Load the current snapshot data
         hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r')
@@ -157,6 +159,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         # Get only the real halo ids
         halo_ids = halo_ids[reals]
+
+        print("Master data reading took", time.time() - read_start, "seconds")
 
         # =============== Find all Direct Progenitors And Descendant Of Halos In This Snapshot ===============
 
@@ -200,6 +204,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         halo_ids = None
 
         # =========================== Load the necessary data for the child processes ===========================
+
+        read_start = time.time()
 
         # Load the current snapshot data
         hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r')
@@ -247,6 +253,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             desc_haloids = np.array([])
             desc_npart = np.array([])
 
+        print("Child data reading took", time.time() - read_start, "seconds")
+
         # Worker processes execute code below
         name = MPI.Get_processor_name()
         # print("I am a worker with rank %d on %s." % (rank, name))
@@ -261,8 +269,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             if tag == tags.START:
 
-                # Assign the particle IDs contained in the current halo
+                # Get the particle IDs contained in the current task's halo
                 current_halo_pids = hdf_current[str(haloID)]['Halo_Part_IDs'][...]
+
+                # Extract the progenitor and descendant IDs for these particles
                 progs = prog_haloids[current_halo_pids]
                 descs = desc_haloids[current_halo_pids]
                 npart = current_halo_pids.size
@@ -289,8 +299,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
-
-        print("Collecting the results took", time.time() - collect_start, "seconds")
 
         if verbose:
             print("Collecting the results took", time.time() - collect_start, "seconds")

@@ -41,8 +41,6 @@ def find_halos(tree, pos, linkl, npart):
              query_func: The tree query object assigned to a variable.
     """
 
-    task_npart = pos.shape[0]
-
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise the arrays and dictionaries for storing halo data
@@ -461,9 +459,9 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
     halo_pids = {}
     for halo in task_assigned_parts:
         part_inds = list(task_assigned_parts[halo])
-        halo_pids[halo] = part_inds
+        halo_pids[(thisTask, halo)] = part_inds
 
-    return thisTask, halo_pids
+    return halo_pids
 
 
 def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, linkl, pmass, vlcoeff, decrement,
@@ -997,33 +995,36 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
         vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6) * (1 + redshift) ** 0.5).value
 
     else:
+
+        # Open hdf5 file
+        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+        # Get parameters for decomposition
+        boxsize = hdf.attrs['boxsize']
+        npart = hdf.attrs['npart']
+        redshift = hdf.attrs['redshift']
+        pmass = hdf.attrs['pmass']
+        h = hdf.attrs['h']
+        pos = hdf['part_pos'][...]
+
+        hdf.close()
+
+        # Define and convert particle mass to M_sun
+        pmass *= 1e10 * 1 / h
+
         tree = None
         nodes = None
-        redshift = None
         linkl = None
         soft = None
         G = None
-        npart = None
-        pmass = None
-        mean_sep = None
         sub_linkl = None
         mean_den = None
         vlinkl_indp = None
-        boxsize = None
-        h = None
-        pos = None
 
-    nodes, redshift, tree = comm.bcast((nodes, redshift, tree), root=0)
-    linkl, soft, G, pmass, mean_sep, sub_linkl, mean_den, vlinkl_halo_indp, boxsize, h, npart = comm.bcast((linkl, soft,
-                                                                                                            G,
-                                                                                                            pmass,
-                                                                                                            mean_sep,
-                                                                                                            sub_linkl,
-                                                                                                            mean_den,
-                                                                                                            vlinkl_indp,
-                                                                                                            boxsize, h,
-                                                                                                            npart),
-                                                                                                           root=0)
+    nodes, tree, linkl, soft, G, sub_linkl, mean_den, vlinkl_halo_indp = comm.bcast((nodes, tree, linkl, soft, G,
+                                                                                     sub_linkl, mean_den, vlinkl_indp),
+                                                                                    root=0)
+
     nnodes = len(nodes)
 
     if verbose:
@@ -1033,19 +1034,13 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
 
     if rank == 0:
 
-        # Initialise particle halo id array for full simulation for spatial halos and phase space halos
-        spatial_part_haloids = np.full((npart, 2), -2, dtype=int)
-        phase_part_haloids = np.full((npart, 2), -2, dtype=int)
-
         # Initialise dictionaries to store halo data
-        halo_pids = {}
-        vlcoeffs = {}
+        results = {}
 
         start = time.time()
 
         # Master process executes code below
         tasks = set(range(nnodes))
-        newtaskID = nnodes + 1
         num_workers = size - 1
         closed_workers = 0
         while closed_workers < num_workers:
@@ -1060,7 +1055,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
                     # Get this task
                     thisTask = tasks.pop()
 
-                    comm.send((thisTask, pos[nodes[thisTask], :]), dest=source, tag=tags.START)
+                    comm.send(thisTask, dest=source, tag=tags.START)
 
                 else:
 
@@ -1068,37 +1063,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
                     comm.send(None, dest=source, tag=tags.EXIT)
 
             elif tag == tags.DONE:
-                results = data
-
-                # Store halo ids and halo data for the halos found out in the spatial search
-                for halo in results[1]:
-
-                    parts = results[1][halo]
-                    uni_part_haloids = np.unique(spatial_part_haloids[parts, 0])
-                    uni_part_haloids = uni_part_haloids[uni_part_haloids >= 0]
-                    if len(uni_part_haloids) == 0:
-
-                        # Assign new halo to
-                        spatial_part_haloids[parts, 0] = newtaskID
-                        halo_pids[(1, newtaskID)] = set(parts)
-
-                        newtaskID += 1
-
-                    elif len(uni_part_haloids) == 1:
-
-                        spatial_part_haloids[parts, 0] = uni_part_haloids[0]
-                        halo_pids[(1, uni_part_haloids[np.where(uni_part_haloids != -2)].min())].update(parts)
-
-                    else:
-
-                        existing_halos = uni_part_haloids
-                        final_id = existing_halos.min()
-                        other_parts = set()
-                        for halo in existing_halos:
-                            other_parts.update(halo_pids.pop((1, halo)))
-                        other_parts.update(parts)
-                        spatial_part_haloids[list(other_parts), 0] = uni_part_haloids[0]
-                        halo_pids[(1, final_id)] = other_parts
+                result = data
 
             elif tag == tags.EXIT:
 
@@ -1108,11 +1073,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
 
     else:
 
-        spatial_part_haloids = None
-        vlcoeffs = None
-        halo_pids = None
-        newtaskID = None
-        phase_part_haloids = None
+        results = {}
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
@@ -1124,8 +1085,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
 
             if tag == tags.START:
 
-                result = spatial_node_task(thisTask[0], thisTask[1], tree, linkl, npart)
-                comm.send(result, dest=0, tag=tags.DONE)
+                result = spatial_node_task(thisTask, pos[nodes[thisTask], :], tree, linkl, npart)
+                results[thisTask] = result
+                comm.send(None, dest=0, tag=tags.DONE)
 
             elif tag == tags.EXIT:
                 break
@@ -1136,13 +1098,66 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
         print("This Rank:", rank)
         print(hp.heap())
 
-    comm.barrier()
+    # Collect child process results
+    collect_start = time.time()
+    collected_results = comm.gather(results, root=0)
 
     if rank == 0:
+
+        # Initialise particle halo id array for full simulation for spatial halos and phase space halos
+        spatial_part_haloids = np.full((npart, 2), -2, dtype=int)
+        phase_part_haloids = np.full((npart, 2), -2, dtype=int)
+
+        # Combine collected results from children processes into a single dict
+        results = {k: v for d in collected_results for k, v in d.items()}
+
+        if verbose:
+            print("Collecting the results took", time.time() - collect_start, "seconds")
+
+        halo_pids = {}
+        vlcoeffs = {}
+
+        combine_start = time.time()
+
+        # Store halo ids and halo data for the halos found out in the spatial search
+        newtaskID = 0
+        for task in results:
+            for halo in results[task]:
+
+                parts = results[task][halo]
+                uni_part_haloids = np.unique(spatial_part_haloids[parts, 0])
+                uni_part_haloids = uni_part_haloids[uni_part_haloids >= 0]
+
+                if len(uni_part_haloids) == 0:
+
+                    # Assign new halo to
+                    spatial_part_haloids[parts, 0] = newtaskID
+                    halo_pids[(1, newtaskID)] = set(parts)
+
+                    newtaskID += 1
+
+                elif len(uni_part_haloids) == 1:
+
+                    spatial_part_haloids[parts, 0] = uni_part_haloids[0]
+                    halo_pids[(1, uni_part_haloids[np.where(uni_part_haloids != -2)].min())].update(parts)
+
+                else:
+
+                    existing_halos = uni_part_haloids
+                    final_id = existing_halos.min()
+                    other_parts = set()
+                    for halo in existing_halos:
+                        other_parts.update(halo_pids.pop((1, halo)))
+                    other_parts.update(parts)
+                    spatial_part_haloids[list(other_parts), 0] = uni_part_haloids[0]
+                    halo_pids[(1, final_id)] = other_parts
 
         combined_data = utilities.combine_across_boundaries(snapshot, spatial_part_haloids, ini_vlcoeff,
                                                             vlcoeffs, halo_pids, boxsize, inputpath)
         halo_poss, halo_vels, halo_pids, vlcoeffs, unique_haloids = combined_data
+
+        if verbose:
+            print("Combining the results took", time.time() - combine_start, "seconds")
 
         # Define dictionaries to collate results
         results_dict = {}
@@ -1516,6 +1531,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
     else:
 
         results_dict = None
+        spatial_part_haloids = None
+        newtaskID = None
+        phase_part_haloids = None
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
