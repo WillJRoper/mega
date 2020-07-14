@@ -224,8 +224,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             elif tag == tags.DONE:
                 result = data
 
-                results[result[0]] = result[1:]
-
             elif tag == tags.EXIT:
 
                 closed_workers += 1
@@ -234,7 +232,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
     else:
 
-        results = None
+        results = {}
         reals = None
         halo_ids = None
 
@@ -286,14 +284,22 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 result = directProgDescFinder(thisTask[0], thisTask[1], thisTask[2], thisTask[3], thisTask[4],
                                               preals, prog_npart, desc_npart, thisTask[5])
 
-                comm.send(result, dest=0, tag=tags.DONE)
+                results[result[0]] = result[1:]
+
+                comm.send(None, dest=0, tag=tags.DONE)
 
             elif tag == tags.EXIT:
                 break
 
         comm.send(None, dest=0, tag=tags.EXIT)
 
+    # Collect child process results
+    collected_results = comm.gather(results, root=0)
+
     if rank == 0:
+
+        # Combine collected results from children processes into a single dict
+        results = {k: v for d in collected_results for k, v in d.items()}
 
         notreals = 0
 
