@@ -161,14 +161,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             # Extract the particle halo ID array and particle ID array
             prog_haloids = hdf_prog['particle_halo_IDs'][:, density_rank]
 
-            # Get progenitor snapshot data
-            if density_rank == 0:
-                preals = hdf_prog['real_flag'][...]
-                prog_npart = hdf_prog['nparts'][...]
-            else:
-                preals = hdf_prog['Subhalos']['real_flag'][...]
-                prog_npart = hdf_prog['Subhalos']['nparts'][...]
-
             hdf_prog.close()
 
         else:
@@ -183,12 +175,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # Extract the particle halo ID array and particle ID array
             desc_haloids = hdf_desc['particle_halo_IDs'][:, density_rank]
-
-            # Get descenitor snapshot data
-            if density_rank == 0:
-                desc_npart = hdf_desc['nparts'][...]
-            else:
-                desc_npart = hdf_desc['Subhalos']['nparts'][...]
 
             hdf_desc.close()
 
@@ -227,8 +213,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                     progs = prog_haloids[current_halo_pids]
                     descs = desc_haloids[current_halo_pids]
 
-                    comm.send((haloID, prog_snap, desc_snap, progs, descs, preals, prog_npart, desc_npart,
-                               current_halo_pids.size),
+                    comm.send((haloID, prog_snap, desc_snap, progs, descs, current_halo_pids.size),
                               dest=source, tag=tags.START)
 
                 else:
@@ -253,6 +238,41 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         reals = None
         halo_ids = None
 
+        if prog_snap != None:
+
+            # Load the progenitor snapshot
+            hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
+
+            # Get progenitor snapshot data
+            if density_rank == 0:
+                preals = hdf_prog['real_flag'][...]
+                prog_npart = hdf_prog['nparts'][...]
+            else:
+                preals = hdf_prog['Subhalos']['real_flag'][...]
+                prog_npart = hdf_prog['Subhalos']['nparts'][...]
+
+            hdf_prog.close()
+
+        else:
+            preals = np.array([])
+            prog_npart = np.array([])
+
+        if desc_snap != None:
+
+            # Load the descenitor snapshot
+            hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
+
+            # Get descendant snapshot data
+            if density_rank == 0:
+                desc_npart = hdf_desc['nparts'][...]
+            else:
+                desc_npart = hdf_desc['Subhalos']['nparts'][...]
+
+            hdf_desc.close()
+
+        else:
+            desc_npart = np.array([])
+
         # Worker processes execute code below
         name = MPI.Get_processor_name()
         # print("I am a worker with rank %d on %s." % (rank, name))
@@ -264,7 +284,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             if tag == tags.START:
 
                 result = directProgDescFinder(thisTask[0], thisTask[1], thisTask[2], thisTask[3], thisTask[4],
-                                              thisTask[5], thisTask[6], thisTask[7], thisTask[8])
+                                              preals, prog_npart, desc_npart, thisTask[8])
 
                 comm.send(result, dest=0, tag=tags.DONE)
 
