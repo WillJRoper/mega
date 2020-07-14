@@ -148,7 +148,7 @@ elif flags['usemultiprocessing']:
 elif flags['usempi']:
 
     import mpi4py
-    MPI = mpi4py.MPI
+    from mpi4py import MPI
     mpi4py.rc.recv_mprobe = False
 
     # Initializations and preliminaries

@@ -4,7 +4,7 @@ from guppy import hpy; hp = hpy()
 import itertools
 import numpy as np
 import mpi4py
-MPI = mpi4py.MPI
+from mpi4py import MPI
 mpi4py.rc.recv_mprobe = False
 import astropy.constants as const
 import astropy.units as u
