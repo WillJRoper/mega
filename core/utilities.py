@@ -182,7 +182,7 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift, G,
     return halo_energy, KE, GE
 
 
-def wrap_halo(halo_poss, boxsize):
+def wrap_halo(halo_poss, boxsize, domean=False):
 
     # Define the comparison particle as the maximum position in the current dimension
     max_part_pos = halo_poss.max(axis=0)
@@ -196,13 +196,18 @@ def wrap_halo(halo_poss, boxsize):
     # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
     halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
-    # Compute the shifted mean position in the dimension ixyz
-    mean_halo_pos = halo_poss.mean(axis=0)
+    if domean:
+        # Compute the shifted mean position in the dimension ixyz
+        mean_halo_pos = halo_poss.mean(axis=0)
 
-    # Centre the halos about the mean in the dimension ixyz
-    halo_poss -= mean_halo_pos
+        # Centre the halos about the mean in the dimension ixyz
+        halo_poss -= mean_halo_pos
 
-    return halo_poss, mean_halo_pos
+        return halo_poss, mean_halo_pos
+
+    else:
+
+        return halo_poss
 
 
 def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft):

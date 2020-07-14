@@ -26,14 +26,12 @@ def find_halos(tree, pos, linkl, npart):
     """ A function which creates a KD-Tree using scipy.CKDTree and queries it to find particles
     neighbours within a linking length. From This neighbour information particles are assigned
     halo IDs and then returned.
-
     :param pos: The particle position vectors array.
     :param npart: The number of particles in the simulation.
     :param boxsize: The length of the simulation box along one axis.
     :param batchsize: The batchsize for each query to the KD-Tree (see Docs for more information).
     :param linkl: The linking length.
     :param debug_npart: Number of particles to sort during debugging if required.
-
     :return: part_haloids: The array of halo IDs assigned to each particle (where the index is the particle ID)
              assigned_parts: A dictionary containing the particle IDs assigned to each halo.
              final_halo_ids: An array of final halo IDs (where the index is the initial halo ID and value is the
@@ -159,12 +157,10 @@ def find_halos(tree, pos, linkl, npart):
 def find_subhalos(halo_pos, sub_linkl):
     """ A function that finds subhalos within host halos by applying the same KD-Tree algorithm at a
     higher overdensity.
-
     :param halo_pos: The position vectors of particles within the host halo.
     :param sub_llcoeff: The linking length coefficient used to define a subhalo.
     :param boxsize: The length of the simulation box along one axis.
     :param npart: The number of particles in the simulation.
-
     :return: part_subhaloids: The array of subhalo IDs assigned to each particle in the host halo
              (where the index is the particle ID).
              assignedsub_parts: A dictionary containing the particle IDs assigned to each subhalo.
@@ -916,17 +912,14 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath,
                    batchsize, savepath, ini_vlcoeff, min_vlcoeff, decrement, verbose, internal_input, findsubs, ncells):
     """ Run the halo finder, sort the output results, find subhalos and save to a HDF5 file.
-
         NOTE: MPI task allocation adapted with thanks from:
               https://github.com/jbornschein/mpi4py-examples/blob/master/09-task-pull.py
-
     :param snapshot: The snapshot ID.
     :param llcoeff: The host halo linking length coefficient.
     :param sub_llcoeff: The subhalo linking length coefficient.
     :param gadgetpath: The filepath to the gadget simulation data.
     :param batchsize: The number of particle to be queried at one time.
     :param debug_npart: The number of particles to run the program on when debugging.
-
     :return: None
     """
 
