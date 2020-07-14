@@ -284,7 +284,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             if tag == tags.START:
 
                 result = directProgDescFinder(thisTask[0], thisTask[1], thisTask[2], thisTask[3], thisTask[4],
-                                              preals, prog_npart, desc_npart, thisTask[8])
+                                              preals, prog_npart, desc_npart, thisTask[5])
 
                 comm.send(result, dest=0, tag=tags.DONE)
 
