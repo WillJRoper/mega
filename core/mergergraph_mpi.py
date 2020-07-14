@@ -5,6 +5,8 @@ from mpi4py import MPI
 mpi4py.rc.recv_mprobe = False
 from guppy import hpy; hp = hpy()
 import utilities
+import sys
+import time
 
 
 # Initializations and preliminaries
@@ -14,7 +16,7 @@ rank = comm.rank        # density_rank of this process
 status = MPI.Status()   # get MPI status object
 
 
-def directProgDescFinder(haloID, prog_snap, desc_snap, prog_haloids, desc_haloids, prog_reals,
+def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_reals,
                          prog_nparts, desc_nparts, npart):
     """
 
@@ -117,7 +119,7 @@ def directProgDescFinder(haloID, prog_snap, desc_snap, prog_haloids, desc_haloid
         desc_haloids = np.array([-1], copy=False, dtype=int)
         desc_mass_contribution = np.array([-1], copy=False, dtype=int)
 
-    return (haloID, nprog, prog_haloids, prog_npart, prog_mass_contribution,
+    return (nprog, prog_haloids, prog_npart, prog_mass_contribution,
             ndesc, desc_haloids, desc_npart, desc_mass_contribution,
             preals, npart)
 
@@ -153,34 +155,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             halo_ids = hdf_current['Subhalos']['subhalo_IDs'][...]
             reals = hdf_current['Subhalos']['real_flag'][...]
 
-        if prog_snap != None:
-
-            # Load the progenitor snapshot
-            hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
-
-            # Extract the particle halo ID array and particle ID array
-            prog_haloids = hdf_prog['particle_halo_IDs'][:, density_rank]
-
-            hdf_prog.close()
-
-        else:
-            prog_haloids = np.array([])
-            preals = np.array([])
-            prog_npart = np.array([])
-
-        if desc_snap != None:
-
-            # Load the descenitor snapshot
-            hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
-
-            # Extract the particle halo ID array and particle ID array
-            desc_haloids = hdf_desc['particle_halo_IDs'][:, density_rank]
-
-            hdf_desc.close()
-
-        else:
-            desc_haloids = np.array([])
-            desc_npart = np.array([])
+        # Get only the real halo ids
+        halo_ids = halo_ids[reals]
 
         # =============== Find all Direct Progenitors And Descendant Of Halos In This Snapshot ===============
 
@@ -199,22 +175,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 # Worker is ready, so send it a task
                 if len(tasks) != 0:
 
-                    real = False
-                    haloID = None
+                    haloID = tasks.pop()
 
-                    while not real and len(tasks) > 0:
-
-                        haloID = tasks.pop()
-
-                        real = reals[haloID]
-
-                    # Assign the particle IDs contained in the current halo
-                    current_halo_pids = hdf_current[str(haloID)]['Halo_Part_IDs'][...]
-                    progs = prog_haloids[current_halo_pids]
-                    descs = desc_haloids[current_halo_pids]
-
-                    comm.send((haloID, prog_snap, desc_snap, progs, descs, current_halo_pids.size),
-                              dest=source, tag=tags.START)
+                    comm.send(haloID, dest=source, tag=tags.START)
 
                 else:
 
@@ -236,10 +199,18 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         reals = None
         halo_ids = None
 
+        # =========================== Load the necessary data for the child processes ===========================
+
+        # Load the current snapshot data
+        hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r')
+
         if prog_snap != None:
 
             # Load the progenitor snapshot
             hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
+
+            # Extract the particle halo ID array and particle ID array
+            prog_haloids = hdf_prog['particle_halo_IDs'][:, density_rank]
 
             # Get progenitor snapshot data
             if density_rank == 0:
@@ -252,6 +223,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             hdf_prog.close()
 
         else:
+            prog_haloids = np.array([])
             preals = np.array([])
             prog_npart = np.array([])
 
@@ -259,6 +231,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # Load the descenitor snapshot
             hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
+
+            # Extract the particle halo ID array and particle ID array
+            desc_haloids = hdf_desc['particle_halo_IDs'][:, density_rank]
 
             # Get descendant snapshot data
             if density_rank == 0:
@@ -269,22 +244,33 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             hdf_desc.close()
 
         else:
+            desc_haloids = np.array([])
             desc_npart = np.array([])
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
         # print("I am a worker with rank %d on %s." % (rank, name))
+
+        # =========================== Get from master and complete tasks ===========================
+
         while True:
+
             comm.send(None, dest=0, tag=tags.READY)
-            thisTask = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+            haloID = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
             tag = status.Get_tag()
 
             if tag == tags.START:
 
-                result = directProgDescFinder(thisTask[0], thisTask[1], thisTask[2], thisTask[3], thisTask[4],
-                                              preals, prog_npart, desc_npart, thisTask[5])
+                # Assign the particle IDs contained in the current halo
+                current_halo_pids = hdf_current[str(haloID)]['Halo_Part_IDs'][...]
+                progs = prog_haloids[current_halo_pids]
+                descs = desc_haloids[current_halo_pids]
+                npart = current_halo_pids.size
 
-                results[result[0]] = result[1:]
+                result = directProgDescFinder(prog_snap, desc_snap, progs, descs,
+                                              preals, prog_npart, desc_npart, npart)
+
+                results[haloID] = result
 
                 comm.send(None, dest=0, tag=tags.DONE)
 
@@ -293,7 +279,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         comm.send(None, dest=0, tag=tags.EXIT)
 
+        hdf_current.close()
+
     # Collect child process results
+    collect_start = time.time()
     collected_results = comm.gather(results, root=0)
 
     if rank == 0:
@@ -301,11 +290,16 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
 
+        print("Collecting the results took", time.time() - collect_start, "seconds")
+
+        if verbose:
+            print("Collecting the results took", time.time() - collect_start, "seconds")
+
         notreals = 0
 
         # Set up arrays to store host results
-        nhalo = len(halo_ids)
-        index_haloids = halo_ids
+        nhalo = np.max(halo_ids) + 1
+        index_haloids = np.arange(nhalo, dtype=int)
         halo_nparts = np.full(nhalo, -2, dtype=int)
         nprogs = np.full(nhalo, -2, dtype=int)
         ndescs = np.full(nhalo, -2, dtype=int)
