@@ -1,6 +1,8 @@
 import numpy as np
 import h5py
-from mpi4py import MPI
+import mpi4py
+MPI = mpi4py.MPI
+mpi4py.rc.recv_mprobe = False
 from guppy import hpy; hp = hpy()
 import utilities
 

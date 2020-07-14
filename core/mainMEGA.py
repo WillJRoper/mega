@@ -147,7 +147,9 @@ elif flags['usemultiprocessing']:
 
 elif flags['usempi']:
 
-    from mpi4py import MPI
+    import mpi4py
+    MPI = mpi4py.MPI
+    mpi4py.rc.recv_mprobe = False
 
     # Initializations and preliminaries
     comm = MPI.COMM_WORLD  # get MPI communicator object
