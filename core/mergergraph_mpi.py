@@ -383,63 +383,63 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         prog_nparts = np.array(prog_nparts)
         desc_nparts = np.array(desc_nparts)
 
-        # Create file to store this snapshots graph results
-        if density_rank == 0:
-            hdf = h5py.File(savepath + 'Mgraph_' + snap + '.hdf5', 'w')
-        else:
-            hdf = h5py.File(savepath + 'SubMgraph_' + snap + '.hdf5', 'w')
-
-        hdf.create_dataset('halo_IDs', shape=index_haloids.shape, dtype=int, data=index_haloids, compression='gzip')
-        hdf.create_dataset('nProgs', shape=nprogs.shape, dtype=int, data=nprogs, compression='gzip')
-        hdf.create_dataset('nDescs', shape=ndescs.shape, dtype=int, data=ndescs, compression='gzip')
-        hdf.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
-        hdf.create_dataset('prog_start_index', shape=prog_start_index.shape, dtype=int, data=prog_start_index,
-                           compression='gzip')
-        hdf.create_dataset('desc_start_index', shape=desc_start_index.shape, dtype=int, data=desc_start_index,
-                           compression='gzip')
-        hdf.create_dataset('Prog_haloIDs', shape=progs.shape, dtype=int, data=progs, compression='gzip')
-        hdf.create_dataset('Desc_haloIDs', shape=descs.shape, dtype=int, data=descs, compression='gzip')
-        hdf.create_dataset('Prog_Mass_Contribution', shape=prog_mass_conts.shape, dtype=int, data=prog_mass_conts,
-                           compression='gzip')
-        hdf.create_dataset('Desc_Mass_Contribution', shape=desc_mass_conts.shape, dtype=int, data=desc_mass_conts,
-                           compression='gzip')
-        hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
-        hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
-        hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
-
-        hdf.close()
-
-        # Load the descendant snapshot
-        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
-
-        # Set the reality flag in the halo catalog
-        if density_rank == 0:
-            del hdf_desc['real_flag']
-            hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-                                    compression='gzip')
-        else:
-            sub_desc = hdf_desc['Subhalos']
-            del sub_desc['real_flag']
-            sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-                                    compression='gzip')
-
-        hdf_desc.close()
-
-        # Load the descendant snapshot
-        hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
-
-        # Set the reality flag in the halo catalog
-        if density_rank == 0:
-            del hdf_current['real_flag']
-            hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-                                    compression='gzip')
-        else:
-            sub_current = hdf_current['Subhalos']
-            del sub_current['real_flag']
-            sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-                                    compression='gzip')
-
-        hdf_current.close()
+        # # Create file to store this snapshots graph results
+        # if density_rank == 0:
+        #     hdf = h5py.File(savepath + 'Mgraph_' + snap + '.hdf5', 'w')
+        # else:
+        #     hdf = h5py.File(savepath + 'SubMgraph_' + snap + '.hdf5', 'w')
+        #
+        # hdf.create_dataset('halo_IDs', shape=index_haloids.shape, dtype=int, data=index_haloids, compression='gzip')
+        # hdf.create_dataset('nProgs', shape=nprogs.shape, dtype=int, data=nprogs, compression='gzip')
+        # hdf.create_dataset('nDescs', shape=ndescs.shape, dtype=int, data=ndescs, compression='gzip')
+        # hdf.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
+        # hdf.create_dataset('prog_start_index', shape=prog_start_index.shape, dtype=int, data=prog_start_index,
+        #                    compression='gzip')
+        # hdf.create_dataset('desc_start_index', shape=desc_start_index.shape, dtype=int, data=desc_start_index,
+        #                    compression='gzip')
+        # hdf.create_dataset('Prog_haloIDs', shape=progs.shape, dtype=int, data=progs, compression='gzip')
+        # hdf.create_dataset('Desc_haloIDs', shape=descs.shape, dtype=int, data=descs, compression='gzip')
+        # hdf.create_dataset('Prog_Mass_Contribution', shape=prog_mass_conts.shape, dtype=int, data=prog_mass_conts,
+        #                    compression='gzip')
+        # hdf.create_dataset('Desc_Mass_Contribution', shape=desc_mass_conts.shape, dtype=int, data=desc_mass_conts,
+        #                    compression='gzip')
+        # hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
+        # hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
+        # hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
+        #
+        # hdf.close()
+        #
+        # # Load the descendant snapshot
+        # hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
+        #
+        # # Set the reality flag in the halo catalog
+        # if density_rank == 0:
+        #     del hdf_desc['real_flag']
+        #     hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+        #                             compression='gzip')
+        # else:
+        #     sub_desc = hdf_desc['Subhalos']
+        #     del sub_desc['real_flag']
+        #     sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+        #                             compression='gzip')
+        #
+        # hdf_desc.close()
+        #
+        # # Load the descendant snapshot
+        # hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
+        #
+        # # Set the reality flag in the halo catalog
+        # if density_rank == 0:
+        #     del hdf_current['real_flag']
+        #     hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+        #                             compression='gzip')
+        # else:
+        #     sub_current = hdf_current['Subhalos']
+        #     del sub_current['real_flag']
+        #     sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+        #                             compression='gzip')
+        #
+        # hdf_current.close()
 
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
