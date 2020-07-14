@@ -2,24 +2,25 @@ import numpy as np
 import h5py
 import mpi4py
 from mpi4py import MPI
+
 mpi4py.rc.recv_mprobe = False
-from guppy import hpy; hp = hpy()
+from guppy import hpy;
+
+hp = hpy()
 import utilities
 import sys
 import time
 
-
 # Initializations and preliminaries
-comm = MPI.COMM_WORLD   # get MPI communicator object
-size = comm.size        # total number of processes
-rank = comm.rank        # density_rank of this process
-status = MPI.Status()   # get MPI status object
+comm = MPI.COMM_WORLD  # get MPI communicator object
+size = comm.size  # total number of processes
+rank = comm.rank  # density_rank of this process
+status = MPI.Status()  # get MPI status object
 
 
 def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_reals,
                          prog_nparts, desc_nparts, npart):
     """
-
     :param current_halo_pids:
     :param prog_snap_haloIDs:
     :param desc_snap_haloIDs:
@@ -128,18 +129,16 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                          density_rank, verbose, final_snapnum):
     """ A function which cycles through all halos in a snapshot finding and writing out the
     direct progenitor and descendant data.
-
     :param snapshot: The snapshot ID.
     :param halopath: The filepath to the halo finder HDF5 file.
     :param savepath: The filepath to the directory where the Merger Graph should be written out to.
     :param part_threshold: The mass (number of particles) threshold defining a halo.
-
     :return: None
     """
 
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
-    
+
     if rank == 0:
 
         # =============== Read Current Snapshot ===============
@@ -148,7 +147,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         # Load the current snapshot data
         hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r')
-    
+
         # Extract the halo IDs (group names/keys) contained within this snapshot
         if density_rank == 0:
             halo_ids = hdf_current['halo_IDs'][...]
@@ -156,6 +155,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         else:
             halo_ids = hdf_current['Subhalos']['subhalo_IDs'][...]
             reals = hdf_current['Subhalos']['real_flag'][...]
+
+        hdf_current.close()  # close the root group
 
         # Get only the real halo ids
         halo_ids = halo_ids[reals]
@@ -194,8 +195,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             elif tag == tags.EXIT:
 
                 closed_workers += 1
-
-        hdf_current.close()  # close the root group to reduce overhead when looping
 
     else:
 
@@ -349,7 +348,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             # If this halo has no real progenitors and is less than 20 particle it is by definition not
             # a halo
             if nprog == 0 and npart < 20:
-
                 reals[haloID] = False
                 notreals += 1
 
@@ -357,7 +355,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # If this halo is real then it's descendents are real
             if int(desc_snap) < final_snapnum and reals[haloID]:
-
                 desc_reals[desc_haloids] = True
 
             # Write out the data produced
@@ -371,7 +368,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 prog_mass_conts.extend(prog_mass_contribution)
                 prog_nparts.extend(prog_npart)
             else:
-                prog_start_index[haloID] = 2**30
+                prog_start_index[haloID] = 2 ** 30
 
             if ndesc > 0:
                 desc_start_index[haloID] = len(descs)
@@ -379,8 +376,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 desc_mass_conts.extend(desc_mass_contribution)
                 desc_nparts.extend(desc_npart)
             else:
-                desc_start_index[haloID] = 2**30
-
+                desc_start_index[haloID] = 2 ** 30
 
             # if nprog > 0:
             #     prog_start_index[haloID] = prog_ind
