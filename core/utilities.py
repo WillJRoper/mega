@@ -260,21 +260,44 @@ def decomp_nodes(npart, nbins):
     return nodes
 
 
-def combine_across_boundaries(snapshot, spatial_part_haloids, ini_vlcoeff, vlcoeffs,
-                              halo_pids, boxsize, inputpath):
+def combine_across_boundaries(results, snapshot, spatial_part_haloids, ini_vlcoeff, boxsize, inputpath, nnodes):
 
-    # Open hdf5 file
-    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+    # Initialise halo dictionaries read for the phase space test
+    halo_pids = {}
+    vlcoeffs = {}
 
-    # Get parameters for decomposition
-    pos = hdf['part_pos'][...]
-    vel = hdf['part_vel'][...]
+    # Store halo ids and halo data for the halos found out in the spatial search
+    newtaskID = nnodes
+    for task in results:
+        for halo in results[task]:
 
-    hdf.close()
+            parts = results[task][halo]
+            uni_part_haloids = np.unique(spatial_part_haloids[parts, 0])
+            uni_part_haloids = uni_part_haloids[uni_part_haloids >= 0]
 
-    # Initialise dictionaries to store halo data
-    halo_poss = {}
-    halo_vels = {}
+            if len(uni_part_haloids) == 0:
+
+                # Assign new halo to
+                spatial_part_haloids[parts, 0] = newtaskID
+                halo_pids[(1, newtaskID)] = set(parts)
+
+                newtaskID += 1
+
+            elif len(uni_part_haloids) == 1:
+
+                spatial_part_haloids[parts, 0] = uni_part_haloids[0]
+                halo_pids[(1, uni_part_haloids[np.where(uni_part_haloids != -2)].min())].update(parts)
+
+            else:
+
+                existing_halos = uni_part_haloids
+                final_id = existing_halos.min()
+                other_parts = set()
+                for halo in existing_halos:
+                    other_parts.update(halo_pids.pop((1, halo)))
+                other_parts.update(parts)
+                spatial_part_haloids[list(other_parts), 0] = uni_part_haloids[0]
+                halo_pids[(1, final_id)] = other_parts
 
     # Find the halos with 10 or more particles by finding the unique IDs in the particle
     # halo ids array and finding those IDs that are assigned to 10 or more particles
@@ -290,27 +313,9 @@ def combine_across_boundaries(snapshot, spatial_part_haloids, ini_vlcoeff, vlcoe
         vlcoeffs[(1, ihaloid)] = ini_vlcoeff
 
         pids = list(halo_pids[(1, ihaloid)])
+        halo_pids[(1, ihaloid)] = np.array(pids)
 
-        ps = pos[pids, :]
-
-        # Define the comparison particle as the maximum position in the current dimension
-        max_part_pos = ps.max(axis=0)
-
-        # Compute all the halo particle separations from the maximum position
-        sep = max_part_pos - ps
-
-        # If any separations are greater than 50% the boxsize (i.e. the halo is
-        # split over the boundary) bring the particles at the lower boundary together
-        # with the particles at the upper boundary (ignores halos where constituent
-        # particles aren't separated by at least 50% of the boxsize)
-        # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-        ps[np.where(sep > 0.5 * boxsize)] += boxsize
-
-        halo_poss[(1, ihaloid)] = ps
-        halo_vels[(1, ihaloid)] = vel[pids, :]
-        halo_pids[(1, ihaloid)] = pids
-
-    return halo_poss, halo_vels, halo_pids, vlcoeffs, unique_haloids
+    return halo_pids, vlcoeffs, unique_haloids, spatial_part_haloids, newtaskID
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):
