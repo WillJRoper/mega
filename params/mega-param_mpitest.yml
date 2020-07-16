@@ -49,5 +49,5 @@ parameters:
   decrement:           0.05           # The amount alpha_v is decremented by in each phase-space iteration
   part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
                                       # with real progenitors will be kept below this threshold
-  N_cells:             100            # The number of cells to split the particles into for spatial search,
+  N_cells:             500            # The number of cells to split the particles into for spatial search,
                                       # (i.e. npart_per_cell = npart / N_cells)
