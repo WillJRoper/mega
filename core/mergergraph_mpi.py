@@ -1,15 +1,15 @@
 import numpy as np
 import h5py
 import mpi4py
+import pickle
 from mpi4py import MPI
-
+import utilities
+import sys
+import time
 mpi4py.rc.recv_mprobe = False
 from guppy import hpy;
 
 hp = hpy()
-import utilities
-import sys
-import time
 
 # Initializations and preliminaries
 comm = MPI.COMM_WORLD  # get MPI communicator object
@@ -126,7 +126,7 @@ def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_
 
 
 def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
-                         density_rank, verbose, final_snapnum):
+                         density_rank, verbose, final_snapnum, profile, profile_path):
     """ A function which cycles through all halos in a snapshot finding and writing out the
     direct progenitor and descendant data.
     :param snapshot: The snapshot ID.
@@ -138,6 +138,17 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
+
+    if profile:
+        profile_dict = {}
+        profile_dict["START"] = time.time()
+        profile_dict["Reading"] = {"Start": [], "End": []}
+        profile_dict["Linking"] = {"Start": [], "End": []}
+        profile_dict["Assigning"] = {"Start": [], "End": []}
+        profile_dict["Collecting"] = {"Start": [], "End": []}
+        profile_dict["Writing"] = {"Start": [], "End": []}
+    else:
+        profile_dict = None
 
     if rank == 0:
 
@@ -163,6 +174,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         print("Master data reading took", time.time() - read_start, "seconds")
 
+        if profile:
+            profile_dict["Reading"]["Start"].append(read_start)
+            profile_dict["Reading"]["End"].append(time.time())
+
         # =============== Find all Direct Progenitors And Descendant Of Halos In This Snapshot ===============
 
         results = {}
@@ -180,9 +195,15 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 # Worker is ready, so send it a task
                 if len(tasks) != 0:
 
+                    assign_start = time.time()
+
                     haloID = tasks.pop()
 
                     comm.send(haloID, dest=source, tag=tags.START)
+
+                    if profile:
+                        profile_dict["Assigning"]["Start"].append(assign_start)
+                        profile_dict["Assigning"]["End"].append(time.time())
 
                 else:
 
@@ -254,6 +275,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         print("Child data reading took", time.time() - read_start, "seconds")
 
+        if profile:
+            profile_dict["Reading"]["Start"].append(read_start)
+            profile_dict["Reading"]["End"].append(time.time())
+
         # Worker processes execute code below
         name = MPI.Get_processor_name()
         # print("I am a worker with rank %d on %s." % (rank, name))
@@ -267,6 +292,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             tag = status.Get_tag()
 
             if tag == tags.START:
+
+                task_start = time.time()
 
                 # Get the particle IDs contained in the current task's halo
                 current_halo_pids = hdf_current[str(haloID)]['Halo_Part_IDs'][...]
@@ -283,6 +310,12 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
                 comm.send(None, dest=0, tag=tags.DONE)
 
+                task_end = time.time()
+
+                if profile:
+                    profile_dict["Linking"]["Start"].append(task_start)
+                    profile_dict["Linking"]["End"].append(task_end)
+
             elif tag == tags.EXIT:
                 break
 
@@ -294,6 +327,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
 
+    if profile and rank != 0:
+        profile_dict["Collecting"]["Start"].append(collect_start)
+        profile_dict["Collecting"]["End"].append(time.time())
+
     if rank == 0:
 
         # Combine collected results from children processes into a single dict
@@ -301,6 +338,12 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         if verbose:
             print("Collecting the results took", time.time() - collect_start, "seconds")
+
+        if profile:
+            profile_dict["Collecting"]["Start"].append(collect_start)
+            profile_dict["Collecting"]["End"].append(time.time())
+
+        write_start = time.time()
 
         notreals = 0
 
@@ -312,12 +355,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         ndescs = np.full(nhalo, -2, dtype=int)
         prog_start_index = np.full(nhalo, -2, dtype=int)
         desc_start_index = np.full(nhalo, -2, dtype=int)
-        # progs = np.full(nhalo * 2, -2, dtype=int)
-        # descs = np.full(nhalo, -2, dtype=int)
-        # prog_mass_conts = np.full(nhalo * 2, -2, dtype=int)
-        # desc_mass_conts = np.full(nhalo * 2, -2, dtype=int)
-        # prog_nparts = np.full(nhalo * 2, -2, dtype=int)
-        # desc_nparts = np.full(nhalo * 2, -2, dtype=int)
 
         progs = []
         descs = []
@@ -325,9 +362,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         desc_mass_conts = []
         prog_nparts = []
         desc_nparts = []
-
-        # prog_ind = 0
-        # desc_ind = 0
 
         # Load the descendant snapshot
         hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
@@ -378,28 +412,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             else:
                 desc_start_index[haloID] = 2 ** 30
 
-            # if nprog > 0:
-            #     prog_start_index[haloID] = prog_ind
-            #     progs[prog_ind: prog_ind + nprog] = prog_haloids
-            #     prog_mass_conts[prog_ind: prog_ind + nprog] = prog_mass_contribution
-            #     prog_nparts[prog_ind: prog_ind + nprog] = prog_npart
-            #
-            # if ndesc > 0:
-            #     desc_start_index[haloID] = desc_ind
-            #     descs[desc_ind: desc_ind + ndesc] = desc_haloids
-            #     desc_mass_conts[desc_ind: desc_ind + ndesc] = desc_mass_contribution
-            #     desc_nparts[desc_ind: desc_ind + ndesc] = desc_npart
-
-            # prog_ind += nprog
-            # desc_ind += ndesc
-
-        # progs = progs[:prog_ind]
-        # descs = descs[:desc_ind]
-        # prog_mass_conts = prog_mass_conts[:prog_ind]
-        # desc_mass_conts = desc_mass_conts[:desc_ind]
-        # prog_nparts = prog_nparts[:prog_ind]
-        # desc_nparts = desc_nparts[:desc_ind]
-
         progs = np.array(progs)
         descs = np.array(descs)
         prog_mass_conts = np.array(prog_mass_conts)
@@ -407,64 +419,74 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         prog_nparts = np.array(prog_nparts)
         desc_nparts = np.array(desc_nparts)
 
-        # # Create file to store this snapshots graph results
-        # if density_rank == 0:
-        #     hdf = h5py.File(savepath + 'Mgraph_' + snap + '.hdf5', 'w')
-        # else:
-        #     hdf = h5py.File(savepath + 'SubMgraph_' + snap + '.hdf5', 'w')
-        #
-        # hdf.create_dataset('halo_IDs', shape=index_haloids.shape, dtype=int, data=index_haloids, compression='gzip')
-        # hdf.create_dataset('nProgs', shape=nprogs.shape, dtype=int, data=nprogs, compression='gzip')
-        # hdf.create_dataset('nDescs', shape=ndescs.shape, dtype=int, data=ndescs, compression='gzip')
-        # hdf.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
-        # hdf.create_dataset('prog_start_index', shape=prog_start_index.shape, dtype=int, data=prog_start_index,
-        #                    compression='gzip')
-        # hdf.create_dataset('desc_start_index', shape=desc_start_index.shape, dtype=int, data=desc_start_index,
-        #                    compression='gzip')
-        # hdf.create_dataset('Prog_haloIDs', shape=progs.shape, dtype=int, data=progs, compression='gzip')
-        # hdf.create_dataset('Desc_haloIDs', shape=descs.shape, dtype=int, data=descs, compression='gzip')
-        # hdf.create_dataset('Prog_Mass_Contribution', shape=prog_mass_conts.shape, dtype=int, data=prog_mass_conts,
-        #                    compression='gzip')
-        # hdf.create_dataset('Desc_Mass_Contribution', shape=desc_mass_conts.shape, dtype=int, data=desc_mass_conts,
-        #                    compression='gzip')
-        # hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
-        # hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
-        # hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
-        #
-        # hdf.close()
-        #
-        # # Load the descendant snapshot
-        # hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
-        #
-        # # Set the reality flag in the halo catalog
-        # if density_rank == 0:
-        #     del hdf_desc['real_flag']
-        #     hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-        #                             compression='gzip')
-        # else:
-        #     sub_desc = hdf_desc['Subhalos']
-        #     del sub_desc['real_flag']
-        #     sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-        #                             compression='gzip')
-        #
-        # hdf_desc.close()
-        #
-        # # Load the descendant snapshot
-        # hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
-        #
-        # # Set the reality flag in the halo catalog
-        # if density_rank == 0:
-        #     del hdf_current['real_flag']
-        #     hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-        #                             compression='gzip')
-        # else:
-        #     sub_current = hdf_current['Subhalos']
-        #     del sub_current['real_flag']
-        #     sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
-        #                             compression='gzip')
-        #
-        # hdf_current.close()
+        # Create file to store this snapshots graph results
+        if density_rank == 0:
+            hdf = h5py.File(savepath + 'Mgraph_' + snap + '.hdf5', 'w')
+        else:
+            hdf = h5py.File(savepath + 'SubMgraph_' + snap + '.hdf5', 'w')
+
+        hdf.create_dataset('halo_IDs', shape=index_haloids.shape, dtype=int, data=index_haloids, compression='gzip')
+        hdf.create_dataset('nProgs', shape=nprogs.shape, dtype=int, data=nprogs, compression='gzip')
+        hdf.create_dataset('nDescs', shape=ndescs.shape, dtype=int, data=ndescs, compression='gzip')
+        hdf.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
+        hdf.create_dataset('prog_start_index', shape=prog_start_index.shape, dtype=int, data=prog_start_index,
+                           compression='gzip')
+        hdf.create_dataset('desc_start_index', shape=desc_start_index.shape, dtype=int, data=desc_start_index,
+                           compression='gzip')
+        hdf.create_dataset('Prog_haloIDs', shape=progs.shape, dtype=int, data=progs, compression='gzip')
+        hdf.create_dataset('Desc_haloIDs', shape=descs.shape, dtype=int, data=descs, compression='gzip')
+        hdf.create_dataset('Prog_Mass_Contribution', shape=prog_mass_conts.shape, dtype=int, data=prog_mass_conts,
+                           compression='gzip')
+        hdf.create_dataset('Desc_Mass_Contribution', shape=desc_mass_conts.shape, dtype=int, data=desc_mass_conts,
+                           compression='gzip')
+        hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
+        hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
+        hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
+
+        hdf.close()
+
+        # Load the descendant snapshot
+        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
+
+        # Set the reality flag in the halo catalog
+        if density_rank == 0:
+            del hdf_desc['real_flag']
+            hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                    compression='gzip')
+        else:
+            sub_desc = hdf_desc['Subhalos']
+            del sub_desc['real_flag']
+            sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                    compression='gzip')
+
+        hdf_desc.close()
+
+        # Load the descendant snapshot
+        hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')
+
+        # Set the reality flag in the halo catalog
+        if density_rank == 0:
+            del hdf_current['real_flag']
+            hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+                                    compression='gzip')
+        else:
+            sub_current = hdf_current['Subhalos']
+            del sub_current['real_flag']
+            sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
+                                    compression='gzip')
+
+        hdf_current.close()
+
+        if profile:
+            profile_dict["Writing"]["Start"].append(write_start)
+            profile_dict["Writing"]["End"].append(time.time())
 
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
         print("Not real halos", notreals, 'of', nhalo)
+
+    if profile:
+        profile_dict["END"] = time.time()
+
+        with open(profile_path + "Graph_" + str(rank) + '_' + snap + '.pck', 'wb') as pfile:
+            pickle.dump(profile_dict, pfile)
