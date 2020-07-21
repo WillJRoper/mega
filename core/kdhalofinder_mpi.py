@@ -455,9 +455,11 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
 
     # Get the positions
     halo_pids = {}
-    for halo in task_assigned_parts:
-        part_inds = list(task_assigned_parts[halo])
-        halo_pids[(thisTask, halo)] = part_inds
+    while len(task_assigned_parts) > 0:
+        item = task_assigned_parts.popitem()
+        halo, part_inds = item
+        # halo_pids[(thisTask, halo)] = np.array(list(part_inds))
+        halo_pids[(thisTask, halo)] = frozenset(part_inds)
 
     return halo_pids
 
@@ -1141,7 +1143,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             elif tag == tags.EXIT:
 
-                results = utilities.combine_tasks_per_thread(results, spatial_part_haloids, rank)
+                combine_start = time.time()
+
+                results = utilities.combine_tasks_per_thread(results, rank)
+                # results = utilities.combine_tasks_per_thread(results, spatial_part_haloids, rank)
+
+                if profile:
+                    profile_dict["Housekeeping"]["Start"].append(combine_start)
+                    profile_dict["Housekeeping"]["End"].append(time.time())
 
                 break
 
@@ -1323,6 +1332,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     else:
 
+        spatial_part_haloids = None
         newtaskID = None
         phase_part_haloids = None
         newSpatialSubID = None
