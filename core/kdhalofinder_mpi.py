@@ -1,4 +1,5 @@
 from scipy.spatial import cKDTree
+from scipy.sparse import dok_matrix
 from collections import defaultdict
 from guppy import hpy; hp = hpy()
 import itertools
@@ -1116,6 +1117,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     else:
 
         results = {}
+        spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
@@ -1138,6 +1140,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                     profile_dict["Host-Spatial"]["End"].append(time.time())
 
             elif tag == tags.EXIT:
+
+                results = utilities.combine_tasks_per_thread(results, spatial_part_haloids, rank)
+
                 break
 
         comm.send(None, dest=0, tag=tags.EXIT)
@@ -1149,7 +1154,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Collect child process results
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
-    
+
     if profile and rank != 0:
         profile_dict["Collecting"]["Start"].append(collect_start)
         profile_dict["Collecting"]["End"].append(time.time())
@@ -1157,8 +1162,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     if rank == 0:
 
         # Initialise particle halo id array for full simulation for spatial halos and phase space halos
-        spatial_part_haloids = np.full((npart, 2), -2, dtype=int)
-        phase_part_haloids = np.full((npart, 2), -2, dtype=int)
+        spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+        phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
 
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
@@ -1172,8 +1177,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         combine_start = time.time()
 
-        combined_data = utilities.combine_across_boundaries(results, snapshot, spatial_part_haloids, ini_vlcoeff,
-                                                            boxsize, inputpath, nnodes)
+        combined_data = utilities.combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes)
         halo_pids, vlcoeffs, unique_haloids, spatial_part_haloids, newtaskID = combined_data
 
         if verbose:
@@ -1319,7 +1323,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     else:
 
-        spatial_part_haloids = None
         newtaskID = None
         phase_part_haloids = None
         newSpatialSubID = None

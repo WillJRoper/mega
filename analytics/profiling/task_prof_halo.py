@@ -87,7 +87,7 @@ ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
 # Plot lines to denote each task
 for rank in range(nranks + 1):
-    ax.plot((0, master_total), (rank - 0.5, rank - 0.5), color='k', linewidth=1)
+    ax.plot((0, master_total), (rank - 0.5, rank - 0.5), color='k', linewidth=0.1)
 
 for spine in ax.spines.values():
         spine.set_edgecolor('k')
