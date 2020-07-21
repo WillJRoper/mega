@@ -1,6 +1,7 @@
 import yaml
 import readgadgetdata
 import h5py
+import time
 import networkx
 from networkx.algorithms.components.connected import connected_components
 import numpy as np
@@ -348,13 +349,14 @@ def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes):
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
     vlcoeffs = {}
-
+    start = time.time()
     results = set(results.values())
 
     G = to_graph(results)
     results = [parts for parts in connected_components(G) if len(parts) >= 10]
-
+    print("Graph", time.time() - start)
     # Store halo ids and halo data for the halos found out in the spatial search
+    start = time.time()
     newtaskID = nnodes
     while len(results) > 0:
         parts = np.array(list(results.pop()))
@@ -368,6 +370,8 @@ def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes):
 
         newtaskID += 1
 
+    print("Loop", time.time() - start)
+
     # Find the halos with 10 or more particles by finding the unique IDs in the particle
     # halo ids array and finding those IDs that are assigned to 10 or more particles
     unique, counts = np.unique(spatial_part_haloids[:, 0], return_counts=True)
@@ -379,8 +383,7 @@ def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes):
     return halo_pids, vlcoeffs, unique_haloids, spatial_part_haloids, newtaskID
 
 
-def combine_tasks_per_thread(results, rank):
-
+def combine_tasks_per_thread(results, rank, thisRank_parts):
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
 
@@ -394,6 +397,10 @@ def combine_tasks_per_thread(results, rank):
     newtaskID = 0
     while len(results) > 0:
         parts = results.pop()
+
+        if len(parts) < 10:
+            if len(parts - thisRank_parts) == 0:
+                continue
 
         halo_pids[(rank, newtaskID)] = frozenset(parts)
         newtaskID += 1

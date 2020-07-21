@@ -1119,7 +1119,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     else:
 
         results = {}
-        spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+        thisRank_parts = set()
 
         # Worker processes execute code below
         name = MPI.Get_processor_name()
@@ -1134,8 +1134,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 task_start = time.time()
 
                 result = spatial_node_task(thisTask, pos[nodes[thisTask], :], tree, linkl, npart)
-                results[thisTask] = result
+
                 comm.send(None, dest=0, tag=tags.DONE)
+
+                results[thisTask] = result
+                thisRank_parts.update(set(nodes[thisTask]))
 
                 if profile:
                     profile_dict["Host-Spatial"]["Start"].append(task_start)
@@ -1145,7 +1148,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
                 combine_start = time.time()
 
-                results = utilities.combine_tasks_per_thread(results, rank)
+                results = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
                 # results = utilities.combine_tasks_per_thread(results, spatial_part_haloids, rank)
 
                 if profile:
