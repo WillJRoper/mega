@@ -1685,7 +1685,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             profile_dict["Writing"]["Start"].append(write_start)
             profile_dict["Writing"]["End"].append(time.time())
 
-        assert -1 not in np.unique(KEs), "halo ids are not sequential!"
+        # assert -1 not in np.unique(KEs), "halo ids are not sequential!"
 
     if profile:
         profile_dict["END"] = time.time()
