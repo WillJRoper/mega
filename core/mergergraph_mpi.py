@@ -172,7 +172,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         # Get only the real halo ids
         halo_ids = halo_ids[reals]
 
-        print("Master data reading took", time.time() - read_start, "seconds")
+        if verbose:
+            print("Master data reading took", time.time() - read_start, "seconds")
 
         if profile:
             profile_dict["Reading"]["Start"].append(read_start)
@@ -273,7 +274,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             desc_haloids = np.array([])
             desc_npart = np.array([])
 
-        print("Child data reading took", time.time() - read_start, "seconds")
+        if verbose:
+            print("Child data reading took", time.time() - read_start, "seconds")
 
         if profile:
             profile_dict["Reading"]["Start"].append(read_start)
