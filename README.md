@@ -3,4 +3,7 @@ MErger Graph Algorithm: A robust but simple halo finder and merger graph builder
 
 # To Do
 
-- [] extend METIS utilisation to ad the option to use ParMETIS
+- [ ] Finalise graph format 
+- [ ] Extend METIS utilisation to ad the option to use ParMETIS
+- [ ] Paralleise Merger Tree construction
+- [ ] Balance work load to avoid worker wait time
