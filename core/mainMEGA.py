@@ -7,7 +7,7 @@ import mergergraph_mpi as mgmpi
 # import lumberjack as ld
 import time
 import sys
-# import multiprocessing as mp
+import multiprocessing as mp
 import utilities
 
 
@@ -41,10 +41,10 @@ def main_kd(snap):
 
 def main_kdmpi(snap):
     kdmpi.hosthalofinder(snap, llcoeff=params['llcoeff'], sub_llcoeff=params['sub_llcoeff'], inputpath=inputs['data'],
-                         batchsize=params['batchsize'],  savepath=inputs['haloSavePath'],
-                         ini_vlcoeff=params['ini_alpha_v'], min_vlcoeff=params['min_alpha_v'],
-                         decrement=params['decrement'], verbose=flags['verbose'],
-                         internal_input=flags['internalInput'], findsubs=flags['subs'])
+                         savepath=inputs['haloSavePath'], ini_vlcoeff=params['ini_alpha_v'],
+                         min_vlcoeff=params['min_alpha_v'], decrement=params['decrement'], verbose=flags['verbose'],
+                         internal_input=flags['internalInput'], findsubs=flags['subs'], ncells=params['N_cells'],
+                         profile=flags['profile'], profile_path=inputs["profilingPath"])
 
 
 def main_mg(snap, density_rank):
@@ -56,7 +56,8 @@ def main_mg(snap, density_rank):
 def main_mgmpi(snap, prog_snap, desc_snap, density_rank):
     mgmpi.directProgDescWriter(snap, prog_snap, desc_snap, halopath=inputs['haloSavePath'],
                                savepath=inputs['directgraphSavePath'], density_rank=density_rank,
-                               verbose=flags['verbose'], final_snapnum=len(snaplist))
+                               verbose=flags['verbose'], final_snapnum=len(snaplist),
+                               profile=flags['profile'], profile_path=inputs["profilingPath"])
 
 
 def main_mt(snap):
@@ -147,7 +148,9 @@ elif flags['usemultiprocessing']:
 
 elif flags['usempi']:
 
+    import mpi4py
     from mpi4py import MPI
+    mpi4py.rc.recv_mprobe = False
 
     # Initializations and preliminaries
     comm = MPI.COMM_WORLD  # get MPI communicator object

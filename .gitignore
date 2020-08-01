@@ -8,3 +8,5 @@ __*
 snaplist.txt
 treedataloader.py
 scaling/
+profiling/*
+analytics/plots/*
