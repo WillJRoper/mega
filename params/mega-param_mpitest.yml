@@ -2,7 +2,7 @@
 
 inputs:
 
-  data:                input/            # The filepath containing particle data
+  data:                /Users/willroper/Documents/University/Merger_Trees_to_Merger_Graphs/mega/input/            # The filepath containing particle data
   snapList:            snaplist.txt      # The filepath pointing to the snapshot list file
   haloSavePath:        data/halos/       # The filepath and basename for halo outputs
   directgraphSavePath: data/dgraph/      # The filepath and basename for graph direct progenitor and descendant outputs
@@ -39,7 +39,7 @@ flags:
   binaryInput:         0              # Flag for HDF5 inputs, if False binary format is assumed
 
   verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
-  profile:             1              # Flag for producing profiling txt files while running
+  profile:             0              # Flag for producing profiling txt files while running
 
 
 parameters:

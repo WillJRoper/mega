@@ -10,3 +10,6 @@ treedataloader.py
 scaling/
 profiling/*
 analytics/plots/*
+
+# Exceptions
+!profiling/.gitkeep

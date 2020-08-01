@@ -280,9 +280,12 @@ def decomp_nodes(npart, nbins):
     bin_edges = np.linspace(0, npart, nbins, dtype=int)
 
     # Define the nodes
-    nodes = {}
+    nodes = set()
     for (ind, low), high in zip(enumerate(bin_edges[:-1]), bin_edges[1:]):
-        nodes[ind] = np.arange(low, high, dtype=int)
+        nodes.update(set(np.arange(low, high, dtype=int)))
+
+    # Build a graph from the nodes
+    G = to_graph(nodes)
 
     return nodes
 
