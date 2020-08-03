@@ -39,7 +39,7 @@ flags:
   binaryInput:         0              # Flag for HDF5 inputs, if False binary format is assumed
 
   verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
-  profile:             0              # Flag for producing profiling txt files while running
+  profile:             1              # Flag for producing profiling txt files while running
 
 
 parameters:

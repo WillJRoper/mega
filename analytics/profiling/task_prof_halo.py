@@ -38,7 +38,7 @@ master_time = 0
 cols = {"Writing": "red", "Collecting": "gold", "Domain-Decomp": "yellowgreen", "Reading": "darkorchid",
         "Assigning": "darkgreen", "Worker Idle": 'lightskyblue', "Master Idle": 'violet', "Housekeeping": "aquamarine",
         "Task-Munging": "darkgoldenrod", "Host-Spatial": "firebrick", "Host-Phase": "lime", "Sub-Spatial": "cyan",
-        "Sub-Phase": "darkmagenta"}
+        "Sub-Phase": "darkmagenta", "Communication": "lightseagreen"}
 
 # Set up figure
 fig = plt.figure()

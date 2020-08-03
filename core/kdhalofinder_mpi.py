@@ -1,5 +1,4 @@
 from scipy.spatial import cKDTree
-from scipy.sparse import dok_matrix
 from collections import defaultdict
 from guppy import hpy; hp = hpy()
 import itertools
@@ -921,18 +920,24 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     :return: None
     """
 
-    # Define MPI message tags
-    tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
-
-    # Ensure the number of cells is <= number of ranks
+    # Ensure the number of cells is <= number of ranks and adjust such that the number
+    # of cells is a multiple of the number of ranks
     if ncells < (size - 1):
         ncells = size - 1
+    cells_per_rank = int(ncells % size)
+    if ncells % size != 0:
+        cells_per_rank = int(np.ceil(ncells / size))
+        ncells = cells_per_rank * size
+
+    if verbose and rank == 0:
+        print("nCells adjusted to", ncells)
 
     if profile:
         profile_dict = {}
         profile_dict["START"] = time.time()
         profile_dict["Reading"] = {"Start": [], "End": []}
         profile_dict["Domain-Decomp"] = {"Start": [], "End": []}
+        profile_dict["Communication"] = {"Start": [], "End": []}
         profile_dict["Housekeeping"] = {"Start": [], "End": []}
         profile_dict["Task-Munging"] = {"Start": [], "End": []}
         profile_dict["Host-Spatial"] = {"Start": [], "End": []}
@@ -946,218 +951,187 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         profile_dict = None
 
     # =============== Domain Decomposition ===============
-    if verbose:
-        print("This rank:", rank)
+
+    read_start = time.time()
+
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+    # Get parameters for decomposition
+    mean_sep = hdf.attrs['mean_sep']
+    boxsize = hdf.attrs['boxsize']
+    npart = hdf.attrs['npart']
+    redshift = hdf.attrs['redshift']
+    pmass = hdf.attrs['pmass']
+    h = hdf.attrs['h']
+
+    hdf.close()
+
+    if profile:
+        profile_dict["Reading"]["Start"].append(read_start)
+        profile_dict["Reading"]["End"].append(time.time())
+
+    # ========================== Compute parameters for candidate halo testing ==========================
+
+    set_up_start = time.time()
+
+    # Compute the linking length for host halos
+    linkl = llcoeff * mean_sep
+
+    # Compute the softening length
+    soft = 0.05 * boxsize / npart ** (1. / 3.)
+
+    # Define the gravitational constant
+    G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
+
+    # Define and convert particle mass to M_sun
+    pmass *= 1e10 * 1 / h
+
+    # Compute the linking length for subhalos
+    sub_linkl = sub_llcoeff * mean_sep
+
+    # Compute the mean density
+    mean_den = npart * pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 * (1 + redshift) ** 3
+    mean_den = mean_den.to(u.M_sun / u.km ** 3)
+
+    # Define the velocity space linking length
+    vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6) * (1 + redshift) ** 0.5).value
+
+    # Initialise particle halo id array for full simulation for spatial halos and phase space halos
+    spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+    phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+
+    if profile:
+        profile_dict["Housekeeping"]["Start"].append(set_up_start)
+        profile_dict["Housekeeping"]["End"].append(time.time())
 
     if rank == 0:
 
-        read_start = time.time()
+        start_dd = time.time()
 
         # Open hdf5 file
         hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
 
-        # Get parameters for decomposition
-        mean_sep = hdf.attrs['mean_sep']
-        boxsize = hdf.attrs['boxsize']
-        npart = hdf.attrs['npart']
-        redshift = hdf.attrs['redshift']
-        pmass = hdf.attrs['pmass']
-        h = hdf.attrs['h']
+        # Get positions to perform the decomposition
         pos = hdf['part_pos'][...]
-        vel = None
 
         hdf.close()
 
         if profile:
             profile_dict["Reading"]["Start"].append(read_start)
             profile_dict["Reading"]["End"].append(time.time())
-
-        start_dd = time.time()
 
         # Build the kd tree with the boxsize argument providing 'wrapping' due to periodic boundaries
         # *** Note: Contrary to cKDTree documentation compact_nodes=False and balanced_tree=False results in
         # faster queries (documentation recommends compact_nodes=True and balanced_tree=True)***
         tree = cKDTree(pos, leafsize=16, compact_nodes=False, balanced_tree=False, boxsize=[boxsize, boxsize, boxsize])
 
-        nodes = utilities.decomp_nodes(npart, ncells)
-
         if verbose:
             print("Domain Decomposition and tree building:", time.time() - start_dd)
 
-            print("Nodes memory size", sys.getsizeof(nodes), "bytes")
             print("Tree memory size", sys.getsizeof(tree), "bytes")
 
             print(hp.heap())
 
-        if profile:
-            profile_dict["Domain-Decomp"]["Start"].append(start_dd)
-            profile_dict["Domain-Decomp"]["End"].append(time.time())
-
-        # ========================== Compute parameters for candidate halo testing ==========================
-
-        set_up_start = time.time()
-
-        # Compute the linking length for host halos
-        linkl = llcoeff * mean_sep
-
-        # Compute the softening length
-        soft = 0.05 * boxsize / npart ** (1. / 3.)
-
-        # Define the gravitational constant
-        G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
-
-        # Define and convert particle mass to M_sun
-        pmass *= 1e10 * 1 / h
-
-        # Compute the linking length for subhalos
-        sub_linkl = sub_llcoeff * mean_sep
-
-        # Compute the mean density
-        mean_den = npart * pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 * (1 + redshift) ** 3
-        mean_den = mean_den.to(u.M_sun / u.km ** 3)
-
-        # Define the velocity space linking length
-        vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6) * (1 + redshift) ** 0.5).value
-
     else:
 
-        read_start = time.time()
-
-        # Open hdf5 file
-        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
-
-        # Get parameters for decomposition
-        boxsize = hdf.attrs['boxsize']
-        npart = hdf.attrs['npart']
-        redshift = hdf.attrs['redshift']
-        pmass = hdf.attrs['pmass']
-        h = hdf.attrs['h']
-        pos = hdf['part_pos'][...]
-        vel = hdf['part_vel'][...]
-
-        hdf.close()
-
-        # Define and convert particle mass to M_sun
-        pmass *= 1e10 * 1 / h
+        start_dd = time.time()
 
         tree = None
-        nodes = None
-        linkl = None
-        soft = None
-        G = None
-        sub_linkl = None
-        mean_den = None
-        vlinkl_indp = None
 
-        if profile:
-            profile_dict["Reading"]["Start"].append(read_start)
-            profile_dict["Reading"]["End"].append(time.time())
-            
-    if rank != 0:
-        set_up_start = time.time()
+    thisRank_tasks, thisRank_parts, nnodes = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
 
-    nodes, tree, linkl, soft, G, sub_linkl, mean_den, vlinkl_halo_indp = comm.bcast((nodes, tree, linkl, soft, G,
-                                                                                     sub_linkl, mean_den, vlinkl_indp),
-                                                                                    root=0)
+    if profile:
+        profile_dict["Domain-Decomp"]["Start"].append(start_dd)
+        profile_dict["Domain-Decomp"]["End"].append(time.time())
+
+    comm_start = time.time()
+
+    tree = comm.bcast(tree, root=0)
+
+    if profile:
+        profile_dict["Communication"]["Start"].append(comm_start)
+        profile_dict["Communication"]["End"].append(time.time())
+
+    set_up_start = time.time()
+
+    # Get this ranks particles ID "edges"
+    low_lim, up_lim = thisRank_parts.min(), thisRank_parts.max() + 1
+
+    # Define this ranks index offset (the minimum particle ID contained in a rank)
+    rank_index_offset = thisRank_parts.min()
 
     if profile:
         profile_dict["Housekeeping"]["Start"].append(set_up_start)
         profile_dict["Housekeeping"]["End"].append(time.time())
 
-    nnodes = len(nodes)
+    read_start = time.time()
+
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+    # Get the position and velocity of each particle in this rank
+    pos = hdf['part_pos'][low_lim: up_lim, :]
+    # hdfpos = hdf['part_pos'][...]
+    # pos = hdfpos[low_lim: up_lim, :]
+
+    # del hdfpos
+
+    hdf.close()
+
+    if profile:
+        profile_dict["Reading"]["Start"].append(read_start)
+        profile_dict["Reading"]["End"].append(time.time())
 
     if verbose:
-        print("There are", len(nodes), "nodes")
         print("This Rank:", rank)
         print(hp.heap())
 
+    # ============================== Find spatial halos ==============================
+
+    start = time.time()
+
+    # Initialise dictionaries for results
+    results = {}
+
+    # Initialise task ID counter
+    thisTask = 0
+
+    # Loop over this ranks tasks
+    while len(thisRank_tasks) > 0:
+
+        # Extract this task particle IDs
+        thisTask_parts = thisRank_tasks.pop()
+
+        task_start = time.time()
+
+        # Extract the spatial halos for this tasks particles
+        result = spatial_node_task(thisTask, pos[thisTask_parts - rank_index_offset], tree, linkl, npart)
+
+        # Store the results in a dictionary for later combination
+        results[thisTask] = result
+
+        thisTask += 1
+
+        if profile:
+            profile_dict["Host-Spatial"]["Start"].append(task_start)
+            profile_dict["Host-Spatial"]["End"].append(time.time())
+
+    # ============================== Combine spatial results across ranks ==============================
+
+    combine_start = time.time()
+
+    # Convert to a set for set calculations
+    thisRank_parts = set(thisRank_parts)
+
+    results = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
+
+    if profile:
+        profile_dict["Housekeeping"]["Start"].append(combine_start)
+        profile_dict["Housekeeping"]["End"].append(time.time())
+
     if rank == 0:
-
-        # Initialise dictionaries to store halo data
-        results = {}
-
-        start = time.time()
-
-        # Master process executes code below
-        tasks = set(range(nnodes))
-        num_workers = size - 1
-        closed_workers = 0
-        while closed_workers < num_workers:
-            data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-            source = status.Get_source()
-            tag = status.Get_tag()
-            if tag == tags.READY:
-
-                # Worker is ready, so send it a task
-                if len(tasks) != 0:
-
-                    assign_start = time.time()
-
-                    # Get this task
-                    thisTask = tasks.pop()
-
-                    comm.send(thisTask, dest=source, tag=tags.START)
-                    
-                    if profile:
-                        profile_dict["Assigning"]["Start"].append(assign_start)
-                        profile_dict["Assigning"]["End"].append(time.time())
-
-                else:
-
-                    # There are no tasks left so terminate this process
-                    comm.send(None, dest=source, tag=tags.EXIT)
-
-            elif tag == tags.DONE:
-                result = data
-
-            elif tag == tags.EXIT:
-
-                closed_workers += 1
-
         print("Spatial search finished", time.time() - start)
-
-    else:
-
-        results = {}
-        thisRank_parts = set()
-
-        # Worker processes execute code below
-        name = MPI.Get_processor_name()
-        # print("I am a worker with rank %d on %s." % (rank, name))
-        while True:
-            comm.send(None, dest=0, tag=tags.READY)
-            thisTask = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-            tag = status.Get_tag()
-
-            if tag == tags.START:
-                
-                task_start = time.time()
-
-                result = spatial_node_task(thisTask, pos[nodes[thisTask], :], tree, linkl, npart)
-
-                comm.send(None, dest=0, tag=tags.DONE)
-
-                results[thisTask] = result
-                thisRank_parts.update(set(nodes[thisTask]))
-
-                if profile:
-                    profile_dict["Host-Spatial"]["Start"].append(task_start)
-                    profile_dict["Host-Spatial"]["End"].append(time.time())
-
-            elif tag == tags.EXIT:
-
-                combine_start = time.time()
-
-                results = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
-                # results = utilities.combine_tasks_per_thread(results, spatial_part_haloids, rank)
-
-                if profile:
-                    profile_dict["Housekeeping"]["Start"].append(combine_start)
-                    profile_dict["Housekeeping"]["End"].append(time.time())
-
-                break
-
-        comm.send(None, dest=0, tag=tags.EXIT)
 
     if verbose:
         print("This Rank:", rank)
@@ -1173,10 +1147,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
-        # Initialise particle halo id array for full simulation for spatial halos and phase space halos
-        spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
-        phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
-
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
 
@@ -1189,8 +1159,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         combine_start = time.time()
 
-        combined_data = utilities.combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes)
-        halo_pids, vlcoeffs, unique_haloids, spatial_part_haloids, newtaskID = combined_data
+        combined_data = utilities.combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes, size)
+        all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, unique_haloids, spatial_part_haloids, newtaskID = combined_data
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
@@ -1199,233 +1169,204 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             profile_dict["Housekeeping"]["Start"].append(combine_start)
             profile_dict["Housekeeping"]["End"].append(time.time())
 
-        # Initialise dictionaries to store results
-        results_dict = {}
-        sub_results_dict = {}
-
-        # Define dictionary to keep track of rewritten sequential halo IDs
-        haloID_dict = {}
-        subhaloID_dict = {}
-
-        # Initialise dictionaries to store halo data
-        subhalo_pids = {}
-        sub_vlcoeffs = {}
-
-        # Master process executes code below
-        halo_tasks = set(zip(np.full(len(unique_haloids), 1), unique_haloids))
-        newSpatialSubID = 0
-        newPhaseID = 0
-        newPhaseSubID = 0
-        num_workers = size - 1
-        closed_workers = 0
-        while closed_workers < num_workers:
-            halo_data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-            source = status.Get_source()
-            tag = status.Get_tag()
-            if tag == tags.READY:
-
-                # Worker is ready, so send it a task
-                if len(halo_tasks) != 0:
-
-                    halo_task = halo_tasks.pop()
-
-                    assign_start = time.time()
-
-                    if halo_task[0] == 1:
-
-                        data_tosend = (halo_task, halo_pids.pop(halo_task), vlcoeffs.pop(halo_task))
-                        comm.send(data_tosend, dest=source, tag=tags.START)
-
-                    elif halo_task[0] == 2:
-
-                        data_tosend = (halo_task, subhalo_pids.pop(halo_task))
-                        comm.send(data_tosend, dest=source, tag=tags.START)
-
-                    elif halo_task[0] == 3:
-
-                        data_tosend = (halo_task, subhalo_pids.pop(halo_task), sub_vlcoeffs.pop(halo_task))
-                        comm.send(data_tosend, dest=source, tag=tags.START)
-
-                    if profile:
-                        profile_dict["Assigning"]["Start"].append(assign_start)
-                        profile_dict["Assigning"]["End"].append(time.time())
-
-                else:
-
-                    # There are no tasks left so terminate this process
-                    comm.send(None, dest=source, tag=tags.EXIT)
-
-            elif tag == tags.DONE:
-
-                halo_results = halo_data
-
-                taskmunging_start = time.time()
-
-                if halo_results[0][0] == 1:
-
-                    haloID, post_halo_pids, extra_halo_pids, extra_vlcoeffs = halo_results
-
-                    # Create subhalos tasks from the completed halos
-                    for res in post_halo_pids:
-
-                        if findsubs:  # Only create sub halo tasks if sub halo flag is true
-                            halo_tasks.update({(2, newtaskID)})
-                            subhalo_pids[(2, newtaskID)] = post_halo_pids[res]
-
-                        phase_part_haloids[post_halo_pids[res], 0] = newPhaseID
-                        haloID_dict[(haloID, res)] = newPhaseID
-
-                        # Increment task ID
-                        newtaskID += 1
-                        newPhaseID += 1
-
-                    for key in extra_halo_pids:
-                        halo_tasks.update({(1, newtaskID)})
-                        halo_pids[(1, newtaskID)] = extra_halo_pids[key]
-                        vlcoeffs[(1, newtaskID)] = extra_vlcoeffs[key]
-
-                        # Increment task ID
-                        newtaskID += 1
-
-                elif halo_results[0][0] == 2:
-
-                    thisTask, task_subhalo_pids = halo_results
-
-                    # Create subhalos tasks to test subhalos in phase space
-                    for halo in task_subhalo_pids:
-                        halo_tasks.update({(3, newtaskID)})
-                        subhalo_pids[(3, newtaskID)] = task_subhalo_pids[halo]
-                        sub_vlcoeffs[(3, newtaskID)] = ini_vlcoeff
-
-                        spatial_part_haloids[task_subhalo_pids[halo], 1] = newSpatialSubID
-
-                        # Increment task ID
-                        newtaskID += 1
-                        newSpatialSubID += 1
-
-                elif halo_results[0][0] == 3:
-
-                    subhaloID, post_subhalo_pids, extra_subhalo_pids, extra_sub_vlcoeffs = halo_results
-
-                    # Create subhalos tasks from the completed halos
-                    for res in post_subhalo_pids:
-
-                        phase_part_haloids[post_subhalo_pids[res], 1] = newPhaseSubID
-                        subhaloID_dict[(subhaloID, res)] = newPhaseSubID
-
-                        # Increment task ID
-                        newtaskID += 1
-                        newPhaseSubID += 1
-
-                    for key in extra_subhalo_pids:
-                        halo_tasks.update({(3, newtaskID)})
-                        subhalo_pids[(3, newtaskID)] = extra_subhalo_pids[key]
-                        sub_vlcoeffs[(3, newtaskID)] = extra_sub_vlcoeffs[key]
-
-                        # Increment task ID
-                        newtaskID += 1
-
-                if profile:
-                    profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
-                    profile_dict["Task-Munging"]["End"].append(time.time())
-
-            elif tag == tags.EXIT:
-
-                closed_workers += 1
-
     else:
 
-        spatial_part_haloids = None
+        all_halo_pids =  None
+        all_vlcoeffs = None
+        all_halo_tasks = None
+        parts_in_rank = None
+        nnodes = None
         newtaskID = None
-        phase_part_haloids = None
-        newSpatialSubID = None
-        haloID_dict = None
-        subhaloID_dict = None
-        newPhaseID = None
-        newPhaseSubID = None
 
-        # Initialise dictionaries to store results
-        results_dict = {}
-        sub_results_dict = {}
+    comm_start = time.time()
 
-        # Worker processes execute code below
-        name = MPI.Get_processor_name()
-        while True:
-            comm.send(None, dest=0, tag=tags.READY)
-            thisTask = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-            tag = status.Get_tag()
+    data = comm.bcast((all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, nnodes, newtaskID), root=0)
+    all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, nnodes, newtaskID = data
 
-            if tag == tags.START:
+    if profile:
+        profile_dict["Communication"]["Start"].append(comm_start)
+        profile_dict["Communication"]["End"].append(time.time())
 
-                task_start = time.time()
+    # ============================== Test Halos in Phase Space and find substructure ==============================
 
-                if thisTask[0][0] == 1:
+    set_up_start = time.time()
 
-                    haloID, halo_pids, vlcoeff = thisTask
+    # Extract this ranks spatial halo dictionaries
+    halo_pids = all_halo_pids[rank]
+    vlcoeffs = all_vlcoeffs[rank]
+    halo_tasks = all_halo_tasks[rank]
+    sub_vlcoeffs = {}
+    subhalo_pids = {}
+    haloID_dict = {}
+    subhaloID_dict = {}
 
-                    halo_poss = pos[halo_pids, :]
-                    halo_vels = vel[halo_pids, :]
+    # Get this rank's particle IDs
+    thisRank_parts = parts_in_rank[rank]
 
-                    halo_poss = utilities.wrap_halo(halo_poss, boxsize, domean=False)
+    # Define this ranks index offset (the minimum particle ID contained in a rank)
+    rank_indices = np.full(npart, np.nan, dtype=np.uint32)
+    rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint32)
 
-                    # Do the work here
-                    result = get_real_host_halos(haloID, halo_pids, halo_poss, halo_vels, boxsize,
-                                                 vlinkl_halo_indp, linkl, pmass, vlcoeff, decrement,
-                                                 redshift, G, h, soft, min_vlcoeff)
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
 
-                    thisTask, results, extra_halo_pids, extra_vlcoeffs, post_halo_pids = result
+    # Get the position and velocity of each particle in this rank
+    pos = hdf['part_pos'][thisRank_parts, :]
+    vel = hdf['part_vel'][thisRank_parts, :]
 
-                    results_dict[haloID] = results
+    hdf.close()
 
-                    comm.send((haloID, post_halo_pids, extra_halo_pids, extra_vlcoeffs), dest=0, tag=tags.DONE)
+    # Initialise dictionaries to store results
+    results_dict = {}
+    sub_results_dict = {}
 
-                    if profile:
-                        profile_dict["Host-Phase"]["Start"].append(task_start)
-                        profile_dict["Host-Phase"]["End"].append(time.time())
+    #Initialise ID counters
+    newPhaseID = 0
+    newSpatialSubID = 0
+    newPhaseSubID = 0
 
-                elif thisTask[0][0] == 2:
+    if profile:
+        profile_dict["Housekeeping"]["Start"].append(set_up_start)
+        profile_dict["Housekeeping"]["End"].append(time.time())
 
-                    subhaloID, subhalo_pids = thisTask
+    # Loop through halos
+    while len(halo_tasks) > 0:
 
-                    subhalo_poss = pos[subhalo_pids, :]
+        thisTask = halo_tasks.pop()
 
-                    subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
+        task_start = time.time()
 
-                    # Do the work here
-                    result = get_sub_halos(subhaloID, subhalo_pids, subhalo_poss, sub_linkl)
-                    comm.send(result, dest=0, tag=tags.DONE)
+        if thisTask[0] == 1:
 
-                    if profile:
-                        profile_dict["Sub-Spatial"]["Start"].append(task_start)
-                        profile_dict["Sub-Spatial"]["End"].append(time.time())
+            haloID = thisTask
+            thishalo_pids = halo_pids[thisTask]
+            vlcoeff = vlcoeffs[thisTask]
 
-                elif thisTask[0][0] == 3:
+            halo_poss = pos[rank_indices[thishalo_pids], :]
+            halo_vels = vel[rank_indices[thishalo_pids], :]
 
-                    subhaloID, subhalo_pids, vlcoeff = thisTask
+            halo_poss = utilities.wrap_halo(halo_poss, boxsize, domean=False)
 
-                    subhalo_poss = pos[subhalo_pids, :]
-                    subhalo_vels = vel[subhalo_pids, :]
+            # Do the work here
+            result = get_real_host_halos(haloID, thishalo_pids, halo_poss, halo_vels, boxsize,
+                                         vlinkl_indp, linkl, pmass, vlcoeff, decrement,
+                                         redshift, G, h, soft, min_vlcoeff)
 
-                    subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
+            haloID, results, extra_halo_pids, extra_vlcoeffs, post_halo_pids = result
+            results_dict[haloID] = results
 
-                    result = get_real_sub_halos(subhaloID, subhalo_pids, subhalo_poss, subhalo_vels, boxsize,
-                                                 vlinkl_halo_indp, sub_linkl, pmass, vlcoeff, decrement,
-                                                 redshift, G, h, soft, min_vlcoeff)
+            if profile:
+                profile_dict["Host-Phase"]["Start"].append(task_start)
+                profile_dict["Host-Phase"]["End"].append(time.time())
 
-                    thisTask, results, extra_halo_pids, extra_vlcoeffs, post_halo_pids = result
+            taskmunging_start = time.time()
 
-                    sub_results_dict[subhaloID] = results
+            # Create subhalos tasks from the completed halos
+            for res in post_halo_pids:
 
-                    comm.send((subhaloID, post_halo_pids, extra_halo_pids, extra_vlcoeffs), dest=0, tag=tags.DONE)
+                if findsubs:  # Only create sub halo tasks if sub halo flag is true
+                    halo_tasks.update({(2, newtaskID)})
+                    subhalo_pids[(2, newtaskID)] = post_halo_pids[res]
 
-                    if profile:
-                        profile_dict["Sub-Phase"]["Start"].append(task_start)
-                        profile_dict["Sub-Phase"]["End"].append(time.time())
+                phase_part_haloids[post_halo_pids[res], 0] = newPhaseID
+                haloID_dict[(haloID, res)] = newPhaseID
 
-            elif tag == tags.EXIT:
-                break
+                # Increment task ID
+                newtaskID += 1
+                newPhaseID += 1
 
-        comm.send(None, dest=0, tag=tags.EXIT)
+            for key in extra_halo_pids:
+                halo_tasks.update({(1, newtaskID)})
+                halo_pids[(1, newtaskID)] = extra_halo_pids[key]
+                vlcoeffs[(1, newtaskID)] = extra_vlcoeffs[key]
+
+                # Increment task ID
+                newtaskID += 1
+
+            if profile:
+                profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
+                profile_dict["Task-Munging"]["End"].append(time.time())
+
+        elif thisTask[0] == 2:
+
+            subhaloID = thisTask
+            thishalo_pids = subhalo_pids[thisTask]
+
+            halo_poss = pos[rank_indices[thishalo_pids], :]
+
+            subhalo_poss = utilities.wrap_halo(halo_poss, boxsize, domean=False)
+
+            # Do the work here
+            thisTask, task_subhalo_pids = get_sub_halos(subhaloID, thishalo_pids, subhalo_poss, sub_linkl)
+
+            if profile:
+                profile_dict["Sub-Spatial"]["Start"].append(task_start)
+                profile_dict["Sub-Spatial"]["End"].append(time.time())
+
+            taskmunging_start = time.time()
+
+            # Create subhalos tasks to test subhalos in phase space
+            for halo in task_subhalo_pids:
+                halo_tasks.update({(3, newtaskID)})
+                subhalo_pids[(3, newtaskID)] = task_subhalo_pids[halo]
+                sub_vlcoeffs[(3, newtaskID)] = ini_vlcoeff
+
+                spatial_part_haloids[task_subhalo_pids[halo], 1] = newSpatialSubID
+
+                # Increment task ID
+                newtaskID += 1
+                newSpatialSubID += 1
+
+            if profile:
+                profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
+                profile_dict["Task-Munging"]["End"].append(time.time())
+
+        elif thisTask[0] == 3:
+
+            subhaloID = thisTask
+            thissubhalo_pids = subhalo_pids[thisTask]
+            vlcoeff = sub_vlcoeffs[thisTask]
+
+            subhalo_poss = pos[rank_indices[thissubhalo_pids], :]
+            subhalo_vels = vel[rank_indices[thissubhalo_pids], :]
+
+            subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
+
+            result = get_real_sub_halos(subhaloID, thissubhalo_pids, subhalo_poss, subhalo_vels, boxsize,
+                                        vlinkl_indp, sub_linkl, pmass, vlcoeff, decrement,
+                                        redshift, G, h, soft, min_vlcoeff)
+
+            subhaloID, results, extra_subhalo_pids, extra_sub_vlcoeffs, post_subhalo_pids = result
+
+            sub_results_dict[subhaloID] = results
+
+            if profile:
+                profile_dict["Sub-Phase"]["Start"].append(task_start)
+                profile_dict["Sub-Phase"]["End"].append(time.time())
+
+            taskmunging_start = time.time()
+
+            # Create subhalos tasks from the completed halos
+            for res in post_subhalo_pids:
+
+                phase_part_haloids[post_subhalo_pids[res], 1] = newPhaseSubID
+                subhaloID_dict[(subhaloID, res)] = newPhaseSubID
+
+                # Increment task ID
+                newtaskID += 1
+                newPhaseSubID += 1
+
+            for key in extra_subhalo_pids:
+                halo_tasks.update({(3, newtaskID)})
+                subhalo_pids[(3, newtaskID)] = extra_subhalo_pids[key]
+                sub_vlcoeffs[(3, newtaskID)] = extra_sub_vlcoeffs[key]
+
+                # Increment task ID
+                newtaskID += 1
+
+            if profile:
+                profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
+                profile_dict["Task-Munging"]["End"].append(time.time())
 
     # Collect child process results
     collect_start = time.time()
@@ -1438,19 +1379,30 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
+        newPhaseID = 0
+        newPhaseSubID = 0
+
+        phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+
         # Collect host halo results
         results_dict = {}
         for halo_task in collected_results:
             for task in halo_task:
                 for halo in halo_task[task]:
-                    results_dict[(task, halo)] = halo_task[task][halo]
+                    results_dict[(task, newPhaseID)] = halo_task[task][halo]
+                    pids = halo_task[task][halo]['pids']
+                    phase_part_haloids[pids, 0] = newPhaseID
+                    newPhaseID += 1
 
         # Collect subhalo results
         sub_results_dict = {}
         for subhalo_task in sub_collected_results:
             for subtask in subhalo_task:
                 for subhalo in subhalo_task[subtask]:
-                    sub_results_dict[(subtask, subhalo)] = subhalo_task[subtask][subhalo]
+                    sub_results_dict[(subtask, newPhaseSubID)] = subhalo_task[subtask][subhalo]
+                    pids = subhalo_task[subtask][subhalo]['pids']
+                    phase_part_haloids[pids, 1] = newPhaseSubID
+                    newPhaseSubID += 1
 
         if verbose:
             print("Combining the results took", time.time() - collect_start, "seconds")
@@ -1466,25 +1418,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         # Find the halos with 10 or more particles by finding the unique IDs in the particle
         # halo ids array and finding those IDs that are assigned to 10 or more particles
-        unique, counts = np.unique(spatial_part_haloids[:, 0], return_counts=True)
-        unique_haloids = unique[np.where(counts >= 10)]
-
-        # Remove the null -2 value for single particle halos
-        unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
-
-        # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-        print("=========================== Spatial halos ===========================")
-        print(unique_haloids.size, 'halos found with 10 or more particles')
-        print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
-        print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
-        print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
-        print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
-        print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
-        print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
-        print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
-
-        # Find the halos with 10 or more particles by finding the unique IDs in the particle
-        # halo ids array and finding those IDs that are assigned to 10 or more particles
         unique, counts = np.unique(phase_part_haloids[:, 0], return_counts=True)
         unique_haloids = unique[np.where(counts >= 10)]
 
@@ -1493,25 +1426,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
         print("=========================== Phase halos ===========================")
-        print(unique_haloids.size, 'halos found with 10 or more particles')
-        print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
-        print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
-        print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
-        print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
-        print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
-        print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
-        print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
-
-        # Find the halos with 10 or more particles by finding the unique IDs in the particle
-        # halo ids array and finding those IDs that are assigned to 10 or more particles
-        unique, counts = np.unique(spatial_part_haloids[:, 1], return_counts=True)
-        unique_haloids = unique[np.where(counts >= 10)]
-
-        # Remove the null -2 value for single particle halos
-        unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
-
-        # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-        print("=========================== Spatial subhalos ===========================")
         print(unique_haloids.size, 'halos found with 10 or more particles')
         print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
         print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
