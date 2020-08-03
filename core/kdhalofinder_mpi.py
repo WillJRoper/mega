@@ -1206,7 +1206,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     # Define this ranks index offset (the minimum particle ID contained in a rank)
     rank_indices = np.full(npart, np.nan, dtype=np.uint32)
-    rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint32)
+    rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint16)
 
     # Open hdf5 file
     hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
