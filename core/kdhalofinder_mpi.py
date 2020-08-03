@@ -924,10 +924,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # of cells is a multiple of the number of ranks
     if ncells < (size - 1):
         ncells = size - 1
-    cells_per_rank = int(ncells % size)
     if ncells % size != 0:
         cells_per_rank = int(np.ceil(ncells / size))
         ncells = cells_per_rank * size
+    else:
+        cells_per_rank = ncells // size
 
     if verbose and rank == 0:
         print("nCells adjusted to", ncells)
