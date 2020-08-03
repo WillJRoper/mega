@@ -381,7 +381,7 @@ def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes, ranks):
     unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
 
     # Convert parts in rank to list for use with numpy
-    parts_in_rank = [np.sort(np.array(l), dtype=np.int32) for l in ini_parts_in_rank]
+    parts_in_rank = [np.sort(np.array(l, dtype=np.int32)) for l in ini_parts_in_rank]
 
     return halo_pids, vlcoeffs, tasks, parts_in_rank, unique_haloids, spatial_part_haloids, newtaskID
 
