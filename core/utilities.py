@@ -315,23 +315,32 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
     return tasks, parts_in_rank, nnodes
 
 
-def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes, ranks):
-
-    # Initialise halo dictionaries read for the phase space test
-    halo_pids = [{} for i in range(ranks)]
-    vlcoeffs = [{} for i in range(ranks)]
-    tasks = [set() for i in range(ranks)]
-    ini_parts_in_rank = [[] for i in range(ranks)]
-    all_halo_pids = {}
-
-    # Define the limits for particles on all ranks
-    rank_edges = np.linspace(0, spatial_part_haloids.shape[0], ranks + 1, dtype=int)
+def combine_tasks_networkx(results, ranks):
 
     # Convert results to a set of sets
     results = set(results.values())
 
+    # Convert results to a networkx graph for linking
     G = to_graph(results)
+
+    # Create list of unique lists of particles
     results = [parts for parts in connected_components(G) if len(parts) >= 10]
+
+    # Split into a list containing a list of halos for each rank
+    chunked_results = [[] for i in range(ranks)]
+    for ind, res in enumerate(results):
+        chunked_results[ind % ranks].append(res)
+
+    return chunked_results
+
+
+def decomp_halos(results, ini_vlcoeff, nnodes):
+
+    # Initialise halo dictionaries read for the phase space test
+    halo_pids = {}
+    vlcoeffs = {}
+    tasks = set()
+    ini_parts_in_rank = []
 
     # Store halo ids and halo data for the halos found out in the spatial search
     newtaskID = nnodes + 1
@@ -340,50 +349,24 @@ def combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes, ranks):
         # Extract particle IDs
         parts_arr = np.array(list(results.pop()))
 
-        if len(parts_arr) < 10:
-            continue
-
         # Assign the particles to the main dictionary
-        all_halo_pids[(1, newtaskID)] = parts_arr
+        halo_pids[(1, newtaskID)] = parts_arr
 
-        # Assing this halo ID to the particle array
-        spatial_part_haloids[parts_arr, 0] = newtaskID
+        # Assign particles
+        ini_parts_in_rank.extend(parts_arr)
+
+        # Assign initial vlcoeff to halo entry
+        vlcoeffs[(1, newtaskID)] = ini_vlcoeff
+
+        # Assign task ID
+        tasks.update({(1, newtaskID)})
 
         newtaskID += 1
 
-    # Define the inputs for each rank
-    halos_completed = {-2, }
-    for i in range(ranks):
-        low_lim, up_lim = rank_edges[i], rank_edges[i + 1]
-        halos_in_rank = set(np.unique(spatial_part_haloids[low_lim: up_lim, 0]))
-        halos_in_rank.difference_update(halos_completed)
-        halos_completed.update(halos_in_rank)
-
-        # Assign particles and vlcoeffs to rank
-        for halo in halos_in_rank:
-
-            # Assign particles
-            halo_pids[i][(1, halo)] = all_halo_pids[(1, halo)]
-            ini_parts_in_rank[i].extend(all_halo_pids[(1, halo)])
-
-            # Assign initial vlcoeff to halo entry
-            vlcoeffs[i][(1, halo)] = ini_vlcoeff
-
-            # Assign task ID
-            tasks[i].update({(1, halo)})
-
-    # Find the halos with 10 or more particles by finding the unique IDs in the particle
-    # halo ids array and finding those IDs that are assigned to 10 or more particles
-    unique, counts = np.unique(spatial_part_haloids[:, 0], return_counts=True)
-    unique_haloids = unique[np.where(counts >= 10)]
-
-    # Remove the null -2 value for single particle halos
-    unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
-
     # Convert parts in rank to list for use with numpy
-    parts_in_rank = [np.sort(np.array(l, dtype=np.int32)) for l in ini_parts_in_rank]
+    parts_in_rank = np.sort(ini_parts_in_rank)
 
-    return halo_pids, vlcoeffs, tasks, parts_in_rank, unique_haloids, spatial_part_haloids, newtaskID
+    return halo_pids, vlcoeffs, tasks, parts_in_rank, newtaskID
 
 
 def combine_tasks_per_thread(results, rank, thisRank_parts):

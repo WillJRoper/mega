@@ -999,7 +999,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6) * (1 + redshift) ** 0.5).value
 
     # Initialise particle halo id array for full simulation for spatial halos and phase space halos
-    spatial_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
     phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
 
     if profile:
@@ -1160,8 +1159,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         combine_start = time.time()
 
-        combined_data = utilities.combine_tasks(results, spatial_part_haloids, ini_vlcoeff, nnodes, size)
-        all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, unique_haloids, spatial_part_haloids, newtaskID = combined_data
+        results_per_rank = utilities.combine_tasks_networkx(results, size)
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
@@ -1172,17 +1170,19 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     else:
 
-        all_halo_pids =  None
-        all_vlcoeffs = None
-        all_halo_tasks = None
-        parts_in_rank = None
-        nnodes = None
-        newtaskID = None
+        results_per_rank = None
 
     comm_start = time.time()
+    if rank == 0:
+        for i in range(1, size):
+            comm.send(results_per_rank[i], dest=i)
+        results_per_rank = results_per_rank[0]
+    else:
+        results_per_rank = comm.recv(source=0)
 
-    data = comm.bcast((all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, nnodes, newtaskID), root=0)
-    all_halo_pids, all_vlcoeffs, all_halo_tasks, parts_in_rank, nnodes, newtaskID = data
+    halo_pids, vlcoeffs, halo_tasks, thisRank_parts, newtaskID = utilities.decomp_halos(results_per_rank,
+                                                                                        ini_vlcoeff,
+                                                                                        nnodes)
 
     if profile:
         profile_dict["Communication"]["Start"].append(comm_start)
@@ -1193,16 +1193,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     set_up_start = time.time()
 
     # Extract this ranks spatial halo dictionaries
-    halo_pids = all_halo_pids[rank]
-    vlcoeffs = all_vlcoeffs[rank]
-    halo_tasks = all_halo_tasks[rank]
     sub_vlcoeffs = {}
     subhalo_pids = {}
     haloID_dict = {}
     subhaloID_dict = {}
-
-    # Get this rank's particle IDs
-    thisRank_parts = parts_in_rank[rank]
 
     # Define this ranks index offset (the minimum particle ID contained in a rank)
     rank_indices = np.full(npart, np.nan, dtype=np.uint32)
@@ -1311,8 +1305,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 halo_tasks.update({(3, newtaskID)})
                 subhalo_pids[(3, newtaskID)] = task_subhalo_pids[halo]
                 sub_vlcoeffs[(3, newtaskID)] = ini_vlcoeff
-
-                spatial_part_haloids[task_subhalo_pids[halo], 1] = newSpatialSubID
 
                 # Increment task ID
                 newtaskID += 1
