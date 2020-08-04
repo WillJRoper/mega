@@ -1126,7 +1126,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     results, parts_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
 
-    ranks_in_common = set(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
+    ranks_in_common = frozenset(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
     ranks_in_common.update({rank})
     print(ranks_in_common)
     if profile:
@@ -1151,7 +1151,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
-        ranks_in_common = ranks_in_common
+        ranks_in_common = set(ranks_in_common)
         print(ranks_in_common)
         print(len(ranks_in_common))
 
