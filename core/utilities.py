@@ -312,7 +312,7 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
     # Get the particles in this rank
     parts_in_rank = np.arange(rank_edges[rank], rank_edges[rank + 1], dtype=int)
 
-    return tasks, parts_in_rank, nnodes
+    return tasks, parts_in_rank, nnodes, rank_edges
 
 
 def combine_tasks_networkx(results, ranks):
@@ -385,17 +385,20 @@ def combine_tasks_per_thread(results, rank, thisRank_parts):
 
     # Store halo ids and halo data for the halos found out in the spatial search
     newtaskID = 0
+    parts_in_other_ranks = set()
     while len(results) > 0:
         parts = results.pop()
 
         if len(parts) < 10:
             if len(parts - thisRank_parts) == 0:
                 continue
+        else:
+            parts_in_other_ranks.update(parts - thisRank_parts)
 
         halo_pids[(rank, newtaskID)] = frozenset(parts)
         newtaskID += 1
 
-    return halo_pids
+    return halo_pids, parts_in_other_ranks
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):

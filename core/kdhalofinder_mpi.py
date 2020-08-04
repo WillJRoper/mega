@@ -1039,7 +1039,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         tree = None
 
-    thisRank_tasks, thisRank_parts, nnodes = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
+    thisRank_tasks, thisRank_parts, nnodes, rank_edges = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
 
     if profile:
         profile_dict["Domain-Decomp"]["Start"].append(start_dd)
@@ -1124,7 +1124,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Convert to a set for set calculations
     thisRank_parts = set(thisRank_parts)
 
-    results = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
+    results, parts_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
+
+    print(np.digitize(parts_in_other_ranks, rank_edges))
 
     if profile:
         profile_dict["Housekeeping"]["Start"].append(combine_start)
