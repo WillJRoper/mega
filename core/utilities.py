@@ -315,24 +315,27 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
     return tasks, parts_in_rank, nnodes, rank_edges
 
 
-def combine_tasks_networkx(results, ranks):
+def combine_tasks_networkx(results, ranks, halos_to_combine):
 
-    # Convert results to a set of sets
-    results = set(results.values())
+    results_to_combine = {frozenset(results.pop(halo)) for halo in halos_to_combine}
 
     # Convert results to a networkx graph for linking
-    G = to_graph(results)
+    G = to_graph(results_to_combine)
 
     # Create list of unique lists of particles
-    results = [parts for parts in connected_components(G) if len(parts) >= 10]
+    combined_results = {frozenset(parts) for parts in connected_components(G) if len(parts) >= 10}
+    results = set(results.values())
+    results.update(combined_results)
 
     # Split into a list containing a list of halos for each rank
     chunked_results = [[] for i in range(ranks)]
     chunked_load = np.zeros(ranks)
-    for res in results:
-        i = np.argmin(chunked_load)
-        chunked_load[i] += len(res)
-        chunked_results[i].append(res)
+    while len(results) > 0:
+        res = results.pop()
+        if len(res) >= 10:
+            i = np.argmin(chunked_load)
+            chunked_load[i] += len(res)
+            chunked_results[i].append(res)
 
     return chunked_results
 
@@ -385,20 +388,23 @@ def combine_tasks_per_thread(results, rank, thisRank_parts):
 
     # Store halo ids and halo data for the halos found out in the spatial search
     newtaskID = 0
-    parts_in_other_ranks = set()
+    halos_in_other_ranks = set()
     while len(results) > 0:
         parts = results.pop()
 
+        parts_in_other_ranks = parts - thisRank_parts
+
         if len(parts) < 10:
-            if len(parts - thisRank_parts) == 0:
+            if len(parts_in_other_ranks) == 0:
                 continue
-        else:
-            parts_in_other_ranks.update(parts - thisRank_parts)
+
+        if len(parts_in_other_ranks) > 0:
+            halos_in_other_ranks.update({(rank, newtaskID)})
 
         halo_pids[(rank, newtaskID)] = frozenset(parts)
         newtaskID += 1
 
-    return halo_pids, parts_in_other_ranks
+    return halo_pids, halos_in_other_ranks
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):

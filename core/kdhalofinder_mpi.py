@@ -1,4 +1,5 @@
 from scipy.spatial import cKDTree
+from scipy.sparse import lil_matrix
 from collections import defaultdict
 from guppy import hpy; hp = hpy()
 import itertools
@@ -1124,12 +1125,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Convert to a set for set calculations
     thisRank_parts = set(thisRank_parts)
 
-    results, parts_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
+    results, halos_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
 
-    ranks_in_common = set(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
-    ranks_in_common.update({rank})
-    ranks_in_common = frozenset(ranks_in_common)
-    print(ranks_in_common)
     if profile:
         profile_dict["Housekeeping"]["Start"].append(combine_start)
         profile_dict["Housekeeping"]["End"].append(time.time())
@@ -1144,7 +1141,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Collect child process results
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
-    ranks_in_common = comm.gather(ranks_in_common, root=0)
+    halos_in_other_ranks = comm.gather(halos_in_other_ranks, root=0)
 
     if profile and rank != 0:
         profile_dict["Collecting"]["Start"].append(collect_start)
@@ -1152,9 +1149,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
-        ranks_in_common = set(ranks_in_common)
-        print(ranks_in_common)
-        print(len(ranks_in_common))
+        halos_to_combine = set().union(*halos_in_other_ranks)
 
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
@@ -1168,7 +1163,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         combine_start = time.time()
 
-        results_per_rank = utilities.combine_tasks_networkx(results, size)
+        results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine)
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
@@ -1208,7 +1203,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     haloID_dict = {}
     subhaloID_dict = {}
 
-    # Define this ranks index offset (the minimum particle ID contained in a rank)
+    # Define the particles in this rank and an array of indices for them
     rank_indices = np.full(npart, np.nan, dtype=np.uint32)
     rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint16)
 
