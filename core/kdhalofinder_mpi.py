@@ -1151,7 +1151,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
-        ranks_in_common = set(ranks_in_common)
+        ranks_in_common = ranks_in_common
         print(ranks_in_common)
         print(len(ranks_in_common))
 
