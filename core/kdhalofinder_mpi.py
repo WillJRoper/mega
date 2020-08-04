@@ -1173,7 +1173,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         results_per_rank = None
 
     comm_start = time.time()
-    comm.scatter(results_per_rank, root=0)
+    results_per_rank = comm.scatter(results_per_rank, root=0)
 
     if profile:
         profile_dict["Communication"]["Start"].append(comm_start)
