@@ -1126,8 +1126,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     results, parts_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
 
-    ranks_in_common = set(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges))).update({rank})
-
+    ranks_in_common = set(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
+    ranks_in_common.update({rank})
+    print(ranks_in_common)
     if profile:
         profile_dict["Housekeeping"]["Start"].append(combine_start)
         profile_dict["Housekeeping"]["End"].append(time.time())
@@ -1142,7 +1143,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Collect child process results
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
-    print(ranks_in_common)
     ranks_in_common = comm.gather(ranks_in_common, root=0)
 
     if profile and rank != 0:
