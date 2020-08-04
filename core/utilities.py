@@ -328,8 +328,11 @@ def combine_tasks_networkx(results, ranks):
 
     # Split into a list containing a list of halos for each rank
     chunked_results = [[] for i in range(ranks)]
-    for ind, res in enumerate(results):
-        chunked_results[ind % ranks].append(res)
+    chunked_load = [0 for i in range(ranks)]
+    for res in results:
+        i = np.argmin(chunked_load)[0]
+        chunked_load[i] += len(res)
+        chunked_results[i].append(res)
 
     return chunked_results
 

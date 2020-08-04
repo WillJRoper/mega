@@ -1173,22 +1173,23 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         results_per_rank = None
 
     comm_start = time.time()
-    if rank == 0:
-        for i in range(1, size):
-            comm.send(results_per_rank[i], dest=i)
-        results_per_rank = results_per_rank[0]
-    else:
-        results_per_rank = comm.recv(source=0)
-
-    halo_pids, vlcoeffs, halo_tasks, thisRank_parts, newtaskID = utilities.decomp_halos(results_per_rank,
-                                                                                        ini_vlcoeff,
-                                                                                        nnodes)
+    comm.scatter(results_per_rank, root=0)
 
     if profile:
         profile_dict["Communication"]["Start"].append(comm_start)
         profile_dict["Communication"]["End"].append(time.time())
 
     # ============================== Test Halos in Phase Space and find substructure ==============================
+
+    start_dd = time.time()
+
+    halo_pids, vlcoeffs, halo_tasks, thisRank_parts, newtaskID = utilities.decomp_halos(results_per_rank,
+                                                                                        ini_vlcoeff,
+                                                                                        nnodes)
+
+    if profile:
+        profile_dict["Domain-Decomp"]["Start"].append(start_dd)
+        profile_dict["Domain-Decomp"]["End"].append(time.time())
 
     set_up_start = time.time()
 
@@ -1446,8 +1447,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
         print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
         print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
-
-        print(newtaskID - 1, "tasks completed")
 
         # ============================= Write out data =============================
 
