@@ -1126,8 +1126,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     results, parts_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
 
-    ranks_in_common = frozenset(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
+    ranks_in_common = set(np.unique(np.digitize(list(parts_in_other_ranks), rank_edges)))
     ranks_in_common.update({rank})
+    ranks_in_common = frozenset(ranks_in_common)
     print(ranks_in_common)
     if profile:
         profile_dict["Housekeeping"]["Start"].append(combine_start)
