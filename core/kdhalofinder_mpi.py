@@ -1142,6 +1142,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Collect child process results
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
+    print(ranks_in_common)
     ranks_in_common = comm.gather(ranks_in_common, root=0)
 
     if profile and rank != 0:
@@ -1151,6 +1152,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     if rank == 0:
 
         ranks_in_common = set(ranks_in_common)
+        print(ranks_in_common)
         print(len(ranks_in_common))
 
         # Combine collected results from children processes into a single dict
