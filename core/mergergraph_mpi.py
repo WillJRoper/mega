@@ -7,7 +7,7 @@ import utilities
 import sys
 import time
 mpi4py.rc.recv_mprobe = False
-from guppy import hpy;
+from guppy import hpy
 
 hp = hpy()
 
