@@ -22,8 +22,6 @@ snap_ind = int(sys.argv[2])
 
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
-print("Possible snapshots:", snaplist)
-print("Running on snapshot:", snaplist[snap_ind])
 
 # Print out the snapshots to ensure they are correct
 if flags['verbose']:
@@ -158,6 +156,9 @@ elif flags['usempi']:
     size = comm.size  # total number of processes
     rank = comm.rank  # rank of this process
     status = MPI.Status()  # get MPI status object
+
+    if rank == 0:
+        print("Running on snapshot:", snaplist[snap_ind])
 
     # ===================== Run The Halo Finder =====================
     if flags['halo']:

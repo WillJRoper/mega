@@ -1149,8 +1149,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
 
-        print("Gathered results", len(halos_in_other_ranks))
-
         halos_to_combine = set().union(*halos_in_other_ranks)
 
         # Combine collected results from children processes into a single dict
@@ -1204,8 +1202,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     subhalo_pids = {}
     haloID_dict = {}
     subhaloID_dict = {}
-
-    print(thisRank_parts)
 
     # Define the particles in this rank and an array of indices for them
     rank_indices = np.full(npart, np.nan, dtype=np.uint32)
@@ -1274,7 +1270,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                     subhalo_pids[(2, newtaskID)] = post_halo_pids[res]
 
                 phase_part_haloids[post_halo_pids[res], 0] = newPhaseID
-                haloID_dict[(haloID, res)] = newPhaseID
 
                 # Increment task ID
                 newtaskID += 1
@@ -1353,7 +1348,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             for res in post_subhalo_pids:
 
                 phase_part_haloids[post_subhalo_pids[res], 1] = newPhaseSubID
-                subhaloID_dict[(subhaloID, res)] = newPhaseSubID
 
                 # Increment task ID
                 newtaskID += 1
@@ -1394,6 +1388,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 for halo in halo_task[task]:
                     results_dict[(task, newPhaseID)] = halo_task[task][halo]
                     pids = halo_task[task][halo]['pids']
+                    haloID_dict[(task, newPhaseID)] = newPhaseID
                     phase_part_haloids[pids, 0] = newPhaseID
                     newPhaseID += 1
 
@@ -1404,6 +1399,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 for subhalo in subhalo_task[subtask]:
                     sub_results_dict[(subtask, newPhaseSubID)] = subhalo_task[subtask][subhalo]
                     pids = subhalo_task[subtask][subhalo]['pids']
+                    subhaloID_dict[(subtask, newPhaseSubID)] = newPhaseSubID
                     phase_part_haloids[pids, 1] = newPhaseSubID
                     newPhaseSubID += 1
 
