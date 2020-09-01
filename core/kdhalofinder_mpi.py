@@ -1142,12 +1142,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
     halos_in_other_ranks = comm.gather(halos_in_other_ranks, root=0)
-    print("Gathered results", len(halos_in_other_ranks))
+
     if profile and rank != 0:
         profile_dict["Collecting"]["Start"].append(collect_start)
         profile_dict["Collecting"]["End"].append(time.time())
 
     if rank == 0:
+
+        print("Gathered results", len(halos_in_other_ranks))
 
         halos_to_combine = set().union(*halos_in_other_ranks)
 
@@ -1203,9 +1205,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     haloID_dict = {}
     subhaloID_dict = {}
 
+    print(thisRank_parts)
+
     # Define the particles in this rank and an array of indices for them
     rank_indices = np.full(npart, np.nan, dtype=np.uint32)
-    rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint16)
+    if len(thisRank_parts) > 0:
+        rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint16)
 
     # Open hdf5 file
     hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
