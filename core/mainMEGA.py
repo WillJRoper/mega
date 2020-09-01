@@ -22,7 +22,8 @@ snap_ind = int(sys.argv[2])
 
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
-
+print("Possible snapshots:", snaplist)
+print("Running on snapshot:", snaplist[snap_ind])
 
 # Print out the snapshots to ensure they are correct
 if flags['verbose']:
