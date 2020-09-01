@@ -1142,7 +1142,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
     halos_in_other_ranks = comm.gather(halos_in_other_ranks, root=0)
-
+    print("Gathered results", len(halos_in_other_ranks))
     if profile and rank != 0:
         profile_dict["Collecting"]["Start"].append(collect_start)
         profile_dict["Collecting"]["End"].append(time.time())

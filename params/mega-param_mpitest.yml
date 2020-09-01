@@ -2,7 +2,7 @@
 
 inputs:
 
-  data:                /Users/willroper/Documents/University/Merger_Trees_to_Merger_Graphs/mega/input/            # The filepath containing particle data
+  data:                input/            # The filepath containing particle data
   snapList:            snaplist.txt      # The filepath pointing to the snapshot list file
   haloSavePath:        data/halos/       # The filepath and basename for halo outputs
   directgraphSavePath: data/dgraph/      # The filepath and basename for graph direct progenitor and descendant outputs
