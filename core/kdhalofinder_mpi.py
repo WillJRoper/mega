@@ -1490,106 +1490,106 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             sub_GEs = None
             host_ids = None
 
-        # # Create the root group
-        # snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'w')
-        #
-        # # Assign simulation attributes to the root of the z=0 snapshot
-        # snap.attrs['snap_nPart'] = npart  # number of particles in the simulation
-        # snap.attrs['boxsize'] = boxsize  # box length along each axis
-        # snap.attrs['part_mass'] = pmass  # particle mass
-        # snap.attrs['h'] = h  # 'little h' (hubble constant parametrisation)
-        #
-        # # Assign snapshot attributes
-        # snap.attrs['linking_length'] = linkl  # host halo linking length
-        # # snap.attrs['rhocrit'] = rhocrit  # critical density parameter
-        # snap.attrs['redshift'] = redshift
-        # # snap.attrs['time'] = t
-        #
-        # halo_ids = np.arange(newPhaseID, dtype=int)
-        #
-        # for res in list(results_dict.keys()):
-        #
-        #     halo_res = results_dict.pop(res)
-        #     halo_id = haloID_dict[res]
-        #     halo_pids = halo_res['pids']
-        #
-        #     mean_poss[halo_id, :] = halo_res['mean_halo_pos']
-        #     mean_vels[halo_id, :] = halo_res['mean_halo_vel']
-        #     halo_nparts[halo_id] = halo_res['npart']
-        #     reals[halo_id] = halo_res['real']
-        #     halo_energies[halo_id] = halo_res['halo_energy']
-        #     KEs[halo_id] = halo_res['KE']
-        #     GEs[halo_id] = halo_res['GE']
-        #
-        #     # Create datasets in the current halo's group in the HDF5 file
-        #     halo = snap.create_group(str(halo_id))  # create halo group
-        #     halo.create_dataset('Halo_Part_IDs', shape=halo_pids.shape, dtype=int,
-        #                         data=halo_pids)  # halo particle ids
-        #
-        # # Save halo property arrays
-        # snap.create_dataset('halo_IDs', shape=halo_ids.shape, dtype=int, data=halo_ids, compression='gzip')
-        # snap.create_dataset('mean_positions', shape=mean_poss.shape, dtype=float, data=mean_poss, compression='gzip')
-        # snap.create_dataset('mean_velocities', shape=mean_vels.shape, dtype=float, data=mean_vels, compression='gzip')
-        # snap.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
-        # snap.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
-        # snap.create_dataset('halo_total_energies', shape=halo_energies.shape, dtype=float, data=halo_energies,
-        #                     compression='gzip')
-        # snap.create_dataset('halo_kinetic_energies', shape=KEs.shape, dtype=float, data=KEs, compression='gzip')
-        # snap.create_dataset('halo_gravitational_energies', shape=GEs.shape, dtype=float, data=GEs, compression='gzip')
-        #
-        # # Assign the full halo IDs array to the snapshot group
-        # snap.create_dataset('particle_halo_IDs', shape=phase_part_haloids.shape, dtype=int, data=phase_part_haloids,
-        #                     compression='gzip')
-        #
-        # if findsubs:
-        #
-        #     subhalo_ids = np.arange(newPhaseSubID, dtype=int)
-        #
-        #     # Create subhalo group
-        #     sub_root = snap.create_group('Subhalos')
-        #
-        #     for res in list(sub_results_dict.keys()):
-        #
-        #         subhalo_res = sub_results_dict.pop(res)
-        #         subhalo_id = subhaloID_dict[res]
-        #         subhalo_pids = subhalo_res['pids']
-        #         host = np.unique(phase_part_haloids[subhalo_pids, 0])
-        #
-        #         assert len(host) == 1, "subhalo is contained in multiple hosts, this should not be possible"
-        #
-        #         sub_mean_poss[subhalo_id, :] = subhalo_res['mean_halo_pos']
-        #         sub_mean_vels[subhalo_id, :] = subhalo_res['mean_halo_vel']
-        #         subhalo_nparts[subhalo_id] = subhalo_res['npart']
-        #         sub_reals[subhalo_id] = subhalo_res['real']
-        #         subhalo_energies[subhalo_id] = subhalo_res['halo_energy']
-        #         sub_KEs[subhalo_id] = subhalo_res['KE']
-        #         sub_GEs[subhalo_id] = subhalo_res['GE']
-        #         host_ids[subhalo_id] = host
-        #         nsubhalos[host] += 1
-        #
-        #         # Create datasets in the current halo's group in the HDF5 file
-        #         subhalo = sub_root.create_group(str(subhalo_id))  # create halo group
-        #         subhalo.create_dataset('Halo_Part_IDs', shape=subhalo_pids.shape, dtype=int,
-        #                                data=subhalo_pids)  # halo particle ids
-        #
-        #     # Save halo property arrays
-        #     sub_root.create_dataset('subhalo_IDs', shape=subhalo_ids.shape, dtype=int, data=subhalo_ids,
-        #                             compression='gzip')
-        #     sub_root.create_dataset('host_IDs', shape=host_ids.shape, dtype=int, data=host_ids, compression='gzip')
-        #     sub_root.create_dataset('mean_positions', shape=sub_mean_poss.shape, dtype=float, data=sub_mean_poss,
-        #                         compression='gzip')
-        #     sub_root.create_dataset('mean_velocities', shape=sub_mean_vels.shape, dtype=float, data=sub_mean_vels,
-        #                         compression='gzip')
-        #     sub_root.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
-        #     sub_root.create_dataset('real_flag', shape=sub_reals.shape, dtype=bool, data=sub_reals, compression='gzip')
-        #     sub_root.create_dataset('halo_total_energies', shape=subhalo_energies.shape, dtype=float,
-        #                             data=subhalo_energies, compression='gzip')
-        #     sub_root.create_dataset('halo_kinetic_energies', shape=sub_KEs.shape, dtype=float, data=sub_KEs,
-        #                             compression='gzip')
-        #     sub_root.create_dataset('halo_gravitational_energies', shape=sub_GEs.shape, dtype=float, data=sub_GEs,
-        #                             compression='gzip')
-        #
-        # snap.close()
+        # Create the root group
+        snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'w')
+
+        # Assign simulation attributes to the root of the z=0 snapshot
+        snap.attrs['snap_nPart'] = npart  # number of particles in the simulation
+        snap.attrs['boxsize'] = boxsize  # box length along each axis
+        snap.attrs['part_mass'] = pmass  # particle mass
+        snap.attrs['h'] = h  # 'little h' (hubble constant parametrisation)
+
+        # Assign snapshot attributes
+        snap.attrs['linking_length'] = linkl  # host halo linking length
+        # snap.attrs['rhocrit'] = rhocrit  # critical density parameter
+        snap.attrs['redshift'] = redshift
+        # snap.attrs['time'] = t
+
+        halo_ids = np.arange(newPhaseID, dtype=int)
+
+        for res in list(results_dict.keys()):
+
+            halo_res = results_dict.pop(res)
+            halo_id = haloID_dict[res]
+            halo_pids = halo_res['pids']
+
+            mean_poss[halo_id, :] = halo_res['mean_halo_pos']
+            mean_vels[halo_id, :] = halo_res['mean_halo_vel']
+            halo_nparts[halo_id] = halo_res['npart']
+            reals[halo_id] = halo_res['real']
+            halo_energies[halo_id] = halo_res['halo_energy']
+            KEs[halo_id] = halo_res['KE']
+            GEs[halo_id] = halo_res['GE']
+
+            # Create datasets in the current halo's group in the HDF5 file
+            halo = snap.create_group(str(halo_id))  # create halo group
+            halo.create_dataset('Halo_Part_IDs', shape=halo_pids.shape, dtype=int,
+                                data=halo_pids)  # halo particle ids
+
+        # Save halo property arrays
+        snap.create_dataset('halo_IDs', shape=halo_ids.shape, dtype=int, data=halo_ids, compression='gzip')
+        snap.create_dataset('mean_positions', shape=mean_poss.shape, dtype=float, data=mean_poss, compression='gzip')
+        snap.create_dataset('mean_velocities', shape=mean_vels.shape, dtype=float, data=mean_vels, compression='gzip')
+        snap.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
+        snap.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
+        snap.create_dataset('halo_total_energies', shape=halo_energies.shape, dtype=float, data=halo_energies,
+                            compression='gzip')
+        snap.create_dataset('halo_kinetic_energies', shape=KEs.shape, dtype=float, data=KEs, compression='gzip')
+        snap.create_dataset('halo_gravitational_energies', shape=GEs.shape, dtype=float, data=GEs, compression='gzip')
+
+        # Assign the full halo IDs array to the snapshot group
+        snap.create_dataset('particle_halo_IDs', shape=phase_part_haloids.shape, dtype=int, data=phase_part_haloids,
+                            compression='gzip')
+
+        if findsubs:
+
+            subhalo_ids = np.arange(newPhaseSubID, dtype=int)
+
+            # Create subhalo group
+            sub_root = snap.create_group('Subhalos')
+
+            for res in list(sub_results_dict.keys()):
+
+                subhalo_res = sub_results_dict.pop(res)
+                subhalo_id = subhaloID_dict[res]
+                subhalo_pids = subhalo_res['pids']
+                host = np.unique(phase_part_haloids[subhalo_pids, 0])
+
+                assert len(host) == 1, "subhalo is contained in multiple hosts, this should not be possible"
+
+                sub_mean_poss[subhalo_id, :] = subhalo_res['mean_halo_pos']
+                sub_mean_vels[subhalo_id, :] = subhalo_res['mean_halo_vel']
+                subhalo_nparts[subhalo_id] = subhalo_res['npart']
+                sub_reals[subhalo_id] = subhalo_res['real']
+                subhalo_energies[subhalo_id] = subhalo_res['halo_energy']
+                sub_KEs[subhalo_id] = subhalo_res['KE']
+                sub_GEs[subhalo_id] = subhalo_res['GE']
+                host_ids[subhalo_id] = host
+                nsubhalos[host] += 1
+
+                # Create datasets in the current halo's group in the HDF5 file
+                subhalo = sub_root.create_group(str(subhalo_id))  # create halo group
+                subhalo.create_dataset('Halo_Part_IDs', shape=subhalo_pids.shape, dtype=int,
+                                       data=subhalo_pids)  # halo particle ids
+
+            # Save halo property arrays
+            sub_root.create_dataset('subhalo_IDs', shape=subhalo_ids.shape, dtype=int, data=subhalo_ids,
+                                    compression='gzip')
+            sub_root.create_dataset('host_IDs', shape=host_ids.shape, dtype=int, data=host_ids, compression='gzip')
+            sub_root.create_dataset('mean_positions', shape=sub_mean_poss.shape, dtype=float, data=sub_mean_poss,
+                                compression='gzip')
+            sub_root.create_dataset('mean_velocities', shape=sub_mean_vels.shape, dtype=float, data=sub_mean_vels,
+                                compression='gzip')
+            sub_root.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
+            sub_root.create_dataset('real_flag', shape=sub_reals.shape, dtype=bool, data=sub_reals, compression='gzip')
+            sub_root.create_dataset('halo_total_energies', shape=subhalo_energies.shape, dtype=float,
+                                    data=subhalo_energies, compression='gzip')
+            sub_root.create_dataset('halo_kinetic_energies', shape=sub_KEs.shape, dtype=float, data=sub_KEs,
+                                    compression='gzip')
+            sub_root.create_dataset('halo_gravitational_energies', shape=sub_GEs.shape, dtype=float, data=sub_GEs,
+                                    compression='gzip')
+
+        snap.close()
 
         if profile:
             profile_dict["Writing"]["Start"].append(write_start)
