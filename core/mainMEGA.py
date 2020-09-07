@@ -166,6 +166,7 @@ elif flags['usempi']:
 
     # ===================== Find Direct Progenitors and Descendents =====================
     if flags['graphdirect']:
+
         snap = snaplist[snap_ind]
 
         if snap_ind - 1 < 0:

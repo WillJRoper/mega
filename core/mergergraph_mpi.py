@@ -350,7 +350,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         notreals = 0
 
         # Set up arrays to store host results
-        nhalo = np.max(halo_ids) + 1
+        if len(halo_ids) != 0:
+            nhalo = np.max(halo_ids) + 1
+        else:
+            nhalo = 0
         index_haloids = np.arange(nhalo, dtype=int)
         halo_nparts = np.full(nhalo, -2, dtype=int)
         nprogs = np.full(nhalo, -2, dtype=int)
