@@ -136,6 +136,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
     :return: None
     """
 
+    print("Progenitor snapshot:", prog_snap)
+    print("Current snapshot:", snap)
+    print("Descendant snapshot:", desc_snap)
+
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
 
@@ -389,8 +393,17 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             if nprog == 0 and npart < 20:
                 reals[haloID] = False
                 notreals += 1
-
                 continue
+
+            # If the halo has neither descendants or progenitors we do not need to store it
+            elif nprog == ndesc == -1 or nprog == ndesc == 0:
+
+                reals[haloID] = False
+
+            # If progenitor is real and this halo is not then it is real
+            elif True in preals and not reals[haloID]:
+
+                reals[haloID] = True
 
             # If this halo is real then it's descendents are real
             if int(desc_snap) < final_snapnum and reals[haloID]:
