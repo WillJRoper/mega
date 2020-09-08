@@ -174,7 +174,7 @@ elif flags['usempi']:
         else:
             prog_snap = snaplist[snap_ind - 1]
 
-        if snap_ind + 1 > len(snaplist):
+        if snap_ind + 1 >= len(snaplist):
             desc_snap = None
         else:
             desc_snap = snaplist[snap_ind + 1]

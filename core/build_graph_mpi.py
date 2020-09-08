@@ -348,6 +348,10 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
 
         graph_id += 1
 
+    hdf.create_dataset('graph_lengths', data=np.array(graph_length), dtype=int, compression='gzip')
+    hdf.create_dataset('root_nparts', data=np.array(root_mass), dtype=int, compression='gzip')
+    hdf.create_dataset('nhalos_in_graph', data=np.array(nhalo_in_graph), dtype=int, compression='gzip')
+
     hdf.close()
 
 
