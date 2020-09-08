@@ -55,8 +55,7 @@ def main_mg(snap, density_rank):
 def main_mgmpi(snap, prog_snap, desc_snap, density_rank):
     mgmpi.directProgDescWriter(snap, prog_snap, desc_snap, halopath=inputs['haloSavePath'],
                                savepath=inputs['directgraphSavePath'], density_rank=density_rank,
-                               verbose=flags['verbose'], final_snapnum=len(snaplist),
-                               profile=flags['profile'], profile_path=inputs["profilingPath"])
+                               verbose=flags['verbose'], profile=flags['profile'], profile_path=inputs["profilingPath"])
 
 
 def main_mt(snap):

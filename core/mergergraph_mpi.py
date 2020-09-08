@@ -126,7 +126,7 @@ def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_
 
 
 def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
-                         density_rank, verbose, final_snapnum, profile, profile_path):
+                         density_rank, verbose, profile, profile_path):
     """ A function which cycles through all halos in a snapshot finding and writing out the
     direct progenitor and descendant data.
     :param snapshot: The snapshot ID.
@@ -136,9 +136,11 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
     :return: None
     """
 
-    print("Progenitor snapshot:", prog_snap)
-    print("Current snapshot:", snap)
-    print("Descendant snapshot:", desc_snap)
+    if rank == 0:
+        print("---------------------------------------------------")
+        print("Progenitor snapshot:", prog_snap)
+        print("Current snapshot:", snap)
+        print("Descendant snapshot:", desc_snap)
 
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
@@ -306,7 +308,10 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
                 # Extract the progenitor and descendant IDs for these particles
                 progs = prog_haloids[current_halo_pids]
-                descs = desc_haloids[current_halo_pids]
+                if desc_snap != None:
+                    descs = desc_haloids[current_halo_pids]
+                else:
+                    descs = np.array([])
                 npart = current_halo_pids.size
 
                 result = directProgDescFinder(prog_snap, desc_snap, progs, descs,
@@ -372,16 +377,20 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         prog_nparts = []
         desc_nparts = []
 
-        # Load the descendant snapshot
-        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
+        if desc_snap != None:
 
-        # Get the reality flag array
-        if density_rank == 0:
-            desc_reals = hdf_desc['real_flag'][...]
+            # Load the descendant snapshot
+            hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r')
+
+            # Get the reality flag array
+            if density_rank == 0:
+                desc_reals = hdf_desc['real_flag'][...]
+            else:
+                desc_reals = hdf_desc['Subhalos']['real_flag'][...]
+
+            hdf_desc.close()
         else:
-            desc_reals = hdf_desc['Subhalos']['real_flag'][...]
-
-        hdf_desc.close()
+            desc_reals = np.array([])
 
         for num, haloID in enumerate(results):
 
@@ -406,7 +415,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 reals[haloID] = True
 
             # If this halo is real then it's descendents are real
-            if int(desc_snap) < final_snapnum and reals[haloID]:
+            if desc_snap != None and reals[haloID]:
                 desc_reals[desc_haloids] = True
 
             # Write out the data produced
@@ -463,21 +472,23 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         hdf.close()
 
-        # Load the descendant snapshot
-        hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
+        if desc_snap != None:
 
-        # Set the reality flag in the halo catalog
-        if density_rank == 0:
-            del hdf_desc['real_flag']
-            hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-                                    compression='gzip')
-        else:
-            sub_desc = hdf_desc['Subhalos']
-            del sub_desc['real_flag']
-            sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
-                                    compression='gzip')
+            # Load the descendant snapshot
+            hdf_desc = h5py.File(halopath + 'halos_' + desc_snap + '.hdf5', 'r+')
 
-        hdf_desc.close()
+            # Set the reality flag in the halo catalog
+            if density_rank == 0:
+                del hdf_desc['real_flag']
+                hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                        compression='gzip')
+            else:
+                sub_desc = hdf_desc['Subhalos']
+                del sub_desc['real_flag']
+                sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
+                                        compression='gzip')
+
+            hdf_desc.close()
 
         # Load the descendant snapshot
         hdf_current = h5py.File(halopath + 'halos_' + snap + '.hdf5', 'r+')

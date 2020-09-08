@@ -1542,6 +1542,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         snap.create_dataset('particle_halo_IDs', shape=phase_part_haloids.shape, dtype=int, data=phase_part_haloids,
                             compression='gzip')
 
+        # Get how many halos were found be real
+        print("Halos found to initially not be real:", halo_ids.size - halo_ids[reals].size, "of", halo_ids.size)
+
         if findsubs:
 
             subhalo_ids = np.arange(newPhaseSubID, dtype=int)

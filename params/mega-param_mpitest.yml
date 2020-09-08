@@ -49,7 +49,7 @@ parameters:
   min_alpha_v:         0.8            # The initial velocity linking length coefficient for phase-space iteration
   llcoeff:             0.2            # Spatial linking length coefficient for host halos
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
-  decrement:           0.05           # The amount alpha_v is decremented by in each phase-space iteration
+  decrement:           0.1           # The amount alpha_v is decremented by in each phase-space iteration
   part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
                                       # with real progenitors will be kept below this threshold
   N_cells:             500            # The number of cells to split the particles into for spatial search,
