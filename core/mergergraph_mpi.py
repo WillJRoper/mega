@@ -174,7 +174,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             reals = hdf_current['Subhalos']['real_flag'][...]
 
         hdf_current.close()  # close the root group
-
+        old_reals = np.copy(reals)
         # Get only the real halo ids
         halo_ids = halo_ids[reals]
 
@@ -247,17 +247,17 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # Get progenitor snapshot data
             if density_rank == 0:
-                preals = hdf_prog['real_flag'][...]
+                prog_reals = hdf_prog['real_flag'][...]
                 prog_npart = hdf_prog['nparts'][...]
             else:
-                preals = hdf_prog['Subhalos']['real_flag'][...]
+                prog_reals = hdf_prog['Subhalos']['real_flag'][...]
                 prog_npart = hdf_prog['Subhalos']['nparts'][...]
 
             hdf_prog.close()
 
         else:
             prog_haloids = np.array([])
-            preals = np.array([])
+            prog_reals = np.array([])
             prog_npart = np.array([])
 
         if desc_snap != None:
@@ -315,7 +315,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                 npart = current_halo_pids.size
 
                 result = directProgDescFinder(prog_snap, desc_snap, progs, descs,
-                                              preals, prog_npart, desc_npart, npart)
+                                              prog_reals, prog_npart, desc_npart, npart)
 
                 results[haloID] = result
 
@@ -392,6 +392,24 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         else:
             desc_reals = np.array([])
 
+        if prog_snap != None:
+
+            # Load the progenitor snapshot
+            hdf_prog = h5py.File(halopath + 'halos_' + prog_snap + '.hdf5', 'r')
+
+            # Get progenitor snapshot data
+            if density_rank == 0:
+                prog_reals = hdf_prog['real_flag'][...]
+            else:
+                prog_reals = hdf_prog['Subhalos']['real_flag'][...]
+
+            hdf_prog.close()
+
+        else:
+            prog_reals = np.array([])
+
+        old_desc_reals = np.copy(desc_reals)
+
         for num, haloID in enumerate(results):
 
             (nprog, prog_haloids, prog_npart, prog_mass_contribution,
@@ -406,8 +424,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # If the halo has neither descendants or progenitors we do not need to store it
             elif nprog == ndesc == -1 or nprog == ndesc == 0:
-
+                notreals += 1
                 reals[haloID] = False
+                continue
 
             # If progenitor is real and this halo is not then it is real
             elif True in preals and not reals[haloID]:
@@ -468,7 +487,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                            compression='gzip')
         hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
         hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
+        hdf.create_dataset('prog_real_flag', shape=reals.shape, dtype=bool, data=prog_reals, compression='gzip')
         hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
+        hdf.create_dataset('desc_real_flag', shape=reals.shape, dtype=bool, data=desc_reals, compression='gzip')
 
         hdf.close()
 
@@ -479,10 +500,12 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             # Set the reality flag in the halo catalog
             if density_rank == 0:
+                print("Overwriting descendant real flags")
                 del hdf_desc['real_flag']
                 hdf_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
                                         compression='gzip')
             else:
+                print("Overwriting descendant subhalo real flags")
                 sub_desc = hdf_desc['Subhalos']
                 del sub_desc['real_flag']
                 sub_desc.create_dataset('real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals,
@@ -495,10 +518,12 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         # Set the reality flag in the halo catalog
         if density_rank == 0:
+            print("Overwriting current real flags")
             del hdf_current['real_flag']
             hdf_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
                                     compression='gzip')
         else:
+            print("Overwriting current subhalo real flags")
             sub_current = hdf_current['Subhalos']
             del sub_current['real_flag']
             sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals,
@@ -512,7 +537,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
-        print("Not real halos", notreals, 'of', nhalo)
+        print("Not real halos", notreals, 'of', halo_ids.size)
+        print("Reals arrays are eqaul:", np.unique(old_reals == reals))
+        print("Descendant reals arrays are eqaul:", np.unique(old_desc_reals == desc_reals))
 
     if profile:
         profile_dict["END"] = time.time()

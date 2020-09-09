@@ -472,8 +472,15 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
     full_sim_halo_pids = np.array(list(pids))
     full_halo_poss = pos  # Positions *** NOTE: these are shifted below ***
     full_halo_vels = vel  # Velocities *** NOTE: these are shifted below ***
-    full_halo_npart = s_halo_pids.size
+    halo_npart = s_halo_pids.size
 
+    # Initialise dicitonaries to store results
+    extra_halo_pids = {}
+    iter_vlcoeffs = {}
+    results = {}
+    pid_results = {}
+
+    # Initialise new ID for halos which need checking later
     newID_iter = -9
 
     # =============== Compute mean positions and velocities and wrap the halos ===============
@@ -496,142 +503,87 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
     # Centre the halos about the mean in the dimension ixyz
     full_halo_poss -= mean_halo_pos
 
-    # Define the velocity space linking length
-    vlinkl = vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * full_halo_npart ** (1 / 3)
+    new_vlcoeff = vlcoeff + decrement
 
-    # Define the phase space vectors for this halo
-    halo_phases = np.concatenate((full_halo_poss, full_halo_vels), axis=1)
+    iter_halo_pids = s_halo_pids
+    iter_sim_halo_pids = full_sim_halo_pids
+    iter_halo_poss = full_halo_poss
+    iter_halo_vels = full_halo_vels
+    itercount = 0
 
-    # Query this halo in velocity space to split apart halos which are found to be distinct in velocity space
-    result = find_phase_space_halos(halo_phases, linkl, vlinkl)
-    phase_part_haloids, phase_assigned_parts = result
+    # Initialise KE and GE for loop
+    KE = 2**30
+    GE = 1
 
-    # Find the halos with 10 or more particles by finding the unique IDs in the particle
-    # halo ids array and finding those IDs that are assigned to 10 or more particles
-    phase_unique, phase_counts = np.unique(phase_part_haloids, return_counts=True)
-    unique_phase_haloids = phase_unique[np.where(phase_counts >= 10)]
+    pID = thisTask
 
-    # Remove the null -2 value for single particle halos
-    unique_phase_haloids = unique_phase_haloids[np.where(unique_phase_haloids >= 0)]
+    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff >= 0.8:
 
-    extra_halo_pids = {}
-    iter_vlcoeffs = {}
-    results = {}
-    pid_results = {}
+        new_vlcoeff -= decrement
 
-    # Loop over the halos returned from velocity space
-    for pID in unique_phase_haloids:
+        # Define the phase space linking length
+        vlinkl = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_npart ** (1 / 3)
 
-        if len(phase_assigned_parts[pID]) == 0:
-            continue
+        # Define the phase space vectors for this halo
+        halo_phases = np.concatenate((iter_halo_poss, iter_halo_vels), axis=1)
 
-        # Extract halo data for this velocity space defined halo ID
-        # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-        phalo_pids = np.array(list(phase_assigned_parts[pID]), dtype=int)
-        halo_pids = s_halo_pids[phalo_pids]
-        sim_halo_pids = full_sim_halo_pids[phalo_pids]
-        halo_poss = pos[halo_pids, :]  # Positions *** NOTE: these are shifted below ***
-        halo_vels = vel[halo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-        halo_npart = halo_pids.size
+        # Query this halo in phase space to split apart halos which are found to
+        # be distinct in phase space
+        result = find_phase_space_halos(halo_phases, linkl, vlinkl)
+        iter_part_haloids, iter_assigned_parts = result
 
-        # =============== Compute mean positions and velocities and wrap the halos ===============
+        # Find the halos with 10 or more particles by finding the unique IDs in the particle
+        # halo ids array and finding those IDs that are assigned to 10 or more particles
+        iter_unique, iter_counts = np.unique(iter_part_haloids, return_counts=True)
+        unique_iter_haloids = iter_unique[np.where(iter_counts >= 10)]
+        iter_counts = iter_counts[np.where(iter_counts >= 10)]
 
-        # Define the comparison particle as the maximum position in the current dimension
-        max_part_pos = halo_poss.max(axis=0)
+        # Remove the null -2 value for single particle halos
+        iter_counts = iter_counts[np.where(unique_iter_haloids >= 0)]
+        unique_iter_haloids = unique_iter_haloids[np.where(unique_iter_haloids >= 0)]
 
-        # Compute all the halo particle separations from the maximum position
-        sep = max_part_pos - halo_poss
+        if unique_iter_haloids.size != 0:
 
-        # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-        # bring the particles at the lower boundary together with the particles at the upper boundary
-        # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-        # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-        halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
+            # Sort IDs by count
+            unique_iter_haloids = unique_iter_haloids[np.argsort(iter_counts)]
 
-        # Compute the shifted mean position
-        mean_halo_pos = halo_poss.mean(axis=0)
+            iterID = unique_iter_haloids[0]
+            for iID in unique_iter_haloids[1:]:
 
-        # Centre the halos about the mean in the dimension ixyz
-        halo_poss -= mean_halo_pos
+                # Store halo for testing as another task
+                extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
+                extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
+                iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
+                newID_iter -= 100
 
-        # Compute halo's energy
-        halo_energy, KE, GE = halo_energy_calc(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft)
+            # Extract halo data for this phase space defined halo ID
+            # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
+            phalo_pids = np.array(list(iter_assigned_parts[iterID]), dtype=int)
+            iter_halo_pids = iter_halo_pids[phalo_pids]
+            iter_sim_halo_pids = iter_sim_halo_pids[phalo_pids]
+            iter_halo_poss = iter_halo_poss[phalo_pids, :]  # Positions *** NOTE: these are shifted below ***
+            iter_halo_vels = iter_halo_vels[phalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
+            halo_npart = iter_halo_pids.size
 
-        new_vlcoeff = vlcoeff
+            # Define the comparison particle as the maximum position in the current dimension
+            max_part_pos = iter_halo_poss.max(axis=0)
 
-        iter_halo_pids = halo_pids
-        iter_sim_halo_pids = sim_halo_pids
-        iter_halo_poss = halo_poss
-        iter_halo_vels = halo_vels
-        itercount = 0
+            # Compute all the halo particle separations from the maximum position
+            sep = max_part_pos - iter_halo_poss
 
-        while KE / GE >= 1 and halo_npart >= 10 and new_vlcoeff >= 0.8:
+            # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
+            # bring the particles at the lower boundary together with the particles at the upper boundary
+            # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
+            # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
+            iter_halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
-            new_vlcoeff -= decrement
+            # Compute halo's energy
+            halo_energy, KE, GE = halo_energy_calc(iter_halo_poss, iter_halo_vels, halo_npart,
+                                                   pmass, redshift, G, h, soft)
+            itercount += 1
 
-            # Define the phase space linking length
-            vlinkl = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_npart ** (1 / 3)
-
-            # Define the phase space vectors for this halo
-            halo_phases = np.concatenate((iter_halo_poss, iter_halo_vels), axis=1)
-
-            # Query this halo in phase space to split apart halos which are found to
-            # be distinct in phase space
-            result = find_phase_space_halos(halo_phases, linkl, vlinkl)
-            iter_part_haloids, iter_assigned_parts = result
-
-            # Find the halos with 10 or more particles by finding the unique IDs in the particle
-            # halo ids array and finding those IDs that are assigned to 10 or more particles
-            iter_unique, iter_counts = np.unique(iter_part_haloids, return_counts=True)
-            unique_iter_haloids = iter_unique[np.where(iter_counts >= 10)]
-            iter_counts = iter_counts[np.where(iter_counts >= 10)]
-
-            # Remove the null -2 value for single particle halos
-            iter_counts = iter_counts[np.where(unique_iter_haloids >= 0)]
-            unique_iter_haloids = unique_iter_haloids[np.where(unique_iter_haloids >= 0)]
-
-            if unique_iter_haloids.size != 0:
-
-                # Sort IDs by count
-                unique_iter_haloids = unique_iter_haloids[np.argsort(iter_counts)]
-
-                iterID = unique_iter_haloids[0]
-                for iID in unique_iter_haloids[1:]:
-
-                    # Store halo for testing as another task
-                    extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
-                    extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
-                    iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
-                    newID_iter -= 100
-
-                # Extract halo data for this phase space defined halo ID
-                # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-                phalo_pids = np.array(list(iter_assigned_parts[iterID]), dtype=int)
-                iter_halo_pids = iter_halo_pids[phalo_pids]
-                iter_sim_halo_pids = iter_sim_halo_pids[phalo_pids]
-                iter_halo_poss = iter_halo_poss[phalo_pids, :]  # Positions *** NOTE: these are shifted below ***
-                iter_halo_vels = iter_halo_vels[phalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-                halo_npart = iter_halo_pids.size
-
-                # Define the comparison particle as the maximum position in the current dimension
-                max_part_pos = iter_halo_poss.max(axis=0)
-
-                # Compute all the halo particle separations from the maximum position
-                sep = max_part_pos - iter_halo_poss
-
-                # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-                # bring the particles at the lower boundary together with the particles at the upper boundary
-                # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-                # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
-                iter_halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
-
-                # Compute halo's energy
-                halo_energy, KE, GE = halo_energy_calc(iter_halo_poss, iter_halo_vels, halo_npart,
-                                                       pmass, redshift, G, h, soft)
-                itercount += 1
-
-            else:
-                halo_npart = 0
+        else:
+            halo_npart = 0
 
         if halo_npart >= 10:
 
@@ -798,7 +750,7 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
             new_vlcoeff -= decrement
 
             # Define the phase space linking length
-            vlinkl = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_npart ** (1 / 3)
+            vlinkl = new_vlcoeff * vlinkl_halo_indp * (1600 / 200)**(1/6) * pmass ** (1 / 3) * halo_npart ** (1 / 3)
 
             # Define the phase space vectors for this halo
             halo_phases = np.concatenate((iter_halo_poss, iter_halo_vels), axis=1)
