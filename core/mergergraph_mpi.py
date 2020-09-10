@@ -390,7 +390,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
             hdf_desc.close()
         else:
-            desc_reals = np.array([])
+            desc_reals = np.array([False])
 
         if prog_snap != None:
 
@@ -406,7 +406,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             hdf_prog.close()
 
         else:
-            prog_reals = np.array([])
+            prog_reals = np.array([False])
 
         old_desc_reals = np.copy(desc_reals)
 
@@ -487,9 +487,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
                            compression='gzip')
         hdf.create_dataset('Prog_nPart', shape=prog_nparts.shape, dtype=int, data=prog_nparts, compression='gzip')
         hdf.create_dataset('Desc_nPart', shape=desc_nparts.shape, dtype=int, data=desc_nparts, compression='gzip')
-        hdf.create_dataset('prog_real_flag', shape=reals.shape, dtype=bool, data=prog_reals, compression='gzip')
+        hdf.create_dataset('prog_real_flag', shape=prog_reals.shape, dtype=bool, data=prog_reals, compression='gzip')
         hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
-        hdf.create_dataset('desc_real_flag', shape=reals.shape, dtype=bool, data=desc_reals, compression='gzip')
+        hdf.create_dataset('desc_real_flag', shape=desc_reals.shape, dtype=bool, data=desc_reals, compression='gzip')
 
         hdf.close()
 
@@ -538,8 +538,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
         print("Not real halos", notreals, 'of', halo_ids.size)
-        print("Reals arrays are eqaul:", np.unique(old_reals == reals))
-        print("Descendant reals arrays are eqaul:", np.unique(old_desc_reals == desc_reals))
+        print("Reals arrays are equal:", np.unique(old_reals == reals))
+        print("Descendant reals arrays are equal:", np.unique(old_desc_reals == desc_reals))
 
     if profile:
         profile_dict["END"] = time.time()
