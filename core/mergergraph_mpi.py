@@ -433,30 +433,32 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
 
                 reals[haloID] = True
 
-            # If this halo is real then it's descendents are real
-            if desc_snap != None and reals[haloID]:
-                desc_reals[desc_haloids] = True
+            if reals[haloID]:
 
-            # Write out the data produced
-            nprogs[haloID] = nprog  # number of progenitors
-            ndescs[haloID] = ndesc  # number of descendants
-            halo_nparts[int(haloID)] = npart  # mass of the halo
+                # If this halo is real then it's descendents are real
+                if desc_snap != None:
+                    desc_reals[desc_haloids] = True
 
-            if nprog > 0:
-                prog_start_index[haloID] = len(progs)
-                progs.extend(prog_haloids)
-                prog_mass_conts.extend(prog_mass_contribution)
-                prog_nparts.extend(prog_npart)
-            else:
-                prog_start_index[haloID] = 2 ** 30
+                # Write out the data produced
+                nprogs[haloID] = nprog  # number of progenitors
+                ndescs[haloID] = ndesc  # number of descendants
+                halo_nparts[int(haloID)] = npart  # mass of the halo
 
-            if ndesc > 0:
-                desc_start_index[haloID] = len(descs)
-                descs.extend(desc_haloids)
-                desc_mass_conts.extend(desc_mass_contribution)
-                desc_nparts.extend(desc_npart)
-            else:
-                desc_start_index[haloID] = 2 ** 30
+                if nprog > 0:
+                    prog_start_index[haloID] = len(progs)
+                    progs.extend(prog_haloids)
+                    prog_mass_conts.extend(prog_mass_contribution)
+                    prog_nparts.extend(prog_npart)
+                else:
+                    prog_start_index[haloID] = 2 ** 30
+
+                if ndesc > 0:
+                    desc_start_index[haloID] = len(descs)
+                    descs.extend(desc_haloids)
+                    desc_mass_conts.extend(desc_mass_contribution)
+                    desc_nparts.extend(desc_npart)
+                else:
+                    desc_start_index[haloID] = 2 ** 30
 
         progs = np.array(progs)
         descs = np.array(descs)

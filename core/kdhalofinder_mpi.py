@@ -517,7 +517,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
 
     pID = thisTask
 
-    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff >= 0.8:
+    while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
 
         new_vlcoeff -= decrement
 
@@ -585,48 +585,52 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
         else:
             halo_npart = 0
 
-        if halo_npart >= 10:
+    if halo_npart >= 10:
 
-            # Extract halo data for this phase space defined halo ID
-            # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
-            sim_halo_pids = iter_sim_halo_pids
-            halo_poss = iter_halo_poss  # Positions *** NOTE: these are shifted below ***
-            halo_vels = iter_halo_vels  # Velocities *** NOTE: these are shifted below ***
-            halo_npart = sim_halo_pids.size
+        # Extract halo data for this phase space defined halo ID
+        # Particle ID *** NOTE: Overwrites IDs which started at 1 ***
+        sim_halo_pids = iter_sim_halo_pids
+        halo_poss = iter_halo_poss  # Positions *** NOTE: these are shifted below ***
+        halo_vels = iter_halo_vels  # Velocities *** NOTE: these are shifted below ***
+        halo_npart = sim_halo_pids.size
 
-            # =============== Compute mean positions and velocities and wrap the halos ===============
+        # =============== Compute mean positions and velocities and wrap the halos ===============
 
-            # Compute the shifted mean position in the dimension ixyz
-            mean_halo_pos = halo_poss.mean(axis=0)
+        # Compute the shifted mean position in the dimension ixyz
+        mean_halo_pos = halo_poss.mean(axis=0)
 
-            # Centre the halos about the mean in the dimension ixyz
-            halo_poss -= mean_halo_pos
+        # Centre the halos about the mean in the dimension ixyz
+        halo_poss -= mean_halo_pos
 
-            # May need to wrap if the halo extends over the upper edge of the box
-            mean_halo_pos = mean_halo_pos % boxsize
+        # May need to wrap if the halo extends over the upper edge of the box
+        mean_halo_pos = mean_halo_pos % boxsize
 
-            # Compute the mean velocity in the dimension ixyz
-            mean_halo_vel = halo_vels.mean(axis=0)
+        # Compute the mean velocity in the dimension ixyz
+        mean_halo_vel = halo_vels.mean(axis=0)
 
-            if KE / GE <= 1 and vlcoeff >= min_vlcoeff:
+        # Compute halo's energy
+        halo_energy, KE, GE = halo_energy_calc(halo_poss, halo_vels, halo_npart,
+                                               pmass, redshift, G, h, soft)
 
-                # Define realness flag
-                real = True
+        if KE / GE <= 1:
 
-                results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
-                                'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
-                                'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-                pid_results[pID] = sim_halo_pids
+            # Define realness flag
+            real = True
 
-            else:
+            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+                            'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
+                            'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
+            pid_results[pID] = sim_halo_pids
 
-                # Define realness flag
-                real = False
+        else:
 
-                results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
-                                'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
-                                'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-                pid_results[pID] = sim_halo_pids
+            # Define realness flag
+            real = False
+
+            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+                            'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
+                            'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
+            pid_results[pID] = sim_halo_pids
 
     return thisTask, results, extra_halo_pids, iter_vlcoeffs, pid_results
 
