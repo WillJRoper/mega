@@ -517,7 +517,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
 
     pID = thisTask
 
-    while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
+    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff > min_vlcoeff:
 
         new_vlcoeff -= decrement
 
