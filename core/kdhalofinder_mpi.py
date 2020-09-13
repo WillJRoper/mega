@@ -1167,7 +1167,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             # Do the work here
             result = get_real_host_halos(haloID, thishalo_pids, halo_poss, halo_vels, boxsize,
-                                         vlinkl_indp, linkl, pmass, vlcoeff, decrement,
+                                         vlinkl_indp, linkl, pmass, ini_vlcoeff, decrement,
                                          redshift, G, h, soft, min_vlcoeff)
 
             haloID, results, extra_halo_pids, extra_vlcoeffs, post_halo_pids = result
@@ -1248,7 +1248,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
 
             result = get_real_sub_halos(subhaloID, thissubhalo_pids, subhalo_poss, subhalo_vels, boxsize,
-                                        vlinkl_indp, sub_linkl, pmass, vlcoeff, decrement,
+                                        vlinkl_indp, sub_linkl, pmass, ini_vlcoeff, decrement,
                                         redshift, G, h, soft, min_vlcoeff)
 
             subhaloID, results, extra_subhalo_pids, extra_sub_vlcoeffs, post_subhalo_pids = result
