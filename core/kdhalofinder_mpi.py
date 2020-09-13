@@ -518,7 +518,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
 
     pID = thisTask
 
-    while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
+    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff > min_vlcoeff:
 
         new_vlcoeff -= decrement
 
@@ -545,8 +545,8 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
 
         if unique_iter_haloids.size != 0:
 
-            # Sort IDs by count
-            unique_iter_haloids = unique_iter_haloids[np.argsort(iter_counts)]
+            # # Sort IDs by count
+            # unique_iter_haloids = unique_iter_haloids[np.argsort(iter_counts)]
 
             iterID = unique_iter_haloids[0]
             for iID in unique_iter_haloids[1:]:
@@ -737,7 +737,7 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
                 # Store halo for testing as another task
                 extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
                 extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
-                iter_vlcoeffs[newID_iter] = 10
+                iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
                 newID_iter -= 100
 
             # Extract halo data for this phase space defined halo ID
