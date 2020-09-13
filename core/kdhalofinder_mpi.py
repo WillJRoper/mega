@@ -554,7 +554,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
                 # Store halo for testing as another task
                 extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
                 extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
-                iter_vlcoeffs[newID_iter] = 10
+                iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
                 newID_iter -= 100
 
             # Extract halo data for this phase space defined halo ID
@@ -1107,7 +1107,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     halo_pids, vlcoeffs, halo_tasks, thisRank_parts, newtaskID = utilities.decomp_halos(results_per_rank,
                                                                                         ini_vlcoeff,
                                                                                         nnodes)
-    print(len(halo_pids), len(results_per_rank))
 
     if profile:
         profile_dict["Domain-Decomp"]["Start"].append(start_dd)
