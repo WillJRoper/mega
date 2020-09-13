@@ -1066,6 +1066,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         # Combine collected results from children processes into a single dict
         results = {k: v for d in collected_results for k, v in d.items()}
 
+        print(len(results), "spatial halos collected")
+
         if verbose:
             print("Collecting the results took", time.time() - collect_start, "seconds")
 
@@ -1076,6 +1078,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         combine_start = time.time()
 
         results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine, npart)
+
+        print("Halos split between", size, "ranks:", [len(lst) for lst in results_per_rank])
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
