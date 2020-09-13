@@ -1074,7 +1074,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         combine_start = time.time()
 
-        results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine)
+        results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine, npart)
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
@@ -1100,8 +1100,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     halo_pids, vlcoeffs, halo_tasks, thisRank_parts, newtaskID = utilities.decomp_halos(results_per_rank,
                                                                                         ini_vlcoeff,
-                                                                                        nnodes,
-                                                                                        npart)
+                                                                                        nnodes)
 
     if profile:
         profile_dict["Domain-Decomp"]["Start"].append(start_dd)
