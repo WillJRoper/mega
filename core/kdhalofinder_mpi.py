@@ -509,20 +509,19 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
     iter_sim_halo_pids = full_sim_halo_pids
     iter_halo_poss = full_halo_poss
     iter_halo_vels = full_halo_vels
+    iter_halo_npart = halo_npart
     itercount = 0
 
     # Initialise KE and GE for loop
     KE = 2**30
     GE = 1
 
-    pID = thisTask
-
-    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff > min_vlcoeff:
+    while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
 
         new_vlcoeff -= decrement
 
         # Define the phase space linking length
-        vlinkl = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_npart ** (1 / 3)
+        vlinkl = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * iter_halo_npart ** (1 / 3)
 
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((iter_halo_poss, iter_halo_vels), axis=1)
@@ -553,7 +552,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
                 # Store halo for testing as another task
                 extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
                 extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
-                iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
+                iter_vlcoeffs[newID_iter] = 10
                 newID_iter -= 100
 
             # Extract halo data for this phase space defined halo ID
@@ -563,7 +562,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
             iter_sim_halo_pids = iter_sim_halo_pids[phalo_pids]
             iter_halo_poss = iter_halo_poss[phalo_pids, :]  # Positions *** NOTE: these are shifted below ***
             iter_halo_vels = iter_halo_vels[phalo_pids, :]  # Velocities *** NOTE: these are shifted below ***
-            halo_npart = iter_halo_pids.size
+            iter_halo_npart = iter_halo_pids.size
 
             # Define the comparison particle as the maximum position in the current dimension
             max_part_pos = iter_halo_poss.max(axis=0)
@@ -578,7 +577,7 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
             iter_halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
             # Compute halo's energy
-            halo_energy, KE, GE = halo_energy_calc(iter_halo_poss, iter_halo_vels, halo_npart,
+            halo_energy, KE, GE = halo_energy_calc(iter_halo_poss, iter_halo_vels, iter_halo_npart,
                                                    pmass, redshift, G, h, soft)
             itercount += 1
 
@@ -617,20 +616,20 @@ def get_real_host_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, lin
             # Define realness flag
             real = True
 
-            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+            results = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
                             'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
                             'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-            pid_results[pID] = sim_halo_pids
+            pid_results = sim_halo_pids
 
         else:
 
             # Define realness flag
             real = False
 
-            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+            results = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
                             'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
                             'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-            pid_results[pID] = sim_halo_pids
+            pid_results = sim_halo_pids
 
     return thisTask, results, extra_halo_pids, iter_vlcoeffs, pid_results
 
@@ -699,8 +698,6 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
     KE = 2 ** 30
     GE = 1
 
-    pID = thisTask
-
     while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
 
         new_vlcoeff -= decrement
@@ -736,7 +733,7 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
                 # Store halo for testing as another task
                 extra_pids = np.array(list(iter_assigned_parts[iID]), dtype=int)
                 extra_halo_pids[newID_iter] = iter_sim_halo_pids[extra_pids]
-                iter_vlcoeffs[newID_iter] = new_vlcoeff - decrement
+                iter_vlcoeffs[newID_iter] = 10
                 newID_iter -= 100
 
             # Extract halo data for this phase space defined halo ID
@@ -800,20 +797,20 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
             # Define realness flag
             real = True
 
-            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+            results = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
                             'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
                             'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-            pid_results[pID] = sim_halo_pids
+            pid_results = sim_halo_pids
 
         else:
 
             # Define realness flag
             real = False
 
-            results[pID] = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
+            results = {'pids': sim_halo_pids, 'npart': halo_npart, 'real': real,
                             'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
                             'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
-            pid_results[pID] = sim_halo_pids
+            pid_results = sim_halo_pids
 
     return thisTask, results, extra_halo_pids, iter_vlcoeffs, pid_results
 
@@ -1294,25 +1291,23 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         # Collect host halo results
         results_dict = {}
-        for halo_task in collected_results:
-            for task in halo_task:
-                for halo in halo_task[task]:
-                    results_dict[(task, newPhaseID)] = halo_task[task][halo]
-                    pids = halo_task[task][halo]['pids']
-                    haloID_dict[(task, newPhaseID)] = newPhaseID
-                    phase_part_haloids[pids, 0] = newPhaseID
-                    newPhaseID += 1
+        for i, halo_task in enumerate(collected_results):
+            for halo in halo_task:
+                results_dict[(i, newPhaseID)] = halo
+                pids = halo['pids']
+                haloID_dict[(i, newPhaseID)] = newPhaseID
+                phase_part_haloids[pids, 0] = newPhaseID
+                newPhaseID += 1
 
         # Collect subhalo results
         sub_results_dict = {}
-        for subhalo_task in sub_collected_results:
-            for subtask in subhalo_task:
-                for subhalo in subhalo_task[subtask]:
-                    sub_results_dict[(subtask, newPhaseSubID)] = subhalo_task[subtask][subhalo]
-                    pids = subhalo_task[subtask][subhalo]['pids']
-                    subhaloID_dict[(subtask, newPhaseSubID)] = newPhaseSubID
-                    phase_part_haloids[pids, 1] = newPhaseSubID
-                    newPhaseSubID += 1
+        for i, subhalo_task in enumerate(sub_collected_results):
+            for subhalo in subhalo_task:
+                sub_results_dict[(i, newPhaseSubID)] = subhalo
+                pids = subhalo['pids']
+                subhaloID_dict[(i, newPhaseSubID)] = newPhaseSubID
+                phase_part_haloids[pids, 1] = newPhaseSubID
+                newPhaseSubID += 1
 
         if verbose:
             print("Combining the results took", time.time() - collect_start, "seconds")
