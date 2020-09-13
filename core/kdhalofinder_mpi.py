@@ -702,7 +702,7 @@ def get_real_sub_halos(thisTask, pids, pos, vel, boxsize, vlinkl_halo_indp, link
 
     pID = thisTask
 
-    while KE / GE > 1 and halo_npart >= 10 and (new_vlcoeff - decrement) >= min_vlcoeff:
+    while KE / GE > 1 and halo_npart >= 10 and new_vlcoeff > min_vlcoeff:
 
         new_vlcoeff -= decrement
 
