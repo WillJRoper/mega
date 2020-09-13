@@ -1079,7 +1079,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine, npart)
 
-        print("Halos split between", size, "ranks:", [len(lst) for lst in results_per_rank])
+        print("Halos split between", size, "ranks:", np.sum([len(lst) for lst in results_per_rank]))
+        print("Halo division between", size, "ranks:", np.sum([len(lst) for lst in results_per_rank]))
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
