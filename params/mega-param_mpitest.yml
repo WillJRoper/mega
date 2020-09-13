@@ -34,10 +34,6 @@ flags:
   usemultiprocessing:  0              # Use python parallelisation with multiprocessing (single cpu)
   usempi:              1              # Use mpi (UNUSED CURRENTLY) (multiple cpus)
 
-  # Input type flags (only enable 1)
-  internalInput:       1              # Flag to use internal HDF5 input
-  binaryInput:         0              # Flag for HDF5 inputs, if False binary format is assumed
-
   verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
   profile:             1              # Flag for producing profiling txt files while running
 

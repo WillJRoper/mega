@@ -340,13 +340,15 @@ def combine_tasks_networkx(results, ranks, halos_to_combine):
     return chunked_results
 
 
-def decomp_halos(results, ini_vlcoeff, nnodes):
+def decomp_halos(results, ini_vlcoeff, nnodes, npart):
 
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
     vlcoeffs = {}
     tasks = set()
     ini_parts_in_rank = []
+
+    spatial_part_haloids = np.full(npart, -2, dtype=np.int32)
 
     # Store halo ids and halo data for the halos found out in the spatial search
     newtaskID = nnodes + 1
@@ -357,6 +359,8 @@ def decomp_halos(results, ini_vlcoeff, nnodes):
 
         # Assign the particles to the main dictionary
         halo_pids[(1, newtaskID)] = parts_arr
+
+        spatial_part_haloids[parts_arr] = newtaskID
 
         # Assign particles
         ini_parts_in_rank.extend(parts_arr)
@@ -371,6 +375,25 @@ def decomp_halos(results, ini_vlcoeff, nnodes):
 
     # Convert parts in rank to list for use with numpy
     parts_in_rank = np.sort(ini_parts_in_rank)
+
+    # Find the halos with 10 or more particles by finding the unique IDs in the particle
+    # halo ids array and finding those IDs that are assigned to 10 or more particles
+    unique, counts = np.unique(spatial_part_haloids, return_counts=True)
+    unique_haloids = unique[np.where(counts >= 10)]
+
+    # Remove the null -2 value for single particle halos
+    unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
+
+    # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
+    print("=========================== Spatial halos ===========================")
+    print(unique_haloids.size, 'halos found with 10 or more particles')
+    print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
+    print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
+    print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
+    print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
+    print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
+    print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
+    print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
 
     return halo_pids, vlcoeffs, tasks, parts_in_rank, newtaskID
 

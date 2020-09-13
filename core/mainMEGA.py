@@ -42,8 +42,8 @@ def main_kdmpi(snap):
     kdmpi.hosthalofinder(snap, llcoeff=params['llcoeff'], sub_llcoeff=params['sub_llcoeff'], inputpath=inputs['data'],
                          savepath=inputs['haloSavePath'], ini_vlcoeff=params['ini_alpha_v'],
                          min_vlcoeff=params['min_alpha_v'], decrement=params['decrement'], verbose=flags['verbose'],
-                         internal_input=flags['internalInput'], findsubs=flags['subs'], ncells=params['N_cells'],
-                         profile=flags['profile'], profile_path=inputs["profilingPath"])
+                         findsubs=flags['subs'], ncells=params['N_cells'], profile=flags['profile'],
+                         profile_path=inputs["profilingPath"])
 
 
 def main_mg(snap, density_rank):

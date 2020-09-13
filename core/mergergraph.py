@@ -314,6 +314,10 @@ def directProgDescWriter(snapshot, halopath='halo_snapshots/', savepath='MergerG
 
             npart = current_halo_pids.size
 
+            if ndesc > 40:
+                print("-----------------------", haloID, "-----------------------")
+                print(nprog, prog_haloids.size, ndesc, desc_haloids.size, preals, current_halo_pids.size)
+
             # If this halo has no real progenitors and is less than 20 particle it is by definition not
             # a halo
             if nprog == 0 and npart < 20:
@@ -509,6 +513,8 @@ for snap in range(0, 62):
 if __name__ == '__main__':
     start = time.time()
     for snap in snaplist:
+        if int(snap) > 24:
+            continue
         print(snap)
         main(snap)
     print('Total:', time.time() - start)
