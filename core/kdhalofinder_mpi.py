@@ -188,102 +188,84 @@ def find_subhalos(halo_pos, sub_linkl):
     # faster queries (documentation recommends compact_nodes=True and balanced_tree=True)***
     tree = cKDTree(halo_pos, leafsize=16, compact_nodes=False, balanced_tree=False)
 
-    if npart > 10000:
+    query = tree.query_ball_point(halo_pos, r=sub_linkl)
 
-        # Define an array of limits for looping defined by the batchsize
-        limits = np.linspace(0, npart, int(npart / 10000) + 1, dtype=int)
+    # Loop through query results
+    for query_part_inds in iter(query):
 
-    else:
+        # Convert the particle index list to an array for ease of use.
+        query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
 
-        limits = [0, npart]
+        # Assert that the query particle is returned by the tree query. Otherwise the program fails
+        assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
 
-    # ===================== Sort Through The Results Assigning Subhalos =====================
+        # Find only the particles not already in a halo
+        new_parts = query_part_inds[np.where(part_subhaloids[query_part_inds] == -1)]
 
-    for ind, limit in enumerate(limits[:-1]):
+        # If only one particle is returned by the query and it is new it is a 'single particle subhalo'
+        if new_parts.size == query_part_inds.size == 1:
 
-        query_parts = halo_pos[limit:limits[ind + 1]]
+            # Assign the 'single particle subhalo' subhalo ID to the particle
+            part_subhaloids[new_parts] = -2
 
-        if query_parts.size == 0:
-            continue
+        # If all particles are new increment the subhalo ID and assign a new subhalo ID
+        elif new_parts.size == query_part_inds.size:
 
-        query = tree.query_ball_point(query_parts, r=sub_linkl)
+            # Increment the subhalo ID by 1 (initialise new halo)
+            isubhaloid += 1
 
-        # Loop through query results
-        for query_part_inds in iter(query):
+            # Assign the subhalo ID to the particles
+            part_subhaloids[new_parts] = isubhaloid
+            assignedsub_parts[isubhaloid] = set(new_parts)
 
-            # Convert the particle index list to an array for ease of use.
-            query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
+            # Assign the final subhalo ID to be the newly assigned subhalo ID
+            final_subhalo_ids[isubhaloid] = isubhaloid
+            linked_subhalos_dict[isubhaloid] = {isubhaloid}
 
-            # Assert that the query particle is returned by the tree query. Otherwise the program fails
-            assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
+        else:
 
-            # Find only the particles not already in a halo
-            new_parts = query_part_inds[np.where(part_subhaloids[query_part_inds] == -1)]
+            # ===== Get the 'final subhalo ID value' =====
 
-            # If only one particle is returned by the query and it is new it is a 'single particle subhalo'
-            if new_parts.size == query_part_inds.size == 1:
+            # Extract the IDs of subhalos returned by the query
+            contained_subhalos = part_subhaloids[query_part_inds]
 
-                # Assign the 'single particle subhalo' subhalo ID to the particle
-                part_subhaloids[new_parts] = -2
+            # Return only the unique subhalo IDs
+            uni_cont_subhalos = np.unique(contained_subhalos)
 
-            # If all particles are new increment the subhalo ID and assign a new subhalo ID
-            elif new_parts.size == query_part_inds.size:
+            # # Assure no single particles are returned by the query
+            # assert any(uni_cont_subhalos != -2), 'Single particle halos should never be found'
 
-                # Increment the subhalo ID by 1 (initialise new halo)
-                isubhaloid += 1
+            # Remove any unassigned subhalos
+            uni_cont_subhalos = uni_cont_subhalos[np.where(uni_cont_subhalos != -1)]
 
-                # Assign the subhalo ID to the particles
-                part_subhaloids[new_parts] = isubhaloid
-                assignedsub_parts[isubhaloid] = set(new_parts)
+            # If there is only one subhalo ID returned avoid the slower code to combine IDs
+            if uni_cont_subhalos.size == 1:
 
-                # Assign the final subhalo ID to be the newly assigned subhalo ID
-                final_subhalo_ids[isubhaloid] = isubhaloid
-                linked_subhalos_dict[isubhaloid] = {isubhaloid}
+                # Get the list of linked subhalos linked to the current subhalo from the linked subhalo dictionary
+                linked_subhalos = linked_subhalos_dict[uni_cont_subhalos[0]]
 
             else:
 
-                # ===== Get the 'final subhalo ID value' =====
+                # Get all linked subhalos from the dictionary so as to not miss out any subhalos IDs that are linked
+                # but not returned by this particular query
+                linked_subhalos_set = set()  # initialise linked subhalo set
+                linked_subhalos = linked_subhalos_set.union(*[linked_subhalos_dict.get(subhalo)
+                                                              for subhalo in uni_cont_subhalos])
 
-                # Extract the IDs of subhalos returned by the query
-                contained_subhalos = part_subhaloids[query_part_inds]
+            # Find the minimum subhalo ID to make the final subhalo ID
+            final_ID = min(linked_subhalos)
 
-                # Return only the unique subhalo IDs
-                uni_cont_subhalos = np.unique(contained_subhalos)
+            # Assign the linked subhalos to all the entries in the linked subhalos dict
+            linked_subhalos_dict.update(dict.fromkeys(list(linked_subhalos), linked_subhalos))
 
-                # # Assure no single particles are returned by the query
-                # assert any(uni_cont_subhalos != -2), 'Single particle halos should never be found'
+            # Assign the final subhalo array
+            final_subhalo_ids[list(linked_subhalos)] = final_ID
 
-                # Remove any unassigned subhalos
-                uni_cont_subhalos = uni_cont_subhalos[np.where(uni_cont_subhalos != -1)]
+            # Assign new parts to the subhalo IDs with the final ID
+            part_subhaloids[new_parts] = final_ID
 
-                # If there is only one subhalo ID returned avoid the slower code to combine IDs
-                if uni_cont_subhalos.size == 1:
-
-                    # Get the list of linked subhalos linked to the current subhalo from the linked subhalo dictionary
-                    linked_subhalos = linked_subhalos_dict[uni_cont_subhalos[0]]
-
-                else:
-
-                    # Get all linked subhalos from the dictionary so as to not miss out any subhalos IDs that are linked
-                    # but not returned by this particular query
-                    linked_subhalos_set = set()  # initialise linked subhalo set
-                    linked_subhalos = linked_subhalos_set.union(*[linked_subhalos_dict.get(subhalo)
-                                                                  for subhalo in uni_cont_subhalos])
-
-                # Find the minimum subhalo ID to make the final subhalo ID
-                final_ID = min(linked_subhalos)
-
-                # Assign the linked subhalos to all the entries in the linked subhalos dict
-                linked_subhalos_dict.update(dict.fromkeys(list(linked_subhalos), linked_subhalos))
-
-                # Assign the final subhalo array
-                final_subhalo_ids[list(linked_subhalos)] = final_ID
-
-                # Assign new parts to the subhalo IDs with the final ID
-                part_subhaloids[new_parts] = final_ID
-
-                # Assign the new particles to the final ID particles in subhalo dictionary entry
-                assignedsub_parts[final_ID].update(new_parts)
+            # Assign the new particles to the final ID particles in subhalo dictionary entry
+            assignedsub_parts[final_ID].update(new_parts)
 
     # =============== Reassign All Subhalos To Their Final Subhalo ID ===============
 
@@ -328,101 +310,83 @@ def find_phase_space_halos(halo_phases, linkl, vlinkl):
 
     npart = halo_phases.shape[0]
 
-    if npart > 1000:
+    query = halo_tree.query_ball_point(halo_phases, r=np.sqrt(2))
 
-        # Define an array of limits for looping defined by the batchsize
-        limits = np.linspace(0, npart, int(npart / 1000) + 1, dtype=int)
+    # Loop through query results assigning initial halo IDs
+    for query_part_inds in iter(query):
 
-    else:
+        query_part_inds = np.array(query_part_inds, dtype=int)
 
-        limits = [0, npart]
+        # Assert that the query particle is returned by the tree query. Otherwise the program fails
+        # assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
 
-    # =============== Query the tree ===============
+        # Find only the particles not already in a halo
+        new_parts = query_part_inds[np.where(phase_part_haloids[query_part_inds] < 0)]
 
-    for ind, limit in enumerate(limits[:-1]):
+        # If only one particle is returned by the query and it is new it is a 'single particle halo'
+        if new_parts.size == query_part_inds.size == 1:
 
-        query_phases = halo_phases[limit:limits[ind + 1]]
+            # Assign the 'single particle halo' halo ID to the particle
+            phase_part_haloids[new_parts] = -2
 
-        if query_phases.size == 0:
-            continue
+        # If all particles are new increment the halo ID and assign a new halo
+        elif new_parts.size == query_part_inds.size:
 
-        query = halo_tree.query_ball_point(query_phases, r=np.sqrt(2))
+            # Increment the halo ID by 1 (initialising a new halo)
+            ihaloid += 1
 
-        # Loop through query results assigning initial halo IDs
-        for query_part_inds in iter(query):
+            # Assign the new halo ID to the particles
+            phase_part_haloids[new_parts] = ihaloid
+            phase_assigned_parts[ihaloid] = set(new_parts)
 
-            query_part_inds = np.array(query_part_inds, dtype=int)
+            # Assign the final halo ID to be the newly assigned halo ID
+            final_phasehalo_ids[ihaloid] = ihaloid
+            phase_linked_halos_dict[ihaloid] = {ihaloid}
 
-            # Assert that the query particle is returned by the tree query. Otherwise the program fails
-            # assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
+        else:
 
-            # Find only the particles not already in a halo
-            new_parts = query_part_inds[np.where(phase_part_haloids[query_part_inds] < 0)]
+            # ===== Get the 'final halo ID value' =====
 
-            # If only one particle is returned by the query and it is new it is a 'single particle halo'
-            if new_parts.size == query_part_inds.size == 1:
+            # Extract the IDs of halos returned by the query
+            contained_halos = phase_part_haloids[query_part_inds]
 
-                # Assign the 'single particle halo' halo ID to the particle
-                phase_part_haloids[new_parts] = -2
+            # Get only the unique halo IDs
+            uni_cont_halos = np.unique(contained_halos)
 
-            # If all particles are new increment the halo ID and assign a new halo
-            elif new_parts.size == query_part_inds.size:
+            # Remove any unassigned halos
+            uni_cont_halos = uni_cont_halos[np.where(uni_cont_halos >= 0)]
 
-                # Increment the halo ID by 1 (initialising a new halo)
-                ihaloid += 1
+            # If there is only one halo ID returned avoid the slower code to combine IDs
+            if uni_cont_halos.size == 1:
 
-                # Assign the new halo ID to the particles
-                phase_part_haloids[new_parts] = ihaloid
-                phase_assigned_parts[ihaloid] = set(new_parts)
+                # Get the list of linked halos linked to the current halo from the linked halo dictionary
+                linked_halos = phase_linked_halos_dict[uni_cont_halos[0]]
 
-                # Assign the final halo ID to be the newly assigned halo ID
-                final_phasehalo_ids[ihaloid] = ihaloid
-                phase_linked_halos_dict[ihaloid] = {ihaloid}
+            elif uni_cont_halos.size == 0:
+                continue
 
             else:
 
-                # ===== Get the 'final halo ID value' =====
+                # Get all the linked halos from dictionary so as to not miss out any halos IDs that are linked
+                # but not returned by this particular query
+                linked_halos_set = set()  # initialise linked halo set
+                linked_halos = linked_halos_set.union(*[phase_linked_halos_dict.get(halo)
+                                                        for halo in uni_cont_halos])
 
-                # Extract the IDs of halos returned by the query
-                contained_halos = phase_part_haloids[query_part_inds]
+            # Find the minimum halo ID to make the final halo ID
+            final_ID = min(linked_halos)
 
-                # Get only the unique halo IDs
-                uni_cont_halos = np.unique(contained_halos)
+            # Assign the linked halos to all the entries in the linked halos dictionary
+            phase_linked_halos_dict.update(dict.fromkeys(list(linked_halos), linked_halos))
 
-                # Remove any unassigned halos
-                uni_cont_halos = uni_cont_halos[np.where(uni_cont_halos >= 0)]
+            # Assign the final halo ID array entries
+            final_phasehalo_ids[list(linked_halos)] = final_ID
 
-                # If there is only one halo ID returned avoid the slower code to combine IDs
-                if uni_cont_halos.size == 1:
+            # Assign new particles to the particle halo IDs array with the final ID
+            phase_part_haloids[new_parts] = final_ID
 
-                    # Get the list of linked halos linked to the current halo from the linked halo dictionary
-                    linked_halos = phase_linked_halos_dict[uni_cont_halos[0]]
-
-                elif uni_cont_halos.size == 0:
-                    continue
-
-                else:
-
-                    # Get all the linked halos from dictionary so as to not miss out any halos IDs that are linked
-                    # but not returned by this particular query
-                    linked_halos_set = set()  # initialise linked halo set
-                    linked_halos = linked_halos_set.union(*[phase_linked_halos_dict.get(halo)
-                                                            for halo in uni_cont_halos])
-
-                # Find the minimum halo ID to make the final halo ID
-                final_ID = min(linked_halos)
-
-                # Assign the linked halos to all the entries in the linked halos dictionary
-                phase_linked_halos_dict.update(dict.fromkeys(list(linked_halos), linked_halos))
-
-                # Assign the final halo ID array entries
-                final_phasehalo_ids[list(linked_halos)] = final_ID
-
-                # Assign new particles to the particle halo IDs array with the final ID
-                phase_part_haloids[new_parts] = final_ID
-
-                # Assign the new particles to the final ID in halo dictionary entry
-                phase_assigned_parts[final_ID].update(new_parts)
+            # Assign the new particles to the final ID in halo dictionary entry
+            phase_assigned_parts[final_ID].update(new_parts)
 
     # =============== Reassign All Halos To Their Final Halo ID ===============
 
@@ -1182,7 +1146,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             haloID = thisTask
             thishalo_pids = halo_pids[thisTask]
-            vlcoeff = vlcoeffs[thisTask]
 
             halo_poss = pos[rank_indices[thishalo_pids], :]
             halo_vels = vel[rank_indices[thishalo_pids], :]

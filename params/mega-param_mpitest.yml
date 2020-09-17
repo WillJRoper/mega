@@ -42,7 +42,7 @@ parameters:
 
   batchsize:           2000000        # The number of particles that are tested in the KDTree at once
   ini_alpha_v:         10             # The initial velocity linking length coefficient for phase-space iteration
-  min_alpha_v:         0.8            # The initial velocity linking length coefficient for phase-space iteration
+  min_alpha_v:         0.8           # The initial velocity linking length coefficient for phase-space iteration
   llcoeff:             0.2            # Spatial linking length coefficient for host halos
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
   decrement:           0.05           # The amount alpha_v is decremented by in each phase-space iteration
