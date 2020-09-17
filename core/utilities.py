@@ -332,12 +332,14 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
     # Split into a list containing a list of halos for each rank
     newSpatialID = 0
     chunked_results = [[] for i in range(ranks)]
-    chunked_load = np.zeros(ranks)
+    chunked_part_load = np.zeros(ranks)
+    chunked_halo_load = np.ones(ranks)
     while len(results) > 0:
         res = results.pop()
         if len(res) >= 10:
-            i = np.argmin(chunked_load)
-            chunked_load[i] += len(res)
+            i = np.nanargmin(chunked_part_load)
+            chunked_part_load[i] += len(res)
+            chunked_halo_load[i] += 1
             chunked_results[i].append(res)
             spatial_part_haloids[list(res)] = newSpatialID
             newSpatialID += 1
@@ -397,6 +399,37 @@ def decomp_halos(results, ini_vlcoeff, nnodes):
     parts_in_rank = np.sort(ini_parts_in_rank)
 
     return halo_pids, vlcoeffs, tasks, parts_in_rank, newtaskID
+
+
+def decomp_subhalos(subhalo_pids_per_rank, ranks):
+
+    # Split into a list containing a list of halos for each rank
+    newTaskID = 0
+    chunked_part_load = np.zeros(ranks)
+    chunked_halo_load = np.zeros(ranks)
+    chunked_pids = [{} for i in range(ranks)]
+
+    # Initialise the key to store all particles on a rank
+    for i in range(ranks):
+        chunked_pids[i]["parts_on_rank"] = set()
+
+    for ind, subhalo_pids_dict in enumerate(subhalo_pids_per_rank):
+        while len(subhalo_pids_dict) > 0:
+            task = (3, newTaskID)
+            _, pids = subhalo_pids_dict.popitem()
+            if len(pids) >= 10:
+                i = np.argmin(chunked_part_load)
+                chunked_part_load[i] += len(pids)
+                chunked_halo_load[i] += 1
+                chunked_pids[i][task] = pids
+                chunked_pids[i]["parts_on_rank"].update(pids)
+                newTaskID += 1
+
+    # Convert sets of included particles on a rank to sorted arrays
+    for i in range(ranks):
+        chunked_pids[i]["parts_on_rank"] = np.sort(list(chunked_pids[i]["parts_on_rank"]))
+
+    return chunked_pids
 
 
 def combine_tasks_per_thread(results, rank, thisRank_parts):

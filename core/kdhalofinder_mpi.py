@@ -328,10 +328,10 @@ def find_phase_space_halos(halo_phases, linkl, vlinkl):
 
     npart = halo_phases.shape[0]
 
-    if npart > 10000:
+    if npart > 1000:
 
         # Define an array of limits for looping defined by the batchsize
-        limits = np.linspace(0, npart, int(npart / 10000) + 1, dtype=int)
+        limits = np.linspace(0, npart, int(npart / 1000) + 1, dtype=int)
 
     else:
 
@@ -1079,8 +1079,31 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         results_per_rank = utilities.combine_tasks_networkx(results, size, halos_to_combine, npart)
 
-        print("Halos split between", size, "ranks:", np.sum([len(lst) for lst in results_per_rank]))
-        print("Halo division between", size, "ranks:\n", [len(lst) for lst in results_per_rank])
+        n_halos_per_rank = [len(lst) for lst in results_per_rank]
+        n_particles_per_rank = [0 for i in range(size)]
+        for ind, lst in enumerate(results_per_rank):
+            for s in lst:
+                n_particles_per_rank[ind] += len(s)
+
+        print("Halos split between", size, "ranks:", np.sum(n_halos_per_rank))
+        if size > 15:
+            n_halos_per_rank = [str(num) + ", " for num in n_halos_per_rank]
+            print("Halo division between", size, "ranks:")
+            for i in range(len(n_halos_per_rank) // 15 + 1):
+                print("".join(n_halos_per_rank[i * 15:(i + 1) * 15]) + "\n")
+        else:
+            print("Halo division between", size, "ranks:")
+            print(n_halos_per_rank)
+
+        print("Particles split between", size, "ranks:", np.sum(n_particles_per_rank))
+        if size > 15:
+            n_halos_per_rank = [str(num) + ", " for num in n_particles_per_rank]
+            print("Particles division between", size, "ranks:")
+            for i in range(len(n_halos_per_rank) // 15 + 1):
+                print("".join(n_halos_per_rank[i * 15:(i + 1) * 15]) + "\n")
+        else:
+            print("Particles division between", size, "ranks:")
+            print(n_particles_per_rank)
 
         if verbose:
             print("Combining the results took", time.time() - combine_start, "seconds")
@@ -1117,6 +1140,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     # Extract this ranks spatial halo dictionaries
     sub_vlcoeffs = {}
     subhalo_pids = {}
+    phase_subhalo_pids = {}
     haloID_dict = {}
     subhaloID_dict = {}
 
@@ -1224,9 +1248,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             # Create subhalos tasks to test subhalos in phase space
             for halo in task_subhalo_pids:
-                halo_tasks.update({(3, newtaskID)})
-                subhalo_pids[(3, newtaskID)] = task_subhalo_pids[halo]
-                sub_vlcoeffs[(3, newtaskID)] = ini_vlcoeff
+                phase_subhalo_pids[(3, newtaskID)] = task_subhalo_pids[halo]
 
                 # Increment task ID
                 newtaskID += 1
@@ -1236,51 +1258,111 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
                 profile_dict["Task-Munging"]["End"].append(time.time())
 
-        elif thisTask[0] == 3:
+    # Collect child process results
+    collect_start = time.time()
+    collected_subhalo_pids = comm.gather(phase_subhalo_pids, root=0)
 
-            subhaloID = thisTask
-            thissubhalo_pids = subhalo_pids[thisTask]
-            vlcoeff = sub_vlcoeffs[thisTask]
+    if profile:
+        profile_dict["Collecting"]["Start"].append(collect_start)
+        profile_dict["Collecting"]["End"].append(time.time())
 
-            subhalo_poss = pos[rank_indices[thissubhalo_pids], :]
-            subhalo_vels = vel[rank_indices[thissubhalo_pids], :]
+    if rank == 0:
 
-            subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
+        start_dd = time.time()
 
-            result = get_real_sub_halos(subhaloID, thissubhalo_pids, subhalo_poss, subhalo_vels, boxsize,
-                                        vlinkl_indp, sub_linkl, pmass, ini_vlcoeff, decrement,
-                                        redshift, G, h, soft, min_vlcoeff)
+        chunked_subhalo_pids = utilities.decomp_subhalos(collected_subhalo_pids, size)
 
-            subhaloID, results, extra_subhalo_pids, extra_sub_vlcoeffs, post_subhalo_pids = result
+        if profile:
+            profile_dict["Domain-Decomp"]["Start"].append(start_dd)
+            profile_dict["Domain-Decomp"]["End"].append(time.time())
 
-            sub_results_dict[subhaloID] = results
+    else:
 
-            if profile:
-                profile_dict["Sub-Phase"]["Start"].append(task_start)
-                profile_dict["Sub-Phase"]["End"].append(time.time())
+        chunked_subhalo_pids = None
 
-            taskmunging_start = time.time()
+    comm_start = time.time()
+    subhalo_pids = comm.scatter(chunked_subhalo_pids, root=0)
 
-            # Create subhalos tasks from the completed halos
-            for res in post_subhalo_pids:
+    if profile:
+        profile_dict["Communication"]["Start"].append(comm_start)
+        profile_dict["Communication"]["End"].append(time.time())
 
-                phase_part_haloids[post_subhalo_pids[res], 1] = newPhaseSubID
+    set_up_start = time.time()
 
-                # Increment task ID
-                newtaskID += 1
-                newPhaseSubID += 1
+    # Get the particles on this node
+    thisRank_parts = subhalo_pids.pop("parts_on_rank")
 
-            for key in extra_subhalo_pids:
-                halo_tasks.update({(3, newtaskID)})
-                subhalo_pids[(3, newtaskID)] = extra_subhalo_pids[key]
-                sub_vlcoeffs[(3, newtaskID)] = extra_sub_vlcoeffs[key]
+    # Define the particles in this rank and an array of indices for them
+    rank_indices = np.full(npart, np.nan, dtype=np.uint32)
+    if len(thisRank_parts) > 0:
+        rank_indices[thisRank_parts] = np.arange(0, len(thisRank_parts), dtype=np.uint16)
 
-                # Increment task ID
-                newtaskID += 1
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
 
-            if profile:
-                profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
-                profile_dict["Task-Munging"]["End"].append(time.time())
+    # Get the position and velocity of each particle in this rank
+    pos = hdf['part_pos'][thisRank_parts, :]
+    vel = hdf['part_vel'][thisRank_parts, :]
+
+    hdf.close()
+
+    # Get the subhalo tasks from the keys returned by the decomposition
+    subhalo_tasks = set(subhalo_pids.keys())
+
+    if profile:
+        profile_dict["Housekeeping"]["Start"].append(set_up_start)
+        profile_dict["Housekeeping"]["End"].append(time.time())
+
+    # Loop through halos
+    while len(subhalo_tasks) > 0:
+
+        thisTask = subhalo_tasks.pop()
+
+        task_start = time.time()
+
+        subhaloID = thisTask
+        thissubhalo_pids = subhalo_pids[thisTask]
+        # vlcoeff = sub_vlcoeffs[thisTask]
+
+        subhalo_poss = pos[rank_indices[thissubhalo_pids], :]
+        subhalo_vels = vel[rank_indices[thissubhalo_pids], :]
+
+        subhalo_poss = utilities.wrap_halo(subhalo_poss, boxsize, domean=False)
+
+        result = get_real_sub_halos(subhaloID, thissubhalo_pids, subhalo_poss, subhalo_vels, boxsize,
+                                    vlinkl_indp, sub_linkl, pmass, ini_vlcoeff, decrement,
+                                    redshift, G, h, soft, min_vlcoeff)
+
+        subhaloID, results, extra_subhalo_pids, extra_sub_vlcoeffs, post_subhalo_pids = result
+
+        sub_results_dict[subhaloID] = results
+
+        if profile:
+            profile_dict["Sub-Phase"]["Start"].append(task_start)
+            profile_dict["Sub-Phase"]["End"].append(time.time())
+
+        taskmunging_start = time.time()
+
+        # Create subhalos tasks from the completed halos
+        for res in post_subhalo_pids:
+
+            phase_part_haloids[post_subhalo_pids[res], 1] = newPhaseSubID
+
+            # Increment task ID
+            newtaskID += 1
+            newPhaseSubID += 1
+
+        for key in extra_subhalo_pids:
+            subhalo_tasks.update({(3, newtaskID)})
+            subhalo_pids[(3, newtaskID)] = extra_subhalo_pids[key]
+            sub_vlcoeffs[(3, newtaskID)] = extra_sub_vlcoeffs[key]
+
+            # Increment task ID
+            newtaskID += 1
+
+        if profile:
+            profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
+            profile_dict["Task-Munging"]["End"].append(time.time())
 
     # Collect child process results
     collect_start = time.time()
