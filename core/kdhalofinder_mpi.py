@@ -966,15 +966,16 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     taskmunging_start = time.time()
 
-    # Create subhalos tasks from the completed halos
-    for res in post_halo_pids:
+    if findsubs:  # Only create sub halo tasks if sub halo flag is true
 
-        if findsubs:  # Only create sub halo tasks if sub halo flag is true
+        # Create subhalos tasks from the completed halos
+        for res in post_halo_pids:
+
             halo_tasks.update({(2, newtaskID)})
             subhalo_pids[(2, newtaskID)] = post_halo_pids[res]
 
-        # Increment task ID
-        newtaskID += 1
+            # Increment task ID
+            newtaskID += 1
 
     if profile:
         profile_dict["Task-Munging"]["Start"].append(taskmunging_start)
@@ -1081,9 +1082,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         task_start = time.time()
 
         # Do the work here
-        result = get_real_host_halos(thisRank_parts, pos, vel, boxsize, vlinkl_indp * (1600 / 200)**(1/6), sub_linkl,
-                                     pmass, ini_vlcoeff, decrement, redshift, G, h, soft, min_vlcoeff,
-                                     this_rank_halo_nparts, this_rank_part_halo_ids, halo_pids, rank_indices)
+        if thisRank_parts.size > 0:
+            result = get_real_host_halos(thisRank_parts, pos, vel, boxsize, vlinkl_indp * (1600 / 200)**(1/6), sub_linkl,
+                                         pmass, ini_vlcoeff, decrement, redshift, G, h, soft, min_vlcoeff,
+                                         this_rank_halo_nparts, this_rank_part_halo_ids, halo_pids, rank_indices)
+        else:
+            result = {}, {}
 
         results, post_halo_pids = result
         sub_results_dict[rank] = results
