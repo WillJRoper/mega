@@ -366,12 +366,10 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
     return chunked_results
 
 
-def decomp_halos(results, ini_vlcoeff, nnodes):
+def decomp_halos(results, nnodes):
 
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
-    vlcoeffs = {}
-    tasks = set()
     ini_parts_in_rank = []
 
     # Store halo ids and halo data for the halos found out in the spatial search
@@ -387,18 +385,12 @@ def decomp_halos(results, ini_vlcoeff, nnodes):
         # Assign particles
         ini_parts_in_rank.extend(parts_arr)
 
-        # Assign initial vlcoeff to halo entry
-        vlcoeffs[(1, newtaskID)] = ini_vlcoeff
-
-        # Assign task ID
-        tasks.update({(1, newtaskID)})
-
         newtaskID += 1
 
     # Convert parts in rank to list for use with numpy
     parts_in_rank = np.sort(ini_parts_in_rank)
 
-    return halo_pids, vlcoeffs, tasks, parts_in_rank, newtaskID
+    return halo_pids, parts_in_rank, newtaskID
 
 
 def decomp_subhalos(subhalo_pids_per_rank, ranks):
