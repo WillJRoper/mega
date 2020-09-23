@@ -452,12 +452,12 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
         halo_poss[rank_indices[halo_pids_dict[key]]][np.where(sep > 0.5 * boxsize)] += boxsize
 
-    new_vlcoeff = ini_vlcoeff + decrement
+    new_vlcoeffs = np.full(len(halo_ids), ini_vlcoeff + decrement)
 
     not_real_pids = {}
     thisresultID = 0
 
-    while new_vlcoeff > min_vlcoeff and len(halo_nparts) > 0:
+    while len(halo_nparts) > 0:
 
         okinds = halo_ids >= 0
         halo_poss = halo_poss[okinds, :]
@@ -465,11 +465,12 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         halo_ids = halo_ids[okinds]
         sim_halo_pids = sim_halo_pids[okinds]
         halo_nparts = np.array(halo_nparts, dtype=int)
+        new_vlcoeffs = new_vlcoeffs[okinds]
 
-        new_vlcoeff -= decrement
+        new_vlcoeffs -= decrement
 
         # Define the phase space linking length
-        vlinkls = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_nparts[halo_ids] ** (1 / 3)
+        vlinkls = new_vlcoeffs * vlinkl_halo_indp * pmass ** (1 / 3) * halo_nparts[halo_ids] ** (1 / 3)
 
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((halo_poss / linkl, halo_vels / vlinkls[:, None]), axis=1)
@@ -478,6 +479,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         part_haloids, assigned_parts = find_phase_space_halos(halo_phases, halo_ids)
 
         halo_nparts = []
+        prev_halo_ids = halo_ids.copy()
         halo_ids = np.full_like(sim_halo_pids, -2)
         not_real_pids = {}
 
@@ -495,6 +497,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
             this_halo_pos = halo_poss[this_halo_pids, :]
             this_halo_vel = halo_vels[this_halo_pids, :]
             this_sim_halo_pids = sim_halo_pids[this_halo_pids]
+            this_vlcoeff = np.unique(new_vlcoeffs[this_halo_pids])
 
             # Compute the centred positions and velocities
             mean_halo_pos = this_halo_pos.mean(axis=0)
@@ -522,12 +525,31 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
 
                 thisresultID += 1
 
+            elif KE / GE > 1 and this_vlcoeff <= min_vlcoeff:
+
+                # # Compute the shifted mean position and velocity in the dimension ixyz
+                # mean_halo_pos = this_halo_pos.mean(axis=0)
+                # mean_halo_vel = this_halo_vel.mean(axis=0)
+
+                # Define realness flag
+                real = False
+
+                results[thisresultID] = {'pids': this_sim_halo_pids, 'npart': halo_npart, 'real': real,
+                                         'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
+                                         'halo_energy': halo_energy, 'KE': KE, 'GE': GE}
+                pid_results[thisresultID] = this_sim_halo_pids
+
+                thisresultID += 1
+
             else:
-                halo_nparts.append(halo_npart)
+                halo_nparts.insert(thiscontID, halo_npart)
                 halo_ids[this_halo_pids] = thiscontID
                 not_real_pids[thiscontID] = this_halo_pids
 
                 thiscontID += 1
+
+                if len(set(prev_halo_ids[this_halo_pids])) > 1:
+                    new_vlcoeffs[this_halo_pids] = ini_vlcoeff
 
     else:
 
