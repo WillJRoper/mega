@@ -300,7 +300,7 @@ def find_phase_space_halos(halo_phases, halo_ids):
     ihaloid = -1
 
     # Initialise the halo kd tree in 6D phase space
-    halo_tree = cKDTree(halo_phases, leafsize=32, compact_nodes=True, balanced_tree=True)
+    halo_tree = cKDTree(halo_phases, leafsize=16, compact_nodes=True, balanced_tree=True)
 
     query = halo_tree.query_ball_point(halo_phases, r=np.sqrt(2))
 
@@ -452,7 +452,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
         halo_poss[rank_indices[halo_pids_dict[key]]][np.where(sep > 0.5 * boxsize)] += boxsize
 
-    new_vlcoeff = ini_vlcoeff + decrement * ini_vlcoeff
+    new_vlcoeff = ini_vlcoeff + decrement
 
     not_real_pids = {}
     thisresultID = 0
@@ -466,7 +466,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         sim_halo_pids = sim_halo_pids[okinds]
         halo_nparts = np.array(halo_nparts, dtype=int)
 
-        new_vlcoeff -= decrement * new_vlcoeff
+        new_vlcoeff -= decrement
 
         # Define the phase space linking length
         vlinkls = new_vlcoeff * vlinkl_halo_indp * pmass ** (1 / 3) * halo_nparts[halo_ids] ** (1 / 3)
@@ -530,6 +530,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
                 thiscontID += 1
 
     else:
+
+        print("Unbound halos exiting iteration", len(not_real_pids), "on rank", rank)
 
         while len(not_real_pids) > 0:
 
