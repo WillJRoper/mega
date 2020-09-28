@@ -4,9 +4,9 @@ inputs:
 
   data:                ../mega/input/            # The filepath containing particle data
   snapList:            snaplist.txt      # The filepath pointing to the snapshot list file
-  haloSavePath:        ../mega/data/halos/       # The filepath and basename for halo outputs
+  haloSavePath:        data/halos/       # The filepath and basename for halo outputs
   directgraphSavePath: data/dgraph/      # The filepath and basename for graph direct progenitor and descendant outputs
-  graphSavePath:       <filepath>        # The filepath and basename for graph output
+  graphSavePath:       data/graph/mega_graph        # The filepath and basename for graph output
   treehaloSavePath:    <filepath>        # The filepath and basename for split-halo outputs
   directtreeSavePath:  <filepath>        # The filepath and basename for tree direct progenitor and descendant outputs
   treeSavePath:        <filepath>        # The filepath and basename for tree output
@@ -17,10 +17,10 @@ inputs:
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
-  halo:                1              # Flag for creating halo catalog
-  subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
+  halo:                0              # Flag for creating halo catalog
+  subs:                0              # Find substructure within halos (UNUSED CURRENTLY)
   graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
-  subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
+  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
   graph:               0              # Flag for building complete graphs
   subgraph:            0              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
 

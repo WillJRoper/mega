@@ -54,10 +54,13 @@ def get_graph(z0halo, snaplist, data_dict):
 
     count = 0
 
+    for snap in snaplist:
+
+        graph_dict.setdefault(snap, set())
+
     # Loop until no new halos are found
     while len(new_halos) != 0:
 
-        print(count)
         count += 1
 
         # Overwrite the last set of new_halos
@@ -116,13 +119,20 @@ def get_graph(z0halo, snaplist, data_dict):
     for snap in graph_dict:
 
         if len(graph_dict[snap]) == 0:
+
+            # Convert entry to an array for sorting
+            graph_dict[snap] = np.array([])
+
+            # Get the halo masses
+            mass_dict[snap] = np.array([])
+
             continue
 
         # Convert entry to an array for sorting
         graph_dict[snap] = np.array([int(halo[0]) for halo in graph_dict[snap]])
 
         # Get the halo masses
-        mass_dict[snap] = data_dict['nparts'][graph_dict[snap]]
+        mass_dict[snap] = data_dict['nparts'][snap][graph_dict[snap]]
 
         # Sort by mass
         sinds = np.argsort(mass_dict[snap])[::-1]
@@ -134,30 +144,30 @@ def get_graph(z0halo, snaplist, data_dict):
 
 def graph_worker(root_halo, snaplist, verbose, data_dict):
 
-    lock.acquire()
-    with open('utilityfiles/roothalos.pck', 'rb') as pfile:
-        roots = pickle.load(pfile)
-        if verbose:
-            print(len(roots) - 1, 'Roots')
-    lock.release()
-    if int(root_halo) in roots:
-        if verbose:
-            print('Halo ' + str(root_halo) + '\'s Forest exists...')
-        return {}
+    # lock.acquire()
+    # with open('utilityfiles/roothalos.pck', 'rb') as pfile:
+    #     roots = pickle.load(pfile)
+    #     if verbose:
+    #         print(len(roots) - 1, 'Roots')
+    # lock.release()
+    # if int(root_halo) in roots:
+    #     if verbose:
+    #         print('Halo ' + str(root_halo) + '\'s Forest exists...')
+    #     return {}
 
     # Get the graph with this halo at it's root
     graph_dict, mass_dict = get_graph(root_halo, snaplist, data_dict)
 
-    print('Halo ' + str(root_halo) + '\'s Forest extracted...')
+    # print('Halo ' + str(root_halo) + '\'s Forest extracted...')
 
-    lock.acquire()
-    with open('utilityfiles/roothalos.pck', 'rb') as file:
-        roots = pickle.load(file)
-    for root in graph_dict['061']:
-        roots.update([root])
-    with open('utilityfiles/roothalos.pck', 'wb') as file:
-        pickle.dump(roots, file)
-    lock.release()
+    # lock.acquire()
+    # with open('utilityfiles/roothalos.pck', 'rb') as file:
+    #     roots = pickle.load(file)
+    # for root in graph_dict['061']:
+    #     roots.update([root])
+    # with open('utilityfiles/roothalos.pck', 'wb') as file:
+    #     pickle.dump(roots, file)
+    # lock.release()
 
     return graph_dict, mass_dict
 
@@ -206,6 +216,8 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         # Initialise internal graph ids
         graph_internal_id = 0
 
+        # print(graph_internal_id)
+
         # Create dictionaries for ID matching
         internal2halocat = {}
         halocat2internal = {}
@@ -214,6 +226,7 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         this_graph = []
         this_graph_halo_cat_ids = []
         snaps = []
+        snaps_str = []
         generations = []
         nparts = []
         generation_start_index = np.full(len(snaplist), 2**30)
@@ -231,28 +244,29 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         # IDs in this generation of this graph
         root_mass.append(np.max(z0masses))
 
-        done_roots.update(root_halos)
-
-        if len(done_roots.intersection(set(root_halos))):
+        if len(done_roots.intersection(set(root_halos))) > 0:
             continue
+
+        done_roots.update(root_halos)
 
         graph = hdf.create_group(str(graph_id))  # create halo group
 
         # Loop over snapshots
         generation = 0
-        for snap in range(snaplist):
+        for snap_ind in range(len(snaplist)):
 
             # Extract this generation
-            this_gen = graph_dict.pop(snaplist[snap])
-            this_gen_masses = mass_dict.pop(snaplist[snap])
+            snap = snaplist[snap_ind]
+            this_gen = graph_dict.pop(snap)
+            this_gen_masses = mass_dict.pop(snap)
 
             if len(this_gen) == 0:
                 continue
             else:
 
                 # Assign the start index for this generation and the generations lengths
-                generation_start_index[snap] = len(this_graph)
-                generation_length[snap] = len(this_gen)
+                generation_start_index[snap_ind] = len(this_graph)
+                generation_length[snap_ind] = len(this_gen)
 
                 # Assign this generations number
                 generations.append(generation)
@@ -262,7 +276,8 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
                     # Store these halos
                     this_graph.append(graph_internal_id)
                     this_graph_halo_cat_ids.append(halo)
-                    snaps.append(snap)
+                    snaps.append(int(snap))
+                    snaps_str.append(snap)
                     nparts.append(m)
 
                     # Keep tracks of IDs
@@ -286,7 +301,7 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         prog_mass_conts = []
         desc_mass_conts = []
 
-        for snap, haloID in zip(snaps, this_graph):
+        for snap, haloID in zip(snaps_str, this_graph):
 
             # Get halo catalog ID
             halo_cat_id = internal2halocat[haloID]
@@ -332,7 +347,7 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         graph.create_dataset('graph_halo_ids', data=np.array(this_graph), dtype=int, compression='gzip')
         graph.create_dataset('halo_catalog_halo_ids', data=np.array(this_graph_halo_cat_ids), dtype=int,
                              compression='gzip')
-        graph.create_dataset('snapshots', data=np.array(snaps), dtype=str, compression='gzip')
+        graph.create_dataset('snapshots', data=np.array(snaps), dtype=int, compression='gzip')
         graph.create_dataset('generation_id', data=np.array(generations), dtype=int, compression='gzip')
         graph.create_dataset('nparts', data=np.array(nparts), dtype=int, compression='gzip')
         graph.create_dataset('generation_start_index', data=generation_start_index, dtype=int, compression='gzip')
@@ -343,8 +358,8 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
         graph.create_dataset('desc_start_index', data=desc_start_index, dtype=int, compression='gzip')
         graph.create_dataset('direct_prog_ids', data=np.array(progs), dtype=int, compression='gzip')
         graph.create_dataset('direct_desc_ids', data=np.array(descs), dtype=int, compression='gzip')
-        graph.create_dataset('direct_prog_contribution', data=np.array(prog_conts), dtype=int, compression='gzip')
-        graph.create_dataset('direct_desc_contribution', data=np.array(desc_conts), dtype=int, compression='gzip')
+        graph.create_dataset('direct_prog_contribution', data=np.array(this_prog_conts), dtype=int, compression='gzip')
+        graph.create_dataset('direct_desc_contribution', data=np.array(this_desc_conts), dtype=int, compression='gzip')
 
         graph_id += 1
 
@@ -360,6 +375,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
     # Get the root snapshot
     snaplist.reverse()
     root_snap = snaplist[0]
+    past2present_snaplist = list(reversed(snaplist))
 
     # Create file to store this snapshots graph results
     if density_rank == 0:
@@ -380,13 +396,13 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
     roots = halo_ids[reals]
 
     # Get the work for each task
-    lims = np.linspace(0, roots.size, size + 1)
+    lims = np.linspace(0, roots.size, size + 1, dtype=int)
     low_lims = lims[:-1]
-    up_lims = lims[0:]
+    up_lims = lims[1:]
 
     # Define the roots for this rank
     myroots = roots[low_lims[rank]: up_lims[rank]]
-    print(roots.size, rank, low_lims[rank], up_lims[rank])
+    print(roots.size, rank, low_lims[rank], up_lims[rank], len(myroots))
 
     # Get the start indices, progs, and descs and store them in dictionaries
     progs = {}
@@ -430,11 +446,12 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
         graphs.append(result)
 
     collected_results = comm.gather(graphs, root=0)
-    results = []
-    for col_res in collected_results:
-        results.extend(col_res)
 
     if rank == 0:
 
+        results = []
+        for col_res in collected_results:
+            results.extend(col_res)
+
         # Write out the result
-        graph_writer(results, graphpath, treepath, snaplist, data_dict, density_rank)
+        graph_writer(results, graphpath, treepath, past2present_snaplist, data_dict, density_rank)

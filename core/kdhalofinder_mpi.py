@@ -553,8 +553,6 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
 
     else:
 
-        print("Unbound halos exiting iteration", len(not_real_pids), "on rank", rank)
-
         while len(not_real_pids) > 0:
 
             # Extract halo particle data

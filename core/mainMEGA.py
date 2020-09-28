@@ -3,6 +3,7 @@ import kdhalofinder as kd
 import kdhalofinder_mpi as kdmpi
 import mergergraph as mg
 import mergergraph_mpi as mgmpi
+import build_graph_mpi as bgmpi
 # import mergertrees as mt
 # import lumberjack as ld
 import time
@@ -200,3 +201,8 @@ elif flags['usempi']:
     if rank == 0:
         print('Total: ', time.time() - walltime_start)
 
+
+    if flags["graph"]:
+
+        bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'], graphpath=inputs['graphSavePath'],
+                                     snaplist=snaplist, density_rank=0, verbose=flags['verbose'])
