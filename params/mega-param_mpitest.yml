@@ -20,8 +20,8 @@ flags:
   halo:                0              # Flag for creating halo catalog
   subs:                0              # Find substructure within halos (UNUSED CURRENTLY)
   graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
-  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
-  graph:               0              # Flag for building complete graphs
+  subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
+  graph:               1              # Flag for building complete graphs
   subgraph:            0              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
 
   # Subhalos aren't currently included in trees

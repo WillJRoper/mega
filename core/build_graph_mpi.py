@@ -172,33 +172,35 @@ def graph_worker(root_halo, snaplist, verbose, data_dict):
     return graph_dict, mass_dict
 
 
-def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank):
+def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
 
     # Initialise roots set to ensure there isn't duplication
     done_roots = set()
 
     prog_conts = {}
     desc_conts = {}
+    sub_prog_conts = {}
+    sub_desc_conts = {}
+    host_in_graph = np.full(len(data_dict['nparts'][snaplist[-1]]), 2**30)
 
     for snap in snaplist:
 
         # Open this graph file
-        if density_rank == 0:
-
-            hdf = h5py.File(treepath + 'Mgraph_' + snap + '.hdf5', 'r')
-
-        else:
-
-            hdf = h5py.File(treepath + 'SubMgraph_' + snap + '.hdf5', 'r')
+        hdf = h5py.File(treepath + 'Mgraph_' + snap + '.hdf5', 'r')
+        sub_hdf = h5py.File(treepath + 'SubMgraph_' + snap + '.hdf5', 'r')
 
         # Assign
         prog_conts[snap] = hdf['Prog_Mass_Contribution'][...]
         desc_conts[snap] = hdf['Desc_Mass_Contribution'][...]
+        sub_prog_conts[snap] = sub_hdf['Prog_Mass_Contribution'][...]
+        sub_desc_conts[snap] = sub_hdf['Desc_Mass_Contribution'][...]
 
         hdf.close()
 
     data_dict["prog_conts"] = prog_conts
     data_dict["desc_conts"] = desc_conts
+    data_dict["sub"]["prog_conts"] = sub_prog_conts
+    data_dict["sub"]["desc_conts"] = sub_desc_conts
 
     # Define lists for graph level data
     nhalo_in_graph = []
@@ -248,6 +250,9 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
             continue
 
         done_roots.update(root_halos)
+
+        # Assign roots to array
+        host_in_graph[root_halos] = graph_id
 
         graph = hdf.create_group(str(graph_id))  # create halo group
 
@@ -369,8 +374,174 @@ def graph_writer(graphs, graphpath, treepath, snaplist, data_dict, density_rank)
 
     hdf.close()
 
+    # ==================================== Subhalo graph ====================================
 
-def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose):
+    # Reverse the snapshot list such that the present day is the first element
+    hdf = h5py.File(graphpath + '.hdf5', 'r+')
+
+    for graph in sub_graphs:
+
+        # Initialise internal graph ids
+        graph_internal_id = 0
+
+        # Create dictionaries for ID matching
+        internal2halocat = {}
+        halocat2internal = {}
+
+        # Initialise list data structures to store results
+        this_graph = []
+        this_graph_halo_cat_ids = []
+        snaps = []
+        snaps_str = []
+        generations = []
+        nparts = []
+        generation_start_index = np.full(len(snaplist), 2 ** 30)
+        generation_length = np.full(len(snaplist), 2 ** 30)
+
+        if len(graph) == 0:
+            continue
+
+        graph_dict, mass_dict = graph
+
+        # Get highest mass root halo
+        root_halos = graph_dict[snaplist[0]]
+        z0masses = mass_dict[snaplist[0]]
+
+        # IDs in this generation of this graph
+        root_mass.append(np.max(z0masses))
+
+        if len(done_roots.intersection(set(root_halos))) > 0:
+            continue
+
+        done_roots.update(root_halos)
+
+        # Get host id
+        host_ids = data_dict["sub"]["hosts"][snaplist[-1]][root_halos]
+
+        # Assign roots to array
+        graph_id = np.unique(host_in_graph[host_ids])
+
+        assert len(graph_id) == 1, "Subhalos populate multiple host level graphs, something is VERY wrong"
+
+        graph = hdf[str(graph_id)]
+
+        # Loop over snapshots
+        generation = 0
+        for snap_ind in range(len(snaplist)):
+
+            # Extract this generation
+            snap = snaplist[snap_ind]
+            this_gen = graph_dict.pop(snap)
+            this_gen_masses = mass_dict.pop(snap)
+
+            if len(this_gen) == 0:
+                continue
+            else:
+
+                # Assign the start index for this generation and the generations lengths
+                generation_start_index[snap_ind] = len(this_graph)
+                generation_length[snap_ind] = len(this_gen)
+
+                # Assign this generations number
+                generations.append(generation)
+
+                for halo, m in zip(this_gen, this_gen_masses):
+                    # Store these halos
+                    this_graph.append(graph_internal_id)
+                    this_graph_halo_cat_ids.append(halo)
+                    snaps.append(int(snap))
+                    snaps_str.append(snap)
+                    nparts.append(m)
+
+                    # Keep tracks of IDs
+                    internal2halocat[graph_internal_id] = halo
+                    halocat2internal[halo] = graph_internal_id
+
+                    graph_internal_id += 1
+
+            generation += 1
+
+        # Assign the numbers of halos in this graph
+        nhalo_in_graph.append(len(this_graph))
+
+        # Set up direct progenitor and descendant arrays for data
+        nprogs = np.full(len(this_graph), 2 ** 30)
+        ndescs = np.full(len(this_graph), 2 ** 30)
+        prog_start_index = np.full(len(this_graph), 2 ** 30)
+        desc_start_index = np.full(len(this_graph), 2 ** 30)
+        progs = []
+        descs = []
+        prog_mass_conts = []
+        desc_mass_conts = []
+
+        for snap, haloID in zip(snaps_str, this_graph):
+
+            # Get halo catalog ID
+            halo_cat_id = internal2halocat[haloID]
+
+            # Get data for this halo
+            this_nprog = data_dict['nprogs'][snap][halo_cat_id]
+            this_ndesc = data_dict['ndescs'][snap][halo_cat_id]
+            this_prog_start = data_dict['prog_start_index'][snap][halo_cat_id]
+            this_desc_start = data_dict['desc_start_index'][snap][halo_cat_id]
+            this_progs = utilities.get_linked_halo_data(data_dict['progs'][snap], this_prog_start, this_nprog)
+            this_descs = utilities.get_linked_halo_data(data_dict['descs'][snap], this_desc_start, this_ndesc)
+            this_prog_conts = utilities.get_linked_halo_data(data_dict['prog_conts'][snap], this_prog_start, this_nprog)
+            this_desc_conts = utilities.get_linked_halo_data(data_dict['desc_conts'][snap], this_desc_start, this_ndesc)
+
+            this_prog_graph_ids = [halocat2internal[i] for i in this_progs]
+            this_desc_graph_ids = [halocat2internal[i] for i in this_descs]
+
+            nprogs[haloID] = this_nprog  # number of progenitors
+            ndescs[haloID] = this_ndesc  # number of descendants
+
+            if this_nprog > 0:
+                prog_start_index[haloID] = len(progs)
+                progs.extend(this_prog_graph_ids)
+                prog_mass_conts.extend(this_prog_conts)
+            else:
+                prog_start_index[haloID] = 2 ** 30
+
+            if this_ndesc > 0:
+                desc_start_index[haloID] = len(descs)
+                descs.extend(this_desc_graph_ids)
+                desc_mass_conts.extend(this_desc_conts)
+            else:
+                desc_start_index[haloID] = 2 ** 30
+
+        # Get the length of this graph
+        length = len(np.unique(snaps))
+        graph_length.append(length)
+
+        # IDs in this generation of this graph
+        graph.attrs["sub_length"] = length
+        graph.attrs["sub_root_mass"] = np.max(z0masses)
+        graph.attrs["sub_nhalos_in_graph"] = len(this_graph)
+        graph.create_dataset('sub_graph_halo_ids', data=np.array(this_graph), dtype=int, compression='gzip')
+        graph.create_dataset('subhalo_catalog_halo_ids', data=np.array(this_graph_halo_cat_ids), dtype=int,
+                             compression='gzip')
+        graph.create_dataset('sub_snapshots', data=np.array(snaps), dtype=int, compression='gzip')
+        graph.create_dataset('sub_generation_id', data=np.array(generations), dtype=int, compression='gzip')
+        graph.create_dataset('sub_nparts', data=np.array(nparts), dtype=int, compression='gzip')
+        graph.create_dataset('sub_generation_start_index', data=generation_start_index, dtype=int, compression='gzip')
+        graph.create_dataset('sub_generation_length', data=generation_length, dtype=int, compression='gzip')
+        graph.create_dataset('sub_nprog', data=nprogs, dtype=int, compression='gzip')
+        graph.create_dataset('sub_ndesc', data=ndescs, dtype=int, compression='gzip')
+        graph.create_dataset('sub_prog_start_index', data=prog_start_index, dtype=int, compression='gzip')
+        graph.create_dataset('sub_desc_start_index', data=desc_start_index, dtype=int, compression='gzip')
+        graph.create_dataset('sub_direct_prog_ids', data=np.array(progs), dtype=int, compression='gzip')
+        graph.create_dataset('sub_direct_desc_ids', data=np.array(descs), dtype=int, compression='gzip')
+        graph.create_dataset('sub_direct_prog_contribution', data=np.array(this_prog_conts), dtype=int, compression='gzip')
+        graph.create_dataset('sub_direct_desc_contribution', data=np.array(this_desc_conts), dtype=int, compression='gzip')
+
+    hdf.create_dataset('sub_graph_lengths', data=np.array(graph_length), dtype=int, compression='gzip')
+    hdf.create_dataset('sub_root_nparts', data=np.array(root_mass), dtype=int, compression='gzip')
+    hdf.create_dataset('sub_nhalos_in_graph', data=np.array(nhalo_in_graph), dtype=int, compression='gzip')
+
+    hdf.close()
+
+
+def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
 
     # Get the root snapshot
     snaplist.reverse()
@@ -378,13 +549,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
     past2present_snaplist = list(reversed(snaplist))
 
     # Create file to store this snapshots graph results
-    if density_rank == 0:
-
-        hdf = h5py.File(treepath + 'Mgraph_' + root_snap + '.hdf5', 'r')
-
-    else:
-
-        hdf = h5py.File(treepath + 'SubMgraph_' + root_snap + '.hdf5', 'r')
+    hdf = h5py.File(treepath + 'Mgraph_' + root_snap + '.hdf5', 'r')
 
     # Extract the halo IDs (group names/keys) contained within this snapshot and the realness flag
     halo_ids = hdf['halo_IDs'][...]
@@ -415,13 +580,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
     for snap in snaplist:
 
         # Open this graph file
-        if density_rank == 0:
-
-            hdf = h5py.File(treepath + 'Mgraph_' + snap + '.hdf5', 'r')
-
-        else:
-
-            hdf = h5py.File(treepath + 'SubMgraph_' + snap + '.hdf5', 'r')
+        hdf = h5py.File(treepath + 'Mgraph_' + snap + '.hdf5', 'r')
 
         # Assign
         progs[snap] = hdf['Prog_haloIDs'][...]
@@ -447,11 +606,81 @@ def main_get_graph_members(treepath, graphpath, snaplist, density_rank, verbose)
 
     collected_results = comm.gather(graphs, root=0)
 
+    # Create file to store this snapshots graph results
+    hdf = h5py.File(treepath + 'SubMgraph_' + root_snap + '.hdf5', 'r')
+
+    # Extract the halo IDs (group names/keys) contained within this snapshot and the realness flag
+    subhalo_ids = hdf['halo_IDs'][...]
+    sub_reals = hdf['real_flag'][...]
+
+    hdf.close()
+
+    # Extract only the real roots
+    sub_roots = subhalo_ids[sub_reals]
+
+    # Get the work for each task
+    sub_lims = np.linspace(0, sub_roots.size, size + 1, dtype=int)
+    sub_low_lims = sub_lims[:-1]
+    sub_up_lims = sub_lims[1:]
+
+    # Define the roots for this rank
+    sub_myroots = sub_roots[sub_low_lims[rank]: sub_up_lims[rank]]
+    print(sub_roots.size, rank, sub_low_lims[rank], sub_up_lims[rank], len(sub_myroots))
+
+    # Get the start indices, progs, and descs and store them in dictionaries
+    progs = {}
+    descs = {}
+    nprogs = {}
+    ndescs = {}
+    prog_start_index = {}
+    desc_start_index = {}
+    nparts = {}
+    hosts = {}
+    for snap in snaplist:
+
+        # Open this graph file
+        hdf = h5py.File(treepath + 'SubMgraph_' + snap + '.hdf5', 'r')
+
+        # Assign
+        progs[snap] = hdf['Prog_haloIDs'][...]
+        descs[snap] = hdf['Desc_haloIDs'][...]
+        nprogs[snap] = hdf['nProgs'][...]
+        ndescs[snap] = hdf['nDescs'][...]
+        prog_start_index[snap] = hdf['prog_start_index'][...]
+        desc_start_index[snap] = hdf['desc_start_index'][...]
+        nparts[snap] = hdf['nparts'][...]
+
+        hdf.close()
+
+        hdf = h5py.File(halopath + 'halos_' + str(snap) + '.hdf5', 'r')
+
+        hosts[snap] = hdf['Subhalos']['host_IDs'][...]
+
+        hdf.close()
+
+    data_dict["sub"] = {'progs': progs, 'descs': descs, 'nprogs': nprogs, 'ndescs': ndescs,
+                        'prog_start_index': prog_start_index, 'desc_start_index': desc_start_index, 'nparts': nparts,
+                        "hosts": hosts}
+
+    # Initialise the tuple for storing results
+    sub_graphs = []
+
+    for thisTask in myroots:
+
+        result = graph_worker(thisTask, snaplist, verbose, data_dict["sub"])
+        sub_graphs.append(result)
+
+    sub_collected_results = comm.gather(sub_graphs, root=0)
+
     if rank == 0:
 
         results = []
         for col_res in collected_results:
             results.extend(col_res)
 
+        sub_results = []
+        for col_res in sub_collected_results:
+            sub_results.extend(col_res)
+
         # Write out the result
-        graph_writer(results, graphpath, treepath, past2present_snaplist, data_dict, density_rank)
+        graph_writer(results, sub_results, graphpath, treepath, past2present_snaplist, data_dict)

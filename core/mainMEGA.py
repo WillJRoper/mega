@@ -184,6 +184,7 @@ elif flags['usempi']:
     comm.barrier()
 
     if flags['subgraphdirect']:
+
         snap = snaplist[snap_ind]
 
         if snap_ind - 1 < 0:
@@ -191,7 +192,7 @@ elif flags['usempi']:
         else:
             prog_snap = snaplist[snap_ind - 1]
 
-        if snap_ind + 1 > len(snaplist):
+        if snap_ind + 1 >= len(snaplist):
             desc_snap = None
         else:
             desc_snap = snaplist[snap_ind + 1]
@@ -205,4 +206,5 @@ elif flags['usempi']:
     if flags["graph"]:
 
         bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'], graphpath=inputs['graphSavePath'],
-                                     snaplist=snaplist, density_rank=0, verbose=flags['verbose'])
+                                     snaplist=snaplist, verbose=flags['verbose'],
+                                     halopath=inputs['haloSavePath'])
