@@ -321,9 +321,6 @@ def find_phase_space_halos(halo_phases, halo_ids):
         if len(uni_this_halo_ids) > 1:
             query_part_inds = query_part_inds[np.where(this_halo_ids == this_halo_ids[0])]
 
-        # Assert that the query particle is returned by the tree query. Otherwise the program fails
-        # assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
-
         # Find only the particles not already in a halo
         new_parts = query_part_inds[np.where(phase_part_haloids[query_part_inds] < 0)]
 
@@ -467,7 +464,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
         halo_nparts = np.array(halo_nparts, dtype=int)
         new_vlcoeffs = new_vlcoeffs[okinds]
 
-        new_vlcoeffs -= decrement
+        new_vlcoeffs -= decrement * new_vlcoeffs
 
         # Define the phase space linking length
         vlinkls = new_vlcoeffs * vlinkl_halo_indp * pmass ** (1 / 3) * halo_nparts[halo_ids] ** (1 / 3)
@@ -552,6 +549,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
                     new_vlcoeffs[this_halo_pids] = ini_vlcoeff
 
     else:
+
+        print(len(not_real_pids))
 
         while len(not_real_pids) > 0:
 
@@ -1337,7 +1336,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                                 compression='gzip')
             sub_root.create_dataset('mean_velocities', shape=sub_mean_vels.shape, dtype=float, data=sub_mean_vels,
                                 compression='gzip')
-            sub_root.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
+            sub_root.create_dataset('nparts', shape=subhalo_nparts.shape, dtype=int, data=subhalo_nparts, compression='gzip')
             sub_root.create_dataset('real_flag', shape=sub_reals.shape, dtype=bool, data=sub_reals, compression='gzip')
             sub_root.create_dataset('halo_total_energies', shape=subhalo_energies.shape, dtype=float,
                                     data=subhalo_energies, compression='gzip')
