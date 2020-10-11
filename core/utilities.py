@@ -331,16 +331,11 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
 
     # Split into a list containing a list of halos for each rank
     newSpatialID = 0
-    chunked_results = [[] for i in range(ranks)]
-    chunked_part_load = np.zeros(ranks)
-    chunked_halo_load = np.ones(ranks)
+    tasks = {}
     while len(results) > 0:
         res = results.pop()
         if len(res) >= 10:
-            i = np.nanargmin(chunked_part_load)
-            chunked_part_load[i] += len(res)
-            chunked_halo_load[i] += 1
-            chunked_results[i].append(res)
+            tasks[newSpatialID] = np.array(list(res), dtype=np.int64)
             spatial_part_haloids[list(res)] = newSpatialID
             newSpatialID += 1
 
@@ -363,7 +358,7 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
     print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
     print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
 
-    return chunked_results
+    return tasks
 
 
 def decomp_halos(results, nnodes):

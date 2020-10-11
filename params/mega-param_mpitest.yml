@@ -17,7 +17,7 @@ inputs:
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
-  halo:                1              # Flag for creating halo catalog
+  halo:                1             # Flag for creating halo catalog
   subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
   graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
   subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
@@ -40,7 +40,7 @@ flags:
 parameters:
 
   batchsize:           2000000        # The number of particles that are tested in the KDTree at once
-  ini_alpha_v:         20             # The initial velocity linking length coefficient for phase-space iteration
+  ini_alpha_v:         10             # The initial velocity linking length coefficient for phase-space iteration
   min_alpha_v:         0.8           # The initial velocity linking length coefficient for phase-space iteration
   llcoeff:             0.2            # Spatial linking length coefficient for host halos
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
