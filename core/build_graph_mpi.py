@@ -241,7 +241,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         snaps_str = []
         prog_snaps_str = []
         desc_snaps_str = []
-        generations = []
+        generations = np.full(len(snaplist), 2**30)
         nparts = []
         generation_start_index = np.full(len(snaplist), 2**30)
         generation_length = np.full(len(snaplist), 2**30)
@@ -269,7 +269,6 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         graph = hdf.create_group(str(graph_id))  # create halo group
 
         # Loop over snapshots
-        generation = 0
         for snap_ind, snap in enumerate(snaplist):
 
             if snap_ind - 1 >= 0:
@@ -296,7 +295,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
                 generation_length[snap_ind] = len(this_gen)
 
                 # Assign this generations number
-                generations.append(generation)
+                generations[snap_ind] = snap_ind
 
                 for halo, m in zip(this_gen, this_gen_masses):
 
@@ -314,8 +313,6 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
                     halocat2internal[(snap, halo)] = graph_internal_id
 
                     graph_internal_id += 1
-
-            generation += 1
 
         # Assign the numbers of halos in this graph
         nhalo_in_graph.append(len(this_graph))
@@ -347,7 +344,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
             this_prog_conts = utilities.get_linked_halo_data(data_dict['prog_conts'][snap], this_prog_start, this_nprog)
             this_desc_conts = utilities.get_linked_halo_data(data_dict['desc_conts'][snap], this_desc_start, this_ndesc)
 
-            mean_pos[haloID] = data_dict["mean_pos"][snap][halo_cat_id, :]
+            mean_pos[haloID, :] = data_dict["mean_pos"][snap][halo_cat_id, :]
 
             zs[haloID] = data_dict["redshift"][snap]
 
@@ -433,7 +430,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         snaps_str = []
         prog_snaps_str = []
         desc_snaps_str = []
-        generations = []
+        generations = np.full(len(snaplist), 2**30)
         nparts = []
         generation_start_index = np.full(len(snaplist), 2**30)
         generation_length = np.full(len(snaplist), 2**30)
@@ -463,7 +460,6 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         graph = hdf[str(graph_id)]
 
         # Loop over snapshots
-        generation = 0
         for snap_ind, snap in enumerate(snaplist):
 
             if snap_ind - 1 >= 0:
@@ -490,7 +486,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
                 generation_length[snap_ind] = len(this_gen)
 
                 # Assign this generations number
-                generations.append(generation)
+                generations[snap_ind] = snap_ind
 
                 for halo, m in zip(this_gen, this_gen_masses):
                     # Store these halos
@@ -507,8 +503,6 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
                     halocat2internal[(snap, halo)] = graph_internal_id
 
                     graph_internal_id += 1
-
-            generation += 1
 
         # Assign the numbers of halos in this graph
         sub_nhalo_in_graph[graph_id] = len(this_graph)
@@ -614,7 +608,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
     hdf.close()
 
     # Extract only the real roots
-    roots = halo_ids[reals][0:1000]
+    roots = halo_ids[reals][0:100]
 
     # Get the work for each task
     lims = np.linspace(0, roots.size, size + 1, dtype=int)

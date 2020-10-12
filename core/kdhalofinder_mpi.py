@@ -316,11 +316,11 @@ def find_phase_space_halos(halo_phases, halo_ids):
             # Assign the 'single particle halo' halo ID to the particle
             phase_part_haloids[query_part_inds] = -2
 
-        # Find the previous halo ID associated to these particles
-        this_halo_ids = halo_ids[query_part_inds]
-        uni_this_halo_ids = set(this_halo_ids)
-        if len(uni_this_halo_ids) > 1:
-            query_part_inds = query_part_inds[np.where(this_halo_ids == this_halo_ids[0])]
+        # # Find the previous halo ID associated to these particles
+        # this_halo_ids = halo_ids[query_part_inds]
+        # uni_this_halo_ids = set(this_halo_ids)
+        # if len(uni_this_halo_ids) > 1:
+        #     query_part_inds = query_part_inds[np.where(this_halo_ids == this_halo_ids[0])]
 
         # Find only the particles not already in a halo
         new_parts = query_part_inds[np.where(phase_part_haloids[query_part_inds] < 0)]
@@ -519,7 +519,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
 
                 results[thisresultID] = {'pids': this_sim_halo_pids, 'npart': halo_npart, 'real': real,
                                          'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
-                                         'halo_energy': halo_energy, 'KE': KE, 'GE': GE, "rms_r": r, "rms_v": vr,
+                                         'halo_energy': halo_energy, 'KE': KE, 'GE': GE, "rms_r": r, "rms_vr": vr,
                                          "veldisp3d": veldisp3d, "veldisp1d": veldisp1d}
 
                 thisresultID += 1
@@ -542,7 +542,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_hal
 
                 results[thisresultID] = {'pids': this_sim_halo_pids, 'npart': halo_npart, 'real': real,
                                          'mean_halo_pos': mean_halo_pos, 'mean_halo_vel': mean_halo_vel,
-                                         'halo_energy': halo_energy, 'KE': KE, 'GE': GE, "rms_r": r, "rms_v": vr,
+                                         'halo_energy': halo_energy, 'KE': KE, 'GE': GE, "rms_r": r, "rms_vr": vr,
                                          "veldisp3d": veldisp3d, "veldisp1d": veldisp1d}
 
                 thisresultID += 1
