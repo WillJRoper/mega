@@ -1106,10 +1106,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
                 # There are no tasks left so terminate this process
                 comm.send(None, dest=source, tag=tags.EXIT)
-
-                if tag == tags.EXIT:
-
-                    closed_workers += 1
+                closed_workers += 1
 
     else:
 
