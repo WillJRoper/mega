@@ -424,8 +424,9 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
     return halo_pids
 
 
-def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize, vlinkl_halo_indp, linkl, pmass,
-                        ini_vlcoeff, decrement, redshift, G, h, soft, min_vlcoeff):
+def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
+                        vlinkl_halo_indp, linkl, pmass, ini_vlcoeff,
+                        decrement, redshift, G, h, soft, min_vlcoeff):
 
     # Initialise dicitonaries to store results
     results = {}
@@ -641,25 +642,27 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
     return subhalo_pids
 
 
-def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlcoeff, min_vlcoeff,
-                   decrement, verbose, findsubs, ncells, profile, profile_path):
-    """ Run the halo finder, sort the output results, find subhalos and save to a HDF5 file.
-        NOTE: MPI task allocation adapted with thanks from:
-              https://github.com/jbornschein/mpi4py-examples/blob/master/09-task-pull.py
+def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
+                   ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
+                   ncells, profile, profile_path):
+    """ Run the halo finder, sort the output results, find subhalos and
+        save to a HDF5 file.
+
     :param snapshot: The snapshot ID.
     :param llcoeff: The host halo linking length coefficient.
     :param sub_llcoeff: The subhalo linking length coefficient.
     :param gadgetpath: The filepath to the gadget simulation data.
     :param batchsize: The number of particle to be queried at one time.
-    :param debug_npart: The number of particles to run the program on when debugging.
+    :param debug_npart: The number of particles to run the program on when
+                        debugging.
     :return: None
     """
 
     # Define MPI message tags
     tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
 
-    # Ensure the number of cells is <= number of ranks and adjust such that the number
-    # of cells is a multiple of the number of ranks
+    # Ensure the number of cells is <= number of ranks and adjust
+    # such that the number of cells is a multiple of the number of ranks
     if ncells < (size - 1):
         ncells = size - 1
     if ncells % size != 0:
@@ -672,22 +675,22 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         print("nCells adjusted to", ncells)
 
     if profile:
-        profile_dict = {}
-        profile_dict["START"] = time.time()
-        profile_dict["Reading"] = {"Start": [], "End": []}
-        profile_dict["Domain-Decomp"] = {"Start": [], "End": []}
-        profile_dict["Communication"] = {"Start": [], "End": []}
-        profile_dict["Housekeeping"] = {"Start": [], "End": []}
-        profile_dict["Task-Munging"] = {"Start": [], "End": []}
-        profile_dict["Host-Spatial"] = {"Start": [], "End": []}
-        profile_dict["Host-Phase"] = {"Start": [], "End": []}
-        profile_dict["Sub-Spatial"] = {"Start": [], "End": []}
-        profile_dict["Sub-Phase"] = {"Start": [], "End": []}
-        profile_dict["Assigning"] = {"Start": [], "End": []}
-        profile_dict["Collecting"] = {"Start": [], "End": []}
-        profile_dict["Writing"] = {"Start": [], "End": []}
+        prof_d = {}
+        prof_d["START"] = time.time()
+        prof_d["Reading"] = {"Start": [], "End": []}
+        prof_d["Domain-Decomp"] = {"Start": [], "End": []}
+        prof_d["Communication"] = {"Start": [], "End": []}
+        prof_d["Housekeeping"] = {"Start": [], "End": []}
+        prof_d["Task-Munging"] = {"Start": [], "End": []}
+        prof_d["Host-Spatial"] = {"Start": [], "End": []}
+        prof_d["Host-Phase"] = {"Start": [], "End": []}
+        prof_d["Sub-Spatial"] = {"Start": [], "End": []}
+        prof_d["Sub-Phase"] = {"Start": [], "End": []}
+        prof_d["Assigning"] = {"Start": [], "End": []}
+        prof_d["Collecting"] = {"Start": [], "End": []}
+        prof_d["Writing"] = {"Start": [], "End": []}
     else:
-        profile_dict = None
+        prof_d = None
 
     # =============== Domain Decomposition ===============
 
@@ -707,10 +710,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     hdf.close()
 
     if profile:
-        profile_dict["Reading"]["Start"].append(read_start)
-        profile_dict["Reading"]["End"].append(time.time())
+        prof_d["Reading"]["Start"].append(read_start)
+        prof_d["Reading"]["End"].append(time.time())
 
-    # ========================== Compute parameters for candidate halo testing ==========================
+    # ============= Compute parameters for candidate halo testing =============
 
     set_up_start = time.time()
 
@@ -730,15 +733,17 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     sub_linkl = sub_llcoeff * mean_sep
 
     # Compute the mean density
-    mean_den = npart * pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 * (1 + redshift) ** 3
+    mean_den = npart * pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 \
+               * (1 + redshift) ** 3
     mean_den = mean_den.to(u.M_sun / u.km ** 3)
 
     # Define the velocity space linking length
-    vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6) * (1 + redshift) ** 0.5).value
+    vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6)
+                   * (1 + redshift) ** 0.5).value
 
     if profile:
-        profile_dict["Housekeeping"]["Start"].append(set_up_start)
-        profile_dict["Housekeeping"]["End"].append(time.time())
+        prof_d["Housekeeping"]["Start"].append(set_up_start)
+        prof_d["Housekeeping"]["End"].append(time.time())
 
     if rank == 0:
 
@@ -753,16 +758,23 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         hdf.close()
 
         if profile:
-            profile_dict["Reading"]["Start"].append(read_start)
-            profile_dict["Reading"]["End"].append(time.time())
+            prof_d["Reading"]["Start"].append(read_start)
+            prof_d["Reading"]["End"].append(time.time())
 
-        # Build the kd tree with the boxsize argument providing 'wrapping' due to periodic boundaries
-        # *** Note: Contrary to cKDTree documentation compact_nodes=False and balanced_tree=False results in
-        # faster queries (documentation recommends compact_nodes=True and balanced_tree=True)***
-        tree = cKDTree(pos, leafsize=16, compact_nodes=False, balanced_tree=False, boxsize=[boxsize, boxsize, boxsize])
+        # Build the kd tree with the boxsize argument providing 'wrapping'
+        # due to periodic boundaries *** Note: Contrary to cKDTree
+        # documentation compact_nodes=False and balanced_tree=False results in
+        # faster queries (documentation recommends compact_nodes=True
+        # and balanced_tree=True)***
+        tree = cKDTree(pos,
+                       leafsize=16,
+                       compact_nodes=False,
+                       balanced_tree=False,
+                       boxsize=[boxsize, boxsize, boxsize])
 
         if verbose:
-            print("Domain Decomposition and tree building:", time.time() - start_dd)
+            print("Domain Decomposition and tree building:",
+                  time.time() - start_dd)
 
             print("Tree memory size", sys.getsizeof(tree), "bytes")
 
@@ -774,31 +786,33 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         tree = None
 
-    thisRank_tasks, thisRank_parts, nnodes, rank_edges = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
+    dd_data = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
+    thisRank_tasks, thisRank_parts, nnodes, rank_edges = dd_data
 
     if profile:
-        profile_dict["Domain-Decomp"]["Start"].append(start_dd)
-        profile_dict["Domain-Decomp"]["End"].append(time.time())
+        prof_d["Domain-Decomp"]["Start"].append(start_dd)
+        prof_d["Domain-Decomp"]["End"].append(time.time())
 
     comm_start = time.time()
 
     tree = comm.bcast(tree, root=0)
 
     if profile:
-        profile_dict["Communication"]["Start"].append(comm_start)
-        profile_dict["Communication"]["End"].append(time.time())
+        prof_d["Communication"]["Start"].append(comm_start)
+        prof_d["Communication"]["End"].append(time.time())
 
     set_up_start = time.time()
 
     # Get this ranks particles ID "edges"
     low_lim, up_lim = thisRank_parts.min(), thisRank_parts.max() + 1
 
-    # Define this ranks index offset (the minimum particle ID contained in a rank)
+    # Define this ranks index offset (the minimum particle ID
+    # contained in a rank)
     rank_index_offset = thisRank_parts.min()
 
     if profile:
-        profile_dict["Housekeeping"]["Start"].append(set_up_start)
-        profile_dict["Housekeeping"]["End"].append(time.time())
+        prof_d["Housekeeping"]["Start"].append(set_up_start)
+        prof_d["Housekeeping"]["End"].append(time.time())
 
     read_start = time.time()
 
@@ -815,10 +829,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     hdf.close()
 
     if profile:
-        profile_dict["Reading"]["Start"].append(read_start)
-        profile_dict["Reading"]["End"].append(time.time())
+        prof_d["Reading"]["Start"].append(read_start)
+        prof_d["Reading"]["End"].append(time.time())
 
-    # ============================== Find spatial halos ==============================
+    # =========================== Find spatial halos ==========================
 
     start = time.time()
 
@@ -837,7 +851,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         task_start = time.time()
 
         # Extract the spatial halos for this tasks particles
-        result = spatial_node_task(thisTask, pos[thisTask_parts - rank_index_offset], tree, linkl, npart)
+        result = spatial_node_task(thisTask,
+                                   pos[thisTask_parts - rank_index_offset],
+                                   tree, linkl, npart)
 
         # Store the results in a dictionary for later combination
         results[thisTask] = result
@@ -845,21 +861,24 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         thisTask += 1
 
         if profile:
-            profile_dict["Host-Spatial"]["Start"].append(task_start)
-            profile_dict["Host-Spatial"]["End"].append(time.time())
+            prof_d["Host-Spatial"]["Start"].append(task_start)
+            prof_d["Host-Spatial"]["End"].append(time.time())
 
-    # ============================== Combine spatial results across ranks ==============================
+    # ================= Combine spatial results across ranks ==================
 
     combine_start = time.time()
 
     # Convert to a set for set calculations
     thisRank_parts = set(thisRank_parts)
 
-    results, halos_in_other_ranks = utilities.combine_tasks_per_thread(results, rank, thisRank_parts)
+    comb_data = utilities.combine_tasks_per_thread(results,
+                                                   rank,
+                                                   thisRank_parts)
+    results, halos_in_other_ranks = comb_data
 
     if profile:
-        profile_dict["Housekeeping"]["Start"].append(combine_start)
-        profile_dict["Housekeeping"]["End"].append(time.time())
+        prof_d["Housekeeping"]["Start"].append(combine_start)
+        prof_d["Housekeeping"]["End"].append(time.time())
 
     if rank == 0:
         print("Spatial search finished", time.time() - start)
@@ -870,8 +889,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     halos_in_other_ranks = comm.gather(halos_in_other_ranks, root=0)
 
     if profile and rank != 0:
-        profile_dict["Collecting"]["Start"].append(collect_start)
-        profile_dict["Collecting"]["End"].append(time.time())
+        prof_d["Collecting"]["Start"].append(collect_start)
+        prof_d["Collecting"]["End"].append(time.time())
 
     if rank == 0:
 
@@ -883,32 +902,37 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         print(len(results), "spatial halos collected")
 
         if verbose:
-            print("Collecting the results took", time.time() - collect_start, "seconds")
+            print("Collecting the results took",
+                  time.time() - collect_start, "seconds")
 
         if profile:
-            profile_dict["Collecting"]["Start"].append(collect_start)
-            profile_dict["Collecting"]["End"].append(time.time())
+            prof_d["Collecting"]["Start"].append(collect_start)
+            prof_d["Collecting"]["End"].append(time.time())
 
         combine_start = time.time()
 
-        halo_tasks = utilities.combine_tasks_networkx(results, size, halos_to_combine, npart)
+        halo_tasks = utilities.combine_tasks_networkx(results,
+                                                      size,
+                                                      halos_to_combine,
+                                                      npart)
 
         if verbose:
-            print("Combining the results took", time.time() - combine_start, "seconds")
+            print("Combining the results took",
+                  time.time() - combine_start, "seconds")
 
         if profile:
-            profile_dict["Housekeeping"]["Start"].append(combine_start)
-            profile_dict["Housekeeping"]["End"].append(time.time())
+            prof_d["Housekeeping"]["Start"].append(combine_start)
+            prof_d["Housekeeping"]["End"].append(time.time())
 
     else:
 
         halo_tasks = None
 
     if profile:
-        profile_dict["Communication"]["Start"].append(comm_start)
-        profile_dict["Communication"]["End"].append(time.time())
+        prof_d["Communication"]["Start"].append(comm_start)
+        prof_d["Communication"]["End"].append(time.time())
 
-    # ============================== Test Halos in Phase Space and find substructure ==============================
+    # ============ Test Halos in Phase Space and find substructure ============
 
     set_up_start = time.time()
 
@@ -921,8 +945,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     subhaloID = 0
 
     if profile:
-        profile_dict["Housekeeping"]["Start"].append(set_up_start)
-        profile_dict["Housekeeping"]["End"].append(time.time())
+        prof_d["Housekeeping"]["Start"].append(set_up_start)
+        prof_d["Housekeeping"]["End"].append(time.time())
 
     if rank == 0:
 
@@ -954,8 +978,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             #         comm.send(thisTask, dest=source, tag=tags.START)
             #
             #         if profile:
-            #             profile_dict["Assigning"]["Start"].append(assign_start)
-            #             profile_dict["Assigning"]["End"].append(time.time())
+            #             prof_d["Assigning"]["Start"].append(assign_start)
+            #             prof_d["Assigning"]["End"].append(time.time())
             #
             #     else:
             #
@@ -993,8 +1017,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         comm.send(thisTask, dest=source, tag=tags.START)
 
                         if profile:
-                            profile_dict["Assigning"]["Start"].append(assign_start)
-                            profile_dict["Assigning"]["End"].append(time.time())
+                            prof_d["Assigning"]["Start"].append(assign_start)
+                            prof_d["Assigning"]["End"].append(time.time())
 
                     else:
 
@@ -1022,9 +1046,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                     thisTask.sort()
 
                     # Open hdf5 file
-                    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                    hdf = h5py.File(inputpath +
+                                    "mega_inputs_" + snapshot + ".hdf5", 'r')
 
-                    # Get the position and velocity of each particle in this rank
+                    # Get the position and velocity of
+                    # each particle in this rank
                     pos = hdf['part_pos'][thisTask, :]
                     vel = hdf['part_vel'][thisTask, :]
 
@@ -1036,14 +1062,17 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                     read_end = time.time()
 
                     if profile:
-                        profile_dict["Reading"]["Start"].append(read_start)
-                        profile_dict["Reading"]["End"].append(read_end)
+                        prof_d["Reading"]["Start"].append(read_start)
+                        prof_d["Reading"]["End"].append(read_end)
 
                     task_start = time.time()
 
                     # Do the work here
-                    result = get_real_host_halos(thisTask, pos, vel, boxsize, vlinkl_indp, linkl, pmass, ini_vlcoeff,
-                                                 decrement, redshift, G, h, soft, min_vlcoeff, halo_nparts, halo_ids)
+                    result = get_real_host_halos(thisTask, pos, vel, boxsize,
+                                                 vlinkl_indp, linkl, pmass,
+                                                 ini_vlcoeff, decrement,
+                                                 redshift, G, h, soft,
+                                                 min_vlcoeff)
 
                     # Save results
                     for res in result:
@@ -1054,8 +1083,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                     task_end = time.time()
 
                     if profile:
-                        profile_dict["Host-Phase"]["Start"].append(task_start)
-                        profile_dict["Host-Phase"]["End"].append(task_end)
+                        prof_d["Host-Phase"]["Start"].append(task_start)
+                        prof_d["Host-Phase"]["End"].append(task_end)
 
                     if findsubs:
 
@@ -1071,9 +1100,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             thishalo_pids = np.sort(res["pids"])
 
                             # Open hdf5 file
-                            hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                            hdf = h5py.File(inputpath
+                                            + "mega_inputs_"
+                                            + snapshot + ".hdf5", 'r')
 
-                            # Get the position and velocity of each particle in this rank
+                            # Get the position and velocity of each
+                            # particle in this rank
                             subhalo_poss = hdf['part_pos'][thishalo_pids, :]
 
                             hdf.close()
@@ -1081,13 +1113,15 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             read_end = time.time()
 
                             if profile:
-                                profile_dict["Reading"]["Start"].append(read_start)
-                                profile_dict["Reading"]["End"].append(read_end)
+                                prof_d["Reading"]["Start"].append(read_start)
+                                prof_d["Reading"]["End"].append(read_end)
 
                             task_start = time.time()
 
                             # Do the work here
-                            sub_result = get_sub_halos(thishalo_pids, subhalo_poss, sub_linkl)
+                            sub_result = get_sub_halos(thishalo_pids,
+                                                       subhalo_poss,
+                                                       sub_linkl)
 
                             while len(sub_result) > 0:
                                 key, res = sub_result.popitem()
@@ -1098,8 +1132,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             task_end = time.time()
 
                             if profile:
-                                profile_dict["Sub-Spatial"]["Start"].append(task_start)
-                                profile_dict["Sub-Spatial"]["End"].append(task_end)
+                                prof_d["Sub-Spatial"]["Start"].append(task_start)
+                                prof_d["Sub-Spatial"]["End"].append(task_end)
 
                         # Loop over spatial subhalos
                         while len(spatial_sub_results) > 0:
@@ -1111,30 +1145,37 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             thisSub.sort()
 
                             # Open hdf5 file
-                            hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                            hdf = h5py.File(inputpath
+                                            + "mega_inputs_"
+                                            + snapshot + ".hdf5", 'r')
 
-                            # Get the position and velocity of each particle in this rank
+                            # Get the position and velocity of each
+                            # particle in this rank
                             pos = hdf['part_pos'][thisSub, :]
                             vel = hdf['part_vel'][thisSub, :]
 
                             hdf.close()
 
-                            subhalo_nparts = np.array([len(thisSub)], dtype=np.int32)
-                            subhalo_ids = np.full_like(thisSub, 0)
-
                             read_end = time.time()
 
                             if profile:
-                                profile_dict["Reading"]["Start"].append(read_start)
-                                profile_dict["Reading"]["End"].append(read_end)
+                                prof_d["Reading"]["Start"].append(read_start)
+                                prof_d["Reading"]["End"].append(read_end)
 
                             task_start = time.time()
 
                             # Do the work here
-                            result = get_real_host_halos(thisSub, pos, vel, boxsize,
-                                                         vlinkl_indp * (1600 / 200) ** (1 / 6), sub_linkl, pmass,
-                                                         ini_vlcoeff, decrement, redshift, G, h, soft,
-                                                         min_vlcoeff, subhalo_nparts, subhalo_ids)
+                            result = get_real_host_halos(thisSub, pos, vel,
+                                                         boxsize,
+                                                         vlinkl_indp
+                                                         * (1600 / 200)
+                                                         ** (1 / 6),
+                                                         sub_linkl, pmass,
+                                                         ini_vlcoeff,
+                                                         decrement,
+                                                         redshift,
+                                                         G, h, soft,
+                                                         min_vlcoeff)
 
                             # Save results
                             while len(result) > 0:
@@ -1146,12 +1187,13 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             task_end = time.time()
 
                             if profile:
-                                profile_dict["Sub-Phase"]["Start"].append(task_start)
-                                profile_dict["Sub-Phase"]["End"].append(task_end)
+                                prof_d["Sub-Phase"]["Start"].append(task_start)
+                                prof_d["Sub-Phase"]["End"].append(task_end)
 
             elif len(halo_tasks) == 0:
 
-                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG,
+                                 status=status)
                 source = status.Get_source()
                 tag = status.Get_tag()
 
@@ -1168,7 +1210,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     else:
 
-        # =========================== Get from master and complete tasks ===========================
+        # ================ Get from master and complete tasks =================
 
         while True:
 
@@ -1183,7 +1225,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 thisTask.sort()
 
                 # Open hdf5 file
-                hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                hdf = h5py.File(inputpath
+                                + "mega_inputs_"
+                                + snapshot + ".hdf5", 'r')
 
                 # Get the position and velocity of each particle in this rank
                 pos = hdf['part_pos'][thisTask, :]
@@ -1194,8 +1238,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 read_end = time.time()
 
                 if profile:
-                    profile_dict["Reading"]["Start"].append(read_start)
-                    profile_dict["Reading"]["End"].append(read_end)
+                    prof_d["Reading"]["Start"].append(read_start)
+                    prof_d["Reading"]["End"].append(read_end)
 
                 task_start = time.time()
 
@@ -1214,8 +1258,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 task_end = time.time()
 
                 if profile:
-                    profile_dict["Host-Phase"]["Start"].append(task_start)
-                    profile_dict["Host-Phase"]["End"].append(task_end)
+                    prof_d["Host-Phase"]["Start"].append(task_start)
+                    prof_d["Host-Phase"]["End"].append(task_end)
 
                 if findsubs:
 
@@ -1231,9 +1275,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         thishalo_pids = np.sort(res["pids"])
 
                         # Open hdf5 file
-                        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                        hdf = h5py.File(inputpath
+                                        + "mega_inputs_"
+                                        + snapshot + ".hdf5", 'r')
 
-                        # Get the position and velocity of each particle in this rank
+                        # Get the position and velocity of each
+                        # particle in this rank
                         subhalo_poss = hdf['part_pos'][thishalo_pids, :]
 
                         hdf.close()
@@ -1241,13 +1288,15 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         read_end = time.time()
 
                         if profile:
-                            profile_dict["Reading"]["Start"].append(read_start)
-                            profile_dict["Reading"]["End"].append(read_end)
+                            prof_d["Reading"]["Start"].append(read_start)
+                            prof_d["Reading"]["End"].append(read_end)
 
                         task_start = time.time()
 
                         # Do the work here
-                        sub_result = get_sub_halos(thishalo_pids, subhalo_poss, sub_linkl)
+                        sub_result = get_sub_halos(thishalo_pids,
+                                                   subhalo_poss,
+                                                   sub_linkl)
 
                         while len(sub_result) > 0:
                             key, res = sub_result.popitem()
@@ -1258,8 +1307,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         task_end = time.time()
 
                         if profile:
-                            profile_dict["Sub-Spatial"]["Start"].append(task_start)
-                            profile_dict["Sub-Spatial"]["End"].append(task_end)
+                            prof_d["Sub-Spatial"]["Start"].append(task_start)
+                            prof_d["Sub-Spatial"]["End"].append(task_end)
 
                     # Loop over spatial subhalos
                     while len(spatial_sub_results) > 0:
@@ -1271,9 +1320,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         thisSub.sort()
 
                         # Open hdf5 file
-                        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+                        hdf = h5py.File(inputpath
+                                        + "mega_inputs_"
+                                        + snapshot + ".hdf5", 'r')
 
-                        # Get the position and velocity of each particle in this rank
+                        # Get the position and velocity of each
+                        # particle in this rank
                         pos = hdf['part_pos'][thisSub, :]
                         vel = hdf['part_vel'][thisSub, :]
 
@@ -1282,14 +1334,19 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         read_end = time.time()
 
                         if profile:
-                            profile_dict["Reading"]["Start"].append(read_start)
-                            profile_dict["Reading"]["End"].append(read_end)
+                            prof_d["Reading"]["Start"].append(read_start)
+                            prof_d["Reading"]["End"].append(read_end)
 
                         task_start = time.time()
 
                         # Do the work here
-                        result = get_real_host_halos(thisSub, pos, vel, boxsize, vlinkl_indp * (1600 / 200) ** (1 / 6),
-                                                     sub_linkl, pmass, ini_vlcoeff, decrement, redshift, G, h, soft,
+                        result = get_real_host_halos(thisSub, pos, vel,
+                                                     boxsize,
+                                                     vlinkl_indp
+                                                     * (1600 / 200) ** (1 / 6),
+                                                     sub_linkl, pmass,
+                                                     ini_vlcoeff, decrement,
+                                                     redshift, G, h, soft,
                                                      min_vlcoeff)
 
                         # Save results
@@ -1302,8 +1359,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         task_end = time.time()
 
                         if profile:
-                            profile_dict["Sub-Phase"]["Start"].append(task_start)
-                            profile_dict["Sub-Phase"]["End"].append(task_end)
+                            prof_d["Sub-Phase"]["Start"].append(task_start)
+                            prof_d["Sub-Phase"]["End"].append(task_end)
 
             elif tag == tags.EXIT:
                 break
@@ -1319,8 +1376,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     sub_collected_results = comm.gather(sub_results, root=0)
 
     if profile and rank != 0:
-        profile_dict["Collecting"]["Start"].append(collect_start)
-        profile_dict["Collecting"]["End"].append(time.time())
+        prof_d["Collecting"]["Start"].append(collect_start)
+        prof_d["Collecting"]["End"].append(time.time())
 
     if rank == 0:
 
@@ -1361,8 +1418,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             # print(hp.heap())
 
         if profile:
-            profile_dict["Collecting"]["Start"].append(collect_start)
-            profile_dict["Collecting"]["End"].append(time.time())
+            prof_d["Collecting"]["Start"].append(collect_start)
+            prof_d["Collecting"]["End"].append(time.time())
 
         write_start = time.time()
 
@@ -1586,13 +1643,13 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         snap.close()
 
         if profile:
-            profile_dict["Writing"]["Start"].append(write_start)
-            profile_dict["Writing"]["End"].append(time.time())
+            prof_d["Writing"]["Start"].append(write_start)
+            prof_d["Writing"]["End"].append(time.time())
 
         # assert -1 not in np.unique(KEs), "halo ids are not sequential!"
 
     if profile:
-        profile_dict["END"] = time.time()
+        prof_d["END"] = time.time()
 
         with open(profile_path + "Halo_" + str(rank) + '_' + snapshot + '.pck', 'wb') as pfile:
-            pickle.dump(profile_dict, pfile)
+            pickle.dump(prof_d, pfile)
