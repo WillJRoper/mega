@@ -801,9 +801,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         profile_dict["Reading"]["Start"].append(read_start)
         profile_dict["Reading"]["End"].append(time.time())
 
-    if verbose:
-        # print(hp.heap())
-
     # ============================== Find spatial halos ==============================
 
     start = time.time()
@@ -849,9 +846,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if rank == 0:
         print("Spatial search finished", time.time() - start)
-
-    if verbose:
-        # print(hp.heap())
 
     # Collect child process results
     collect_start = time.time()
