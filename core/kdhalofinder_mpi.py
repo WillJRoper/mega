@@ -903,7 +903,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     haloID = 0
     subhaloID = 0
 
-    task_count = 0
+    # task_count = 0
 
     if profile:
         profile_dict["Housekeeping"]["Start"].append(set_up_start)
@@ -918,7 +918,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         closed_workers = 0
         while closed_workers < num_workers:
 
-            print(count, len(halo_tasks), closed_workers, num_workers)
+            # print(count, len(halo_tasks), closed_workers, num_workers)
 
             # If all other tasks are currently working let the master handle a (fast) low mass halo
             if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
@@ -953,9 +953,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         # There are no tasks left so terminate this process
                         comm.send(None, dest=source, tag=tags.EXIT)
 
-                elif tag == tags.DONE:
-
-                    task_count += 1
+                # elif tag == tags.DONE:
+                #
+                #     task_count += 1
 
                 elif tag == tags.EXIT:
 
@@ -1263,7 +1263,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             profile_dict["Sub-Phase"]["Start"].append(task_start)
                             profile_dict["Sub-Phase"]["End"].append(task_end)
 
-                comm.send(None, dest=0, tag=tags.DONE)
+                # comm.send(None, dest=0, tag=tags.DONE)
 
             elif tag == tags.EXIT:
                 break
