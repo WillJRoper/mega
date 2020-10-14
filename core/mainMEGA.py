@@ -23,12 +23,6 @@ snap_ind = int(sys.argv[2])
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
 
-# Print out the snapshots to ensure they are correct
-if flags['verbose']:
-    print("Read out snapshots:")
-    for snap in snaplist:
-        print(snap)
-
 
 def main_kd(snap):
     kd.hosthalofinder(snap, llcoeff=params['llcoeff'], sub_llcoeff=params['sub_llcoeff'], inputpath=inputs['data'],

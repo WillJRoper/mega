@@ -802,7 +802,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         profile_dict["Reading"]["End"].append(time.time())
 
     if verbose:
-        print("This Rank:", rank)
         # print(hp.heap())
 
     # ============================== Find spatial halos ==============================
@@ -852,7 +851,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         print("Spatial search finished", time.time() - start)
 
     if verbose:
-        print("This Rank:", rank)
         # print(hp.heap())
 
     # Collect child process results
@@ -923,6 +921,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         num_workers = size - 1
         closed_workers = 0
         while closed_workers < num_workers:
+
+            print(count, len(halo_tasks))
 
             # If all other tasks are currently working let the master handle a (fast) low mass halo
             if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
