@@ -957,39 +957,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         closed_workers = 0
         while closed_workers < num_workers:
 
-            # data = comm.recv(source=MPI.ANY_SOURCE,
-            #                  tag=MPI.ANY_TAG,
-            #                  status=status)
-            # source = status.Get_source()
-            # tag = status.Get_tag()
-            #
-            # print(source, tag, len(halo_tasks),
-            #       closed_workers, num_workers)
-            #
-            # if tag == tags.READY:
-            #
-            #     # Worker is ready, so send it a task
-            #     if len(halo_tasks) != 0:
-            #
-            #         assign_start = time.time()
-            #
-            #         key, thisTask = halo_tasks.popitem()
-            #
-            #         comm.send(thisTask, dest=source, tag=tags.START)
-            #
-            #         if profile:
-            #             prof_d["Assigning"]["Start"].append(assign_start)
-            #             prof_d["Assigning"]["End"].append(time.time())
-            #
-            #     else:
-            #
-            #         # There are no tasks left so terminate this process
-            #         comm.send(None, dest=source, tag=tags.EXIT)
-            #
-            # elif tag == tags.EXIT:
-            #
-            #     closed_workers += 1
-
             # If all other tasks are currently working let the master
             # handle a (fast) low mass halo
             if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
@@ -1001,9 +968,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                  status=status)
                 source = status.Get_source()
                 tag = status.Get_tag()
-
-                print(count, source, tag, len(halo_tasks),
-                      closed_workers, num_workers)
 
                 if tag == tags.READY:
 
@@ -1055,9 +1019,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                     vel = hdf['part_vel'][thisTask, :]
 
                     hdf.close()
-
-                    halo_nparts = np.array([len(thisTask)], dtype=np.int32)
-                    halo_ids = np.full_like(thisTask, 0)
 
                     read_end = time.time()
 
@@ -1196,8 +1157,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                  status=status)
                 source = status.Get_source()
                 tag = status.Get_tag()
-
-                print("EXITING:", source, tag, closed_workers)
 
                 if tag == tags.EXIT:
 
@@ -1366,9 +1325,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 break
 
         comm.send(None, dest=0, tag=tags.EXIT)
-
-    if verbose:
-        print(rank, "Exited phase space finding")
 
     # Collect child process results
     collect_start = time.time()
