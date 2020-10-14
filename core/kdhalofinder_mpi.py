@@ -947,9 +947,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         # There are no tasks left so terminate this process
                         comm.send(None, dest=source, tag=tags.EXIT)
 
-                elif tag == tags.DONE:
-                    pass
-
                 elif tag == tags.EXIT:
 
                     closed_workers += 1
@@ -1104,9 +1101,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 source = status.Get_source()
                 tag = status.Get_tag()
 
-                # There are no tasks left so terminate this process
-                comm.send(None, dest=source, tag=tags.EXIT)
-                closed_workers += 1
+                if tag == tags.EXIT:
+
+                    closed_workers += 1
+
+                else:
+
+                    # There are no tasks left so terminate this process
+                    comm.send(None, dest=source, tag=tags.EXIT)
 
     else:
 
@@ -1251,7 +1253,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                             profile_dict["Sub-Phase"]["Start"].append(task_start)
                             profile_dict["Sub-Phase"]["End"].append(task_end)
 
-                comm.send(None, dest=0, tag=tags.DONE)
+                comm.send(None, dest=0, tag=tags.READY)
 
             elif tag == tags.EXIT:
                 break
