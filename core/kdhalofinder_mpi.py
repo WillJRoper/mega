@@ -931,7 +931,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 source = status.Get_source()
                 tag = status.Get_tag()
 
-                print(count, source, tag)
+                print(count, source, tag, len(halo_tasks), closed_workers, num_workers)
 
                 if tag == tags.READY:
 
