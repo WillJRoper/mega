@@ -1,7 +1,7 @@
 from scipy.spatial import cKDTree
 from scipy.sparse import lil_matrix
 from collections import defaultdict
-from guppy import hpy; hp = hpy()
+# from guppy import hpy; hp = hpy()
 import itertools
 import pickle
 import numpy as np
@@ -749,7 +749,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             print("Tree memory size", sys.getsizeof(tree), "bytes")
 
-            print(hp.heap())
+            # print(hp.heap())
 
     else:
 
@@ -803,7 +803,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if verbose:
         print("This Rank:", rank)
-        print(hp.heap())
+        # print(hp.heap())
 
     # ============================== Find spatial halos ==============================
 
@@ -853,7 +853,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
     if verbose:
         print("This Rank:", rank)
-        print(hp.heap())
+        # print(hp.heap())
 
     # Collect child process results
     collect_start = time.time()
@@ -1312,7 +1312,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             print("Combining the results took", time.time() - collect_start, "seconds")
             print("Results memory size", sys.getsizeof(results_dict), "bytes")
             print("This Rank:", rank)
-            print(hp.heap())
+            # print(hp.heap())
 
         if profile:
             profile_dict["Collecting"]["Start"].append(collect_start)
