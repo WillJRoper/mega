@@ -920,7 +920,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
             # print(count, len(halo_tasks), closed_workers, num_workers)
 
-            # If all other tasks are currently working let the master handle a (fast) low mass halo
+            # If all other tasks are currently working let the master
+            # handle a (fast) low mass halo
             if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
 
                 count += 1
@@ -931,7 +932,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 source = status.Get_source()
                 tag = status.Get_tag()
 
-                print(count, source, tag, len(halo_tasks), closed_workers, num_workers)
+                print(count, source, tag, len(halo_tasks),
+                      closed_workers, num_workers)
 
                 if tag == tags.READY:
 
@@ -1110,6 +1112,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                 data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
                 source = status.Get_source()
                 tag = status.Get_tag()
+
+                print("EXITING:", source, tag, closed_workers)
 
                 if tag == tags.EXIT:
 
