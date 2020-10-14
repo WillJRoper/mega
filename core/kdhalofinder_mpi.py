@@ -903,8 +903,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
     haloID = 0
     subhaloID = 0
 
-    # task_count = 0
-
     if profile:
         profile_dict["Housekeeping"]["Start"].append(set_up_start)
         profile_dict["Housekeeping"]["End"].append(time.time())
@@ -954,10 +952,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
                         # There are no tasks left so terminate this process
                         comm.send(None, dest=source, tag=tags.EXIT)
-
-                # elif tag == tags.DONE:
-                #
-                #     task_count += 1
 
                 elif tag == tags.EXIT:
 
@@ -1134,6 +1128,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
             thisTask = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
             tag = status.Get_tag()
 
+            print(rank, tag)
+
             if tag == tags.START:
 
                 read_start = time.time()
@@ -1266,8 +1262,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                         if profile:
                             profile_dict["Sub-Phase"]["Start"].append(task_start)
                             profile_dict["Sub-Phase"]["End"].append(task_end)
-
-                # comm.send(None, dest=0, tag=tags.DONE)
 
             elif tag == tags.EXIT:
                 break
