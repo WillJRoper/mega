@@ -33,7 +33,7 @@ flags:
   useserial:           0              # Run in serial (single "node"), multithread KDTree queries
   usempi:              1              # Use mpi a distributed network
 
-  verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
+  verbose:             1              # Flag for verbose progress outputs (UNUSED CURRENTLY)
   profile:             1              # Flag for producing profiling txt files while running
 
 
