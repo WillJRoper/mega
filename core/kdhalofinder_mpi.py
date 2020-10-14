@@ -933,238 +933,238 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         closed_workers = 0
         while closed_workers < num_workers:
 
-            data = comm.recv(source=MPI.ANY_SOURCE,
-                             tag=MPI.ANY_TAG,
-                             status=status)
-            source = status.Get_source()
-            tag = status.Get_tag()
-
-            print(source, tag, len(halo_tasks),
-                  closed_workers, num_workers)
-
-            if tag == tags.READY:
-
-                # Worker is ready, so send it a task
-                if len(halo_tasks) != 0:
-
-                    assign_start = time.time()
-
-                    key, thisTask = halo_tasks.popitem()
-
-                    comm.send(thisTask, dest=source, tag=tags.START)
-
-                    if profile:
-                        profile_dict["Assigning"]["Start"].append(assign_start)
-                        profile_dict["Assigning"]["End"].append(time.time())
-
-                else:
-
-                    # There are no tasks left so terminate this process
-                    comm.send(None, dest=source, tag=tags.EXIT)
-
-            elif tag == tags.EXIT:
-
-                closed_workers += 1
-
-            # # If all other tasks are currently working let the master
-            # # handle a (fast) low mass halo
-            # if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
+            # data = comm.recv(source=MPI.ANY_SOURCE,
+            #                  tag=MPI.ANY_TAG,
+            #                  status=status)
+            # source = status.Get_source()
+            # tag = status.Get_tag()
             #
-            #     count += 1
+            # print(source, tag, len(halo_tasks),
+            #       closed_workers, num_workers)
             #
-            #     data = comm.recv(source=MPI.ANY_SOURCE,
-            #                      tag=MPI.ANY_TAG,
-            #                      status=status)
-            #     source = status.Get_source()
-            #     tag = status.Get_tag()
+            # if tag == tags.READY:
             #
-            #     print(count, source, tag, len(halo_tasks),
-            #           closed_workers, num_workers)
+            #     # Worker is ready, so send it a task
+            #     if len(halo_tasks) != 0:
             #
-            #     if tag == tags.READY:
+            #         assign_start = time.time()
             #
-            #         # Worker is ready, so send it a task
-            #         if len(halo_tasks) != 0:
+            #         key, thisTask = halo_tasks.popitem()
             #
-            #             assign_start = time.time()
-            #
-            #             key, thisTask = halo_tasks.popitem()
-            #
-            #             comm.send(thisTask, dest=source, tag=tags.START)
-            #
-            #             if profile:
-            #                 profile_dict["Assigning"]["Start"].append(assign_start)
-            #                 profile_dict["Assigning"]["End"].append(time.time())
-            #
-            #         else:
-            #
-            #             # There are no tasks left so terminate this process
-            #             comm.send(None, dest=source, tag=tags.EXIT)
-            #
-            #     elif tag == tags.EXIT:
-            #
-            #         closed_workers += 1
-            #
-            # elif len(halo_tasks) > 0 and count > size * 1.5:
-            #
-            #     count = 0
-            #
-            #     key, thisTask = halo_tasks.popitem()
-            #
-            #     if len(thisTask) > 100:
-            #
-            #         halo_tasks[key] = thisTask
-            #
-            #     else:
-            #
-            #         read_start = time.time()
-            #
-            #         thisTask.sort()
-            #
-            #         # Open hdf5 file
-            #         hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
-            #
-            #         # Get the position and velocity of each particle in this rank
-            #         pos = hdf['part_pos'][thisTask, :]
-            #         vel = hdf['part_vel'][thisTask, :]
-            #
-            #         hdf.close()
-            #
-            #         halo_nparts = np.array([len(thisTask)], dtype=np.int32)
-            #         halo_ids = np.full_like(thisTask, 0)
-            #
-            #         read_end = time.time()
+            #         comm.send(thisTask, dest=source, tag=tags.START)
             #
             #         if profile:
-            #             profile_dict["Reading"]["Start"].append(read_start)
-            #             profile_dict["Reading"]["End"].append(read_end)
-            #
-            #         task_start = time.time()
-            #
-            #         # Do the work here
-            #         result = get_real_host_halos(thisTask, pos, vel, boxsize, vlinkl_indp, linkl, pmass, ini_vlcoeff,
-            #                                      decrement, redshift, G, h, soft, min_vlcoeff, halo_nparts, halo_ids)
-            #
-            #         # Save results
-            #         for res in result:
-            #             results[(rank, haloID)] = result[res]
-            #
-            #             haloID += 1
-            #
-            #         task_end = time.time()
-            #
-            #         if profile:
-            #             profile_dict["Host-Phase"]["Start"].append(task_start)
-            #             profile_dict["Host-Phase"]["End"].append(task_end)
-            #
-            #         if findsubs:
-            #
-            #             spatial_sub_results = {}
-            #
-            #             # Loop over results getting spatial halos
-            #             while len(result) > 0:
-            #
-            #                 read_start = time.time()
-            #
-            #                 key, res = result.popitem()
-            #
-            #                 thishalo_pids = np.sort(res["pids"])
-            #
-            #                 # Open hdf5 file
-            #                 hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
-            #
-            #                 # Get the position and velocity of each particle in this rank
-            #                 subhalo_poss = hdf['part_pos'][thishalo_pids, :]
-            #
-            #                 hdf.close()
-            #
-            #                 read_end = time.time()
-            #
-            #                 if profile:
-            #                     profile_dict["Reading"]["Start"].append(read_start)
-            #                     profile_dict["Reading"]["End"].append(read_end)
-            #
-            #                 task_start = time.time()
-            #
-            #                 # Do the work here
-            #                 sub_result = get_sub_halos(thishalo_pids, subhalo_poss, sub_linkl)
-            #
-            #                 while len(sub_result) > 0:
-            #                     key, res = sub_result.popitem()
-            #                     spatial_sub_results[subhaloID] = res
-            #
-            #                     subhaloID += 1
-            #
-            #                 task_end = time.time()
-            #
-            #                 if profile:
-            #                     profile_dict["Sub-Spatial"]["Start"].append(task_start)
-            #                     profile_dict["Sub-Spatial"]["End"].append(task_end)
-            #
-            #             # Loop over spatial subhalos
-            #             while len(spatial_sub_results) > 0:
-            #
-            #                 read_start = time.time()
-            #
-            #                 key, thisSub = spatial_sub_results.popitem()
-            #
-            #                 thisSub.sort()
-            #
-            #                 # Open hdf5 file
-            #                 hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
-            #
-            #                 # Get the position and velocity of each particle in this rank
-            #                 pos = hdf['part_pos'][thisSub, :]
-            #                 vel = hdf['part_vel'][thisSub, :]
-            #
-            #                 hdf.close()
-            #
-            #                 subhalo_nparts = np.array([len(thisSub)], dtype=np.int32)
-            #                 subhalo_ids = np.full_like(thisSub, 0)
-            #
-            #                 read_end = time.time()
-            #
-            #                 if profile:
-            #                     profile_dict["Reading"]["Start"].append(read_start)
-            #                     profile_dict["Reading"]["End"].append(read_end)
-            #
-            #                 task_start = time.time()
-            #
-            #                 # Do the work here
-            #                 result = get_real_host_halos(thisSub, pos, vel, boxsize,
-            #                                              vlinkl_indp * (1600 / 200) ** (1 / 6), sub_linkl, pmass,
-            #                                              ini_vlcoeff, decrement, redshift, G, h, soft,
-            #                                              min_vlcoeff, subhalo_nparts, subhalo_ids)
-            #
-            #                 # Save results
-            #                 while len(result) > 0:
-            #                     key, res = result.popitem()
-            #                     sub_results[(rank, subhaloID)] = res
-            #
-            #                     subhaloID += 1
-            #
-            #                 task_end = time.time()
-            #
-            #                 if profile:
-            #                     profile_dict["Sub-Phase"]["Start"].append(task_start)
-            #                     profile_dict["Sub-Phase"]["End"].append(task_end)
-            #
-            # elif len(halo_tasks) == 0:
-            #
-            #     data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-            #     source = status.Get_source()
-            #     tag = status.Get_tag()
-            #
-            #     print("EXITING:", source, tag, closed_workers)
-            #
-            #     if tag == tags.EXIT:
-            #
-            #         closed_workers += 1
+            #             profile_dict["Assigning"]["Start"].append(assign_start)
+            #             profile_dict["Assigning"]["End"].append(time.time())
             #
             #     else:
             #
             #         # There are no tasks left so terminate this process
             #         comm.send(None, dest=source, tag=tags.EXIT)
+            #
+            # elif tag == tags.EXIT:
+            #
+            #     closed_workers += 1
+
+            # If all other tasks are currently working let the master
+            # handle a (fast) low mass halo
+            if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
+
+                count += 1
+
+                data = comm.recv(source=MPI.ANY_SOURCE,
+                                 tag=MPI.ANY_TAG,
+                                 status=status)
+                source = status.Get_source()
+                tag = status.Get_tag()
+
+                print(count, source, tag, len(halo_tasks),
+                      closed_workers, num_workers)
+
+                if tag == tags.READY:
+
+                    # Worker is ready, so send it a task
+                    if len(halo_tasks) != 0:
+
+                        assign_start = time.time()
+
+                        key, thisTask = halo_tasks.popitem()
+
+                        comm.send(thisTask, dest=source, tag=tags.START)
+
+                        if profile:
+                            profile_dict["Assigning"]["Start"].append(assign_start)
+                            profile_dict["Assigning"]["End"].append(time.time())
+
+                    else:
+
+                        # There are no tasks left so terminate this process
+                        comm.send(None, dest=source, tag=tags.EXIT)
+
+                elif tag == tags.EXIT:
+
+                    closed_workers += 1
+
+            elif len(halo_tasks) > 0 and count > size * 1.5:
+
+                count = 0
+
+                key, thisTask = halo_tasks.popitem()
+
+                if len(thisTask) > 100:
+
+                    halo_tasks[key] = thisTask
+
+                else:
+
+                    read_start = time.time()
+
+                    thisTask.sort()
+
+                    # Open hdf5 file
+                    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+                    # Get the position and velocity of each particle in this rank
+                    pos = hdf['part_pos'][thisTask, :]
+                    vel = hdf['part_vel'][thisTask, :]
+
+                    hdf.close()
+
+                    halo_nparts = np.array([len(thisTask)], dtype=np.int32)
+                    halo_ids = np.full_like(thisTask, 0)
+
+                    read_end = time.time()
+
+                    if profile:
+                        profile_dict["Reading"]["Start"].append(read_start)
+                        profile_dict["Reading"]["End"].append(read_end)
+
+                    task_start = time.time()
+
+                    # Do the work here
+                    result = get_real_host_halos(thisTask, pos, vel, boxsize, vlinkl_indp, linkl, pmass, ini_vlcoeff,
+                                                 decrement, redshift, G, h, soft, min_vlcoeff, halo_nparts, halo_ids)
+
+                    # Save results
+                    for res in result:
+                        results[(rank, haloID)] = result[res]
+
+                        haloID += 1
+
+                    task_end = time.time()
+
+                    if profile:
+                        profile_dict["Host-Phase"]["Start"].append(task_start)
+                        profile_dict["Host-Phase"]["End"].append(task_end)
+
+                    if findsubs:
+
+                        spatial_sub_results = {}
+
+                        # Loop over results getting spatial halos
+                        while len(result) > 0:
+
+                            read_start = time.time()
+
+                            key, res = result.popitem()
+
+                            thishalo_pids = np.sort(res["pids"])
+
+                            # Open hdf5 file
+                            hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+                            # Get the position and velocity of each particle in this rank
+                            subhalo_poss = hdf['part_pos'][thishalo_pids, :]
+
+                            hdf.close()
+
+                            read_end = time.time()
+
+                            if profile:
+                                profile_dict["Reading"]["Start"].append(read_start)
+                                profile_dict["Reading"]["End"].append(read_end)
+
+                            task_start = time.time()
+
+                            # Do the work here
+                            sub_result = get_sub_halos(thishalo_pids, subhalo_poss, sub_linkl)
+
+                            while len(sub_result) > 0:
+                                key, res = sub_result.popitem()
+                                spatial_sub_results[subhaloID] = res
+
+                                subhaloID += 1
+
+                            task_end = time.time()
+
+                            if profile:
+                                profile_dict["Sub-Spatial"]["Start"].append(task_start)
+                                profile_dict["Sub-Spatial"]["End"].append(task_end)
+
+                        # Loop over spatial subhalos
+                        while len(spatial_sub_results) > 0:
+
+                            read_start = time.time()
+
+                            key, thisSub = spatial_sub_results.popitem()
+
+                            thisSub.sort()
+
+                            # Open hdf5 file
+                            hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+
+                            # Get the position and velocity of each particle in this rank
+                            pos = hdf['part_pos'][thisSub, :]
+                            vel = hdf['part_vel'][thisSub, :]
+
+                            hdf.close()
+
+                            subhalo_nparts = np.array([len(thisSub)], dtype=np.int32)
+                            subhalo_ids = np.full_like(thisSub, 0)
+
+                            read_end = time.time()
+
+                            if profile:
+                                profile_dict["Reading"]["Start"].append(read_start)
+                                profile_dict["Reading"]["End"].append(read_end)
+
+                            task_start = time.time()
+
+                            # Do the work here
+                            result = get_real_host_halos(thisSub, pos, vel, boxsize,
+                                                         vlinkl_indp * (1600 / 200) ** (1 / 6), sub_linkl, pmass,
+                                                         ini_vlcoeff, decrement, redshift, G, h, soft,
+                                                         min_vlcoeff, subhalo_nparts, subhalo_ids)
+
+                            # Save results
+                            while len(result) > 0:
+                                key, res = result.popitem()
+                                sub_results[(rank, subhaloID)] = res
+
+                                subhaloID += 1
+
+                            task_end = time.time()
+
+                            if profile:
+                                profile_dict["Sub-Phase"]["Start"].append(task_start)
+                                profile_dict["Sub-Phase"]["End"].append(task_end)
+
+            elif len(halo_tasks) == 0:
+
+                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+                source = status.Get_source()
+                tag = status.Get_tag()
+
+                print("EXITING:", source, tag, closed_workers)
+
+                if tag == tags.EXIT:
+
+                    closed_workers += 1
+
+                else:
+
+                    # There are no tasks left so terminate this process
+                    comm.send(None, dest=source, tag=tags.EXIT)
 
     else:
 
