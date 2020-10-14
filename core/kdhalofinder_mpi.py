@@ -1266,6 +1266,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         comm.send(None, dest=0, tag=tags.EXIT)
 
+    print(rank, "Exited")
+
     # Collect child process results
     collect_start = time.time()
     collected_results = comm.gather(results, root=0)
