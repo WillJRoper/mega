@@ -918,16 +918,20 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
         closed_workers = 0
         while closed_workers < num_workers:
 
-            print(count, len(halo_tasks))
+            print(count, len(halo_tasks), closed_workers, num_workers)
 
             # If all other tasks are currently working let the master handle a (fast) low mass halo
             if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
 
                 count += 1
 
-                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+                data = comm.recv(source=MPI.ANY_SOURCE,
+                                 tag=MPI.ANY_TAG,
+                                 status=status)
                 source = status.Get_source()
                 tag = status.Get_tag()
+
+                print(count, source, tag)
 
                 if tag == tags.READY:
 
@@ -1266,7 +1270,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
 
         comm.send(None, dest=0, tag=tags.EXIT)
 
-    print(rank, "Exited")
+    if verbose:
+        print(rank, "Exited phase space finding")
 
     # Collect child process results
     collect_start = time.time()
