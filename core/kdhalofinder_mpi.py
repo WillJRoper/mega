@@ -1104,6 +1104,15 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath, ini_vlco
                                 profile_dict["Sub-Phase"]["Start"].append(task_start)
                                 profile_dict["Sub-Phase"]["End"].append(task_end)
 
+            elif len(halo_tasks) == 0:
+
+                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+                source = status.Get_source()
+                tag = status.Get_tag()
+
+                # There are no tasks left so terminate this process
+                comm.send(None, dest=source, tag=tags.EXIT)
+
     else:
 
         # =========================== Get from master and complete tasks ===========================
