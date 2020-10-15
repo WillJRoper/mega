@@ -327,6 +327,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         prog_mass_conts = []
         desc_mass_conts = []
         mean_pos = np.full((len(this_graph), 3), np.nan, dtype=float)
+        rms_rad = np.full(len(this_graph), np.nan, dtype=float)
         zs = np.full(len(this_graph), 2**30, dtype=float)
 
         for snap, psnap, dsnap, haloID in zip(snaps_str, prog_snaps_str, desc_snaps_str, this_graph):
@@ -345,6 +346,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
             this_desc_conts = utilities.get_linked_halo_data(data_dict['desc_conts'][snap], this_desc_start, this_ndesc)
 
             mean_pos[haloID, :] = data_dict["mean_pos"][snap][halo_cat_id, :]
+            rms_rad[haloID] = data_dict["rms_rad"][snap][halo_cat_id]
 
             zs[haloID] = data_dict["redshift"][snap]
 
@@ -384,6 +386,8 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         graph.create_dataset('generation_id', data=np.array(generations), dtype=int, compression='gzip')
         graph.create_dataset('nparts', data=np.array(nparts), dtype=int, compression='gzip')
         graph.create_dataset('mean_pos', data=mean_pos, dtype=float, compression='gzip')
+        graph.create_dataset('rms_radius', data=rms_rad, dtype=float,
+                             compression='gzip')
         graph.create_dataset('generation_start_index', data=generation_start_index, dtype=int, compression='gzip')
         graph.create_dataset('generation_length', data=generation_length, dtype=int, compression='gzip')
         graph.create_dataset('nprog', data=nprogs, dtype=int, compression='gzip')
@@ -517,6 +521,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         prog_mass_conts = []
         desc_mass_conts = []
         mean_pos = np.full((len(this_graph), 3), np.nan, dtype=float)
+        rms_rad = np.full(len(this_graph), np.nan, dtype=float)
         zs = np.full(len(this_graph), 2 ** 30, dtype=float)
 
         for snap, psnap, dsnap, haloID in zip(snaps_str, prog_snaps_str, desc_snaps_str, this_graph):
@@ -535,6 +540,7 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
             this_desc_conts = utilities.get_linked_halo_data(data_dict["sub"]['desc_conts'][snap], this_desc_start, this_ndesc)
 
             mean_pos[haloID] = data_dict["sub"]["mean_pos"][snap][halo_cat_id, :]
+            rms_rad[haloID] = data_dict["sub"]["rms_rad"][snap][halo_cat_id]
 
             zs[haloID] = data_dict["redshift"][snap]
 
@@ -574,6 +580,8 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
         graph.create_dataset('sub_generation_id', data=np.array(generations), dtype=int, compression='gzip')
         graph.create_dataset('sub_nparts', data=np.array(nparts), dtype=int, compression='gzip')
         graph.create_dataset('sub_mean_pos', data=mean_pos, dtype=float, compression='gzip')
+        graph.create_dataset('sub_rms_radius', data=rms_rad, dtype=float,
+                             compression='gzip')
         graph.create_dataset('sub_generation_start_index', data=generation_start_index, dtype=int, compression='gzip')
         graph.create_dataset('sub_generation_length', data=generation_length, dtype=int, compression='gzip')
         graph.create_dataset('sub_nprog', data=nprogs, dtype=int, compression='gzip')
@@ -608,7 +616,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
     hdf.close()
 
     # Extract only the real roots
-    roots = halo_ids[reals][0:100]
+    roots = halo_ids[reals][0:1000]
 
     # Get the work for each task
     lims = np.linspace(0, roots.size, size + 1, dtype=int)
@@ -629,6 +637,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
     nparts = {}
     hosts = {}
     mean_pos = {}
+    rms_rad = {}
     zs = {}
     pmass = 0
     for snap in snaplist:
@@ -654,12 +663,13 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
 
         hosts[snap] = hdf['Subhalos']['host_IDs'][...]
         mean_pos[snap] = hdf['mean_positions'][...]
+        rms_rad[snap] = hdf["rms_spatial_radius"][...]
 
         hdf.close()
 
     data_dict = {'progs': progs, 'descs': descs, 'nprogs': nprogs, 'ndescs': ndescs,
                  'prog_start_index': prog_start_index, 'desc_start_index': desc_start_index, 'nparts': nparts,
-                 "hosts": hosts, "mean_pos": mean_pos, "redshift": zs, "pmass": pmass}
+                 "hosts": hosts, "mean_pos": mean_pos, "redshift": zs, "pmass": pmass, "rms_rad": rms_rad}
 
     # Initialise the tuple for storing results
     graphs = []
@@ -736,6 +746,7 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
     nparts = {}
     hosts = {}
     mean_pos = {}
+    rms_rad = {}
     zs = {}
     pmass = 0
     for snap in snaplist:
@@ -761,12 +772,13 @@ def main_get_graph_members(treepath, graphpath, snaplist, verbose, halopath):
 
         hosts[snap] = hdf['Subhalos']['host_IDs'][...]
         mean_pos[snap] = hdf['Subhalos']['mean_positions'][...]
+        rms_rad[snap] = hdf['Subhalos']["rms_spatial_radius"][...]
 
         hdf.close()
 
     data_dict["sub"] = {'progs': progs, 'descs': descs, 'nprogs': nprogs, 'ndescs': ndescs,
                         'prog_start_index': prog_start_index, 'desc_start_index': desc_start_index, 'nparts': nparts,
-                        "hosts": hosts, "mean_pos": mean_pos, "redshift": zs, "pmass": pmass}
+                        "hosts": hosts, "mean_pos": mean_pos, "redshift": zs, "pmass": pmass, "rms_rad": rms_rad}
 
     # Initialise the tuple for storing results
     sub_graphs = []

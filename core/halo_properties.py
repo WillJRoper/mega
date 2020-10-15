@@ -20,7 +20,10 @@ def vel_disp(vels):
     return veldisp3d, veldisp1d
 
 
-def half_mass_rad(rs, weight):
+def half_mass_rad(coord, weight):
+
+    # Calculate the radii
+    rs = np.linalg.norm(coord, axis=1)
 
     # Sort the radii and masses
     sinds = np.argsort(rs)
@@ -41,7 +44,10 @@ def half_mass_rad(rs, weight):
     return hmr
 
 
-def vmax(rs, masses, G):
+def vmax(coord, masses, G):
+
+    # Calculate the radii
+    rs = np.linalg.norm(coord, axis=1)
 
     # Sort the radii and masses
     sinds = np.argsort(rs)

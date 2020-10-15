@@ -15,7 +15,7 @@ import h5py
 import gc
 import sys
 import utilities
-import halo_properties as hp
+import halo_properties as hprop
 
 
 # Initializations and preliminaries
@@ -512,11 +512,21 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
             if KE / GE <= 1:
 
                 # Get rms radii from the centred position and velocity
-                r = hp.rms_rad(this_halo_pos)
-                vr = hp.rms_rad(this_halo_vel)
+                r = hprop.rms_rad(this_halo_pos)
+                vr = hprop.rms_rad(this_halo_vel)
 
                 # Compute the velocity dispersion
-                veldisp3d, veldisp1d = hp.vel_disp(this_halo_vel)
+                veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
+
+                # Define "masses" for property computation
+                masses = np.ones(len(this_sim_halo_pids))
+
+                # Compute maximal rotational velocity
+                vmax = hprop.vmax(this_halo_pos, masses, G)
+
+                # Calculate half mass radius in position and velocity space
+                hmr = hprop.half_mass_rad(this_halo_pos, masses)
+                hmvr = hprop.half_mass_rad(this_halo_vel, masses)
 
                 # Define realness flag
                 real = True
@@ -529,18 +539,31 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                          'KE': KE, 'GE': GE,
                                          "rms_r": r, "rms_vr": vr,
                                          "veldisp3d": veldisp3d,
-                                         "veldisp1d": veldisp1d}
+                                         "veldisp1d": veldisp1d,
+                                         "vmax": vmax,
+                                         "hmr": hmr,
+                                         "hmvr": hmvr}
 
                 thisresultID += 1
 
             elif KE / GE > 1 and new_vlcoeff <= min_vlcoeff:
 
                 # Get rms radii from the centred position and velocity
-                r = hp.rms_rad(this_halo_pos)
-                vr = hp.rms_rad(this_halo_vel)
+                r = hprop.rms_rad(this_halo_pos)
+                vr = hprop.rms_rad(this_halo_vel)
 
                 # Compute the velocity dispersion
-                veldisp3d, veldisp1d = hp.vel_disp(this_halo_vel)
+                veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
+
+                # Define "masses" for property computation
+                masses = np.ones(len(this_sim_halo_pids))
+
+                # Compute maximal rotational velocity
+                vmax = hprop.vmax(this_halo_pos, masses, G)
+
+                # Calculate half mass radius in position and velocity space
+                hmr = hprop.half_mass_rad(this_halo_pos, masses)
+                hmvr = hprop.half_mass_rad(this_halo_vel, masses)
 
                 # Define realness flag
                 real = False
@@ -553,14 +576,19 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                          'KE': KE, 'GE': GE,
                                          "rms_r": r, "rms_vr": vr,
                                          "veldisp3d": veldisp3d,
-                                         "veldisp1d": veldisp1d}
+                                         "veldisp1d": veldisp1d,
+                                         "vmax": vmax,
+                                         "hmr": hmr,
+                                         "hmvr": hmvr}
 
                 thisresultID += 1
 
             else:
                 not_real_pids[thiscontID] = this_halo_pids
-                candidate_halos[candidateID] = {"pos": this_halo_pos,
-                                                "vel": this_halo_vel,
+                candidate_halos[candidateID] = {"pos": (this_halo_pos
+                                                        + mean_halo_pos),
+                                                "vel": (this_halo_vel
+                                                        + mean_halo_vel),
                                                 "pid": this_sim_halo_pids,
                                                 "vlcoeff": new_vlcoeff}
 
@@ -598,11 +626,20 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                                    G, h, soft)
 
             # Get rms radii from the centred position and velocity
-            r = hp.rms_rad(this_halo_pos)
-            vr = hp.rms_rad(this_halo_vel)
+            r = hprop.rms_rad(this_halo_pos)
+            vr = hprop.rms_rad(this_halo_vel)
 
             # Compute the velocity dispersion
-            veldisp3d, veldisp1d = hp.vel_disp(this_halo_vel)
+            veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
+            # Define "masses" for property computation
+            masses = np.ones(len(this_sim_halo_pids))
+
+            # Compute maximal rotational velocity
+            vmax = hprop.vmax(this_halo_pos, masses, G)
+
+            # Calculate half mass radius in position and velocity space
+            hmr = hprop.half_mass_rad(this_halo_pos, masses)
+            hmvr = hprop.half_mass_rad(this_halo_vel, masses)
 
             if KE / GE <= 1:
 
@@ -622,7 +659,10 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                      'KE': KE, 'GE': GE,
                                      "rms_r": r, "rms_vr": vr,
                                      "veldisp3d": veldisp3d,
-                                     "veldisp1d": veldisp1d}
+                                     "veldisp1d": veldisp1d,
+                                     "vmax": vmax,
+                                     "hmr": hmr,
+                                     "hmvr": hmvr}
 
             thisresultID += 1
 
@@ -1433,6 +1473,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         rms_vrs = np.zeros(nhalo, dtype=float)
         veldisp1ds = np.zeros((nhalo, 3), dtype=float)
         veldisp3ds = np.zeros(nhalo, dtype=float)
+        vmaxs = np.zeros(nhalo, dtype=float)
+        hmrs = np.zeros(nhalo, dtype=float)
+        hmvrs = np.zeros(nhalo, dtype=float)
 
         if findsubs:
 
@@ -1450,6 +1493,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             sub_rms_vrs = np.zeros(nsubhalo, dtype=float)
             sub_veldisp1ds = np.zeros((nsubhalo, 3), dtype=float)
             sub_veldisp3ds = np.zeros(nsubhalo, dtype=float)
+            sub_vmaxs = np.zeros(nsubhalo, dtype=float)
+            sub_hmrs = np.zeros(nsubhalo, dtype=float)
+            sub_hmvrs = np.zeros(nsubhalo, dtype=float)
 
         else:
 
@@ -1466,6 +1512,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             sub_rms_vrs = None
             sub_veldisp1ds = None
             sub_veldisp3ds = None
+            sub_vmaxs = None
+            sub_hmrs = None
+            sub_hmvrs = None
 
         # Create the root group
         snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'w')
@@ -1501,6 +1550,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             rms_vrs[halo_id] = halo_res["rms_vr"]
             veldisp1ds[halo_id, :] = halo_res["veldisp1d"]
             veldisp3ds[halo_id] = halo_res["veldisp3d"]
+            vmaxs[halo_id] = halo_res["vmax"]
+            hmrs[halo_id] = halo_res["hmr"]
+            hmvrs[halo_id] = halo_res["hmvr"]
 
             # Create datasets in the current halo's group in the HDF5 file
             halo = snap.create_group(str(halo_id))  # create halo group
@@ -1508,30 +1560,92 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                 data=halo_pids)  # halo particle ids
 
         # Save halo property arrays
-        snap.create_dataset('halo_IDs', shape=halo_ids.shape, dtype=int, data=halo_ids, compression='gzip')
-        snap.create_dataset('mean_positions', shape=mean_poss.shape, dtype=float, data=mean_poss, compression='gzip')
-        snap.create_dataset('mean_velocities', shape=mean_vels.shape, dtype=float, data=mean_vels, compression='gzip')
-        snap.create_dataset('rms_spatial_radius', shape=rms_rs.shape, dtype=rms_rs.dtype, data=rms_rs,
+        snap.create_dataset('halo_IDs',
+                            shape=halo_ids.shape,
+                            dtype=int,
+                            data=halo_ids,
                             compression='gzip')
-        snap.create_dataset('rms_velocity_radius', shape=rms_vrs.shape, dtype=rms_vrs.dtype, data=rms_vrs,
+        snap.create_dataset('mean_positions',
+                            shape=mean_poss.shape,
+                            dtype=float,
+                            data=mean_poss,
                             compression='gzip')
-        snap.create_dataset('1D_velocity_dispersion', shape=veldisp1ds.shape, dtype=veldisp1ds.dtype, data=veldisp1ds,
+        snap.create_dataset('mean_velocities',
+                            shape=mean_vels.shape,
+                            dtype=float,
+                            data=mean_vels,
                             compression='gzip')
-        snap.create_dataset('3D_velocity_dispersion', shape=veldisp3ds.shape, dtype=veldisp3ds.dtype, data=veldisp3ds,
+        snap.create_dataset('rms_spatial_radius',
+                            shape=rms_rs.shape,
+                            dtype=rms_rs.dtype,
+                            data=rms_rs,
                             compression='gzip')
-        snap.create_dataset('nparts', shape=halo_nparts.shape, dtype=int, data=halo_nparts, compression='gzip')
-        snap.create_dataset('real_flag', shape=reals.shape, dtype=bool, data=reals, compression='gzip')
-        snap.create_dataset('halo_total_energies', shape=halo_energies.shape, dtype=float, data=halo_energies,
+        snap.create_dataset('rms_velocity_radius',
+                            shape=rms_vrs.shape,
+                            dtype=rms_vrs.dtype,
+                            data=rms_vrs,
                             compression='gzip')
-        snap.create_dataset('halo_kinetic_energies', shape=KEs.shape, dtype=float, data=KEs, compression='gzip')
-        snap.create_dataset('halo_gravitational_energies', shape=GEs.shape, dtype=float, data=GEs, compression='gzip')
+        snap.create_dataset('1D_velocity_dispersion',
+                            shape=veldisp1ds.shape,
+                            dtype=veldisp1ds.dtype,
+                            data=veldisp1ds,
+                            compression='gzip')
+        snap.create_dataset('3D_velocity_dispersion',
+                            shape=veldisp3ds.shape,
+                            dtype=veldisp3ds.dtype,
+                            data=veldisp3ds,
+                            compression='gzip')
+        snap.create_dataset('nparts',
+                            shape=halo_nparts.shape,
+                            dtype=int,
+                            data=halo_nparts,
+                            compression='gzip')
+        snap.create_dataset('real_flag',
+                            shape=reals.shape,
+                            dtype=bool,
+                            data=reals,
+                            compression='gzip')
+        snap.create_dataset('halo_total_energies',
+                            shape=halo_energies.shape,
+                            dtype=float,
+                            data=halo_energies,
+                            compression='gzip')
+        snap.create_dataset('halo_kinetic_energies',
+                            shape=KEs.shape,
+                            dtype=float,
+                            data=KEs,
+                            compression='gzip')
+        snap.create_dataset('halo_gravitational_energies',
+                            shape=GEs.shape,
+                            dtype=float,
+                            data=GEs,
+                            compression='gzip')
+        snap.create_dataset('v_max',
+                            shape=vmaxs.shape,
+                            dtype=vmaxs.dtype,
+                            data=vmaxs,
+                            compression='gzip')
+        snap.create_dataset('half_mass_radius',
+                            shape=hmrs.shape,
+                            dtype=hmrs.dtype,
+                            data=hmrs,
+                            compression='gzip')
+        snap.create_dataset('half_mass_velocity_radius',
+                            shape=hmvrs.shape,
+                            dtype=hmvrs.dtype,
+                            data=hmvrs,
+                            compression='gzip')
 
         # Assign the full halo IDs array to the snapshot group
-        snap.create_dataset('particle_halo_IDs', shape=phase_part_haloids.shape, dtype=int, data=phase_part_haloids,
+        snap.create_dataset('particle_halo_IDs',
+                            shape=phase_part_haloids.shape,
+                            dtype=int,
+                            data=phase_part_haloids,
                             compression='gzip')
 
         # Get how many halos were found be real
-        print("Halos found to initially not be real:", halo_ids.size - halo_ids[reals].size, "of", halo_ids.size)
+        print("Halos found to initially not be real:",
+              halo_ids.size - halo_ids[reals].size, "of", halo_ids.size)
 
         if findsubs:
 
@@ -1547,7 +1661,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 subhalo_pids = subhalo_res['pids']
                 host = np.unique(phase_part_haloids[subhalo_pids, 0])
 
-                assert len(host) == 1, "subhalo is contained in multiple hosts, this should not be possible"
+                assert len(host) == 1, \
+                    "subhalo is contained in multiple hosts, " \
+                    "this should not be possible"
 
                 sub_mean_poss[subhalo_id, :] = subhalo_res['mean_halo_pos']
                 sub_mean_vels[subhalo_id, :] = subhalo_res['mean_halo_vel']
@@ -1562,38 +1678,102 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 sub_rms_vrs[subhalo_id] = subhalo_res["rms_vr"]
                 sub_veldisp1ds[subhalo_id, :] = subhalo_res["veldisp1d"]
                 sub_veldisp3ds[subhalo_id] = subhalo_res["veldisp3d"]
+                sub_vmaxs[subhalo_id] = subhalo_res["vmax"]
+                sub_hmrs[subhalo_id] = subhalo_res["hmr"]
+                sub_hmvrs[subhalo_id] = subhalo_res["hmvr"]
 
-                # Create datasets in the current halo's group in the HDF5 file
-                subhalo = sub_root.create_group(str(subhalo_id))  # create halo group
-                subhalo.create_dataset('Halo_Part_IDs', shape=subhalo_pids.shape, dtype=int,
-                                       data=subhalo_pids)  # halo particle ids
+                # Create subhalo group
+                subhalo = sub_root.create_group(str(subhalo_id))
+                subhalo.create_dataset('Halo_Part_IDs',
+                                       shape=subhalo_pids.shape,
+                                       dtype=int,
+                                       data=subhalo_pids)
 
             # Save halo property arrays
-            sub_root.create_dataset('subhalo_IDs', shape=subhalo_ids.shape, dtype=int, data=subhalo_ids,
+            sub_root.create_dataset('subhalo_IDs',
+                                    shape=subhalo_ids.shape,
+                                    dtype=int,
+                                    data=subhalo_ids,
                                     compression='gzip')
-            sub_root.create_dataset('host_IDs', shape=host_ids.shape, dtype=int, data=host_ids, compression='gzip')
-            sub_root.create_dataset('mean_positions', shape=sub_mean_poss.shape, dtype=float, data=sub_mean_poss,
-                                compression='gzip')
-            sub_root.create_dataset('mean_velocities', shape=sub_mean_vels.shape, dtype=float, data=sub_mean_vels,
+            sub_root.create_dataset('host_IDs',
+                                    shape=host_ids.shape, 
+                                    dtype=int, data=host_ids,
                                     compression='gzip')
-            sub_root.create_dataset('rms_spatial_radius', shape=sub_rms_rs.shape, dtype=sub_rms_rs.dtype,
-                                    data=sub_rms_rs, compression='gzip')
-            sub_root.create_dataset('rms_velocity_radius', shape=sub_rms_vrs.shape, dtype=sub_rms_vrs.dtype,
-                                    data=sub_rms_vrs, compression='gzip')
-            sub_root.create_dataset('1D_velocity_dispersion', shape=sub_veldisp1ds.shape, dtype=sub_veldisp1ds.dtype,
-                                    data=sub_veldisp1ds, compression='gzip')
-            sub_root.create_dataset('3D_velocity_dispersion', shape=sub_veldisp3ds.shape, dtype=sub_veldisp3ds.dtype,
-                                    data=sub_veldisp3ds, compression='gzip')
-            sub_root.create_dataset('nparts', shape=subhalo_nparts.shape, dtype=int, data=subhalo_nparts, compression='gzip')
-            sub_root.create_dataset('real_flag', shape=sub_reals.shape, dtype=bool, data=sub_reals, compression='gzip')
-            sub_root.create_dataset('halo_total_energies', shape=subhalo_energies.shape, dtype=float,
-                                    data=subhalo_energies, compression='gzip')
-            sub_root.create_dataset('halo_kinetic_energies', shape=sub_KEs.shape, dtype=float, data=sub_KEs,
+            sub_root.create_dataset('mean_positions',
+                                    shape=sub_mean_poss.shape,
+                                    dtype=float,
+                                    data=sub_mean_poss,
                                     compression='gzip')
-            sub_root.create_dataset('halo_gravitational_energies', shape=sub_GEs.shape, dtype=float, data=sub_GEs,
+            sub_root.create_dataset('mean_velocities',
+                                    shape=sub_mean_vels.shape,
+                                    dtype=float,
+                                    data=sub_mean_vels,
+                                    compression='gzip')
+            sub_root.create_dataset('rms_spatial_radius',
+                                    shape=sub_rms_rs.shape,
+                                    dtype=sub_rms_rs.dtype,
+                                    data=sub_rms_rs,
+                                    compression='gzip')
+            sub_root.create_dataset('rms_velocity_radius',
+                                    shape=sub_rms_vrs.shape,
+                                    dtype=sub_rms_vrs.dtype,
+                                    data=sub_rms_vrs,
+                                    compression='gzip')
+            sub_root.create_dataset('1D_velocity_dispersion',
+                                    shape=sub_veldisp1ds.shape,
+                                    dtype=sub_veldisp1ds.dtype,
+                                    data=sub_veldisp1ds,
+                                    compression='gzip')
+            sub_root.create_dataset('3D_velocity_dispersion',
+                                    shape=sub_veldisp3ds.shape,
+                                    dtype=sub_veldisp3ds.dtype,
+                                    data=sub_veldisp3ds,
+                                    compression='gzip')
+            sub_root.create_dataset('nparts',
+                                    shape=subhalo_nparts.shape,
+                                    dtype=int,
+                                    data=subhalo_nparts,
+                                    compression='gzip')
+            sub_root.create_dataset('real_flag',
+                                    shape=sub_reals.shape,
+                                    dtype=bool,
+                                    data=sub_reals,
+                                    compression='gzip')
+            sub_root.create_dataset('halo_total_energies',
+                                    shape=subhalo_energies.shape,
+                                    dtype=float,
+                                    data=subhalo_energies,
+                                    compression='gzip')
+            sub_root.create_dataset('halo_kinetic_energies',
+                                    shape=sub_KEs.shape,
+                                    dtype=float,
+                                    data=sub_KEs,
+                                    compression='gzip')
+            sub_root.create_dataset('halo_gravitational_energies',
+                                    shape=sub_GEs.shape,
+                                    dtype=float,
+                                    data=sub_GEs,
+                                    compression='gzip')
+            sub_root.create_dataset('v_max',
+                                    shape=sub_vmaxs.shape,
+                                    dtype=sub_vmaxs.dtype,
+                                    data=sub_vmaxs,
+                                    compression='gzip')
+            sub_root.create_dataset('half_mass_radius',
+                                    shape=sub_hmrs.shape,
+                                    dtype=sub_hmrs.dtype,
+                                    data=sub_hmrs,
+                                    compression='gzip')
+            sub_root.create_dataset('half_mass_velocity_radius',
+                                    shape=sub_hmvrs.shape,
+                                    dtype=sub_hmvrs.dtype,
+                                    data=sub_hmvrs,
                                     compression='gzip')
 
-        snap.create_dataset('occupancy', shape=nsubhalos.shape, dtype=nsubhalos.dtype, data=nsubhalos,
+        snap.create_dataset('occupancy',
+                            shape=nsubhalos.shape,
+                            dtype=nsubhalos.dtype,
+                            data=nsubhalos,
                             compression='gzip')
 
         snap.close()
