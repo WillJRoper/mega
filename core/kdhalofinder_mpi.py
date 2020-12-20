@@ -10,7 +10,6 @@ from scipy.spatial import cKDTree
 mpi4py.rc.recv_mprobe = False
 import astropy.constants as const
 import astropy.units as u
-from astropy.cosmology import Planck13 as cosmo
 import time
 import h5py
 import sys
@@ -297,7 +296,7 @@ def find_subhalos(halo_pos, sub_linkl):
     return part_subhaloids, assignedsub_parts
 
 
-def find_phase_space_halos(halo_phases, z):
+def find_phase_space_halos(halo_phases, z, cosmo):
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise arrays and dictionaries for storing halo data
@@ -445,7 +444,7 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
 
 def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                         vlinkl_halo_indp, linkl, pmass, ini_vlcoeff,
-                        decrement, redshift, G, h, soft, min_vlcoeff):
+                        decrement, redshift, G, h, soft, min_vlcoeff, cosmo):
     # Initialise dicitonaries to store results
     results = {}
 
@@ -495,7 +494,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
 
         # Query these particles in phase space to find distinct bound halos
         part_haloids, assigned_parts = find_phase_space_halos(halo_phases,
-                                                              redshift)
+                                                              redshift,
+                                                              cosmo)
 
         not_real_pids = {}
 
@@ -702,7 +702,7 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                   ncells, profile, profile_path):
+                   ncells, profile, profile_path, cosmo):
     """ Run the halo finder, sort the output results, find subhalos and
         save to a HDF5 file.
 
@@ -1091,7 +1091,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                  vlinkl_indp, linkl, pmass,
                                                  ini_vlcoeff, decrement,
                                                  redshift, G, h, soft,
-                                                 min_vlcoeff)
+                                                 min_vlcoeff, cosmo)
 
                     # Save results
                     for res in result:
@@ -1195,7 +1195,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                          decrement,
                                                          redshift,
                                                          G, h, soft,
-                                                         min_vlcoeff)
+                                                         min_vlcoeff,
+                                                         cosmo)
 
                             # Save results
                             while len(result) > 0:
@@ -1265,7 +1266,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 result = get_real_host_halos(thisTask, pos, vel, boxsize,
                                              vlinkl_indp, linkl, pmass,
                                              ini_vlcoeff, decrement, redshift,
-                                             G, h, soft, min_vlcoeff)
+                                             G, h, soft, min_vlcoeff, cosmo)
 
                 # Save results
                 for res in result:
@@ -1365,7 +1366,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                      sub_linkl, pmass,
                                                      ini_vlcoeff, decrement,
                                                      redshift, G, h, soft,
-                                                     min_vlcoeff)
+                                                     min_vlcoeff, cosmo)
 
                         # Save results
                         while len(result) > 0:

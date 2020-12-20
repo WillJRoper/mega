@@ -17,8 +17,9 @@ def read_param(paramfile):
     inputs = parsed_yaml_file['inputs']
     flags = parsed_yaml_file['flags']
     params = parsed_yaml_file['parameters']
+    cosmology = parsed_yaml_file['cosmology']
 
-    return inputs, flags, params
+    return inputs, flags, params, cosmology
 
 
 def enum(*sequential, **named):
