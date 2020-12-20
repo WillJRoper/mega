@@ -43,7 +43,7 @@ def main_kdmpi(snap):
                          min_vlcoeff=params['min_alpha_v'], decrement=params['decrement'], verbose=flags['verbose'],
                          findsubs=flags['subs'], ncells=params['N_cells'], profile=flags['profile'],
                          profile_path=inputs["profilingPath"],
-                         cosmology=cosmo)
+                         cosmo=cosmo)
 
 
 def main_mg(snap, density_rank):
