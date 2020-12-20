@@ -55,6 +55,8 @@ for g in graphs:
 
     tick_labels = np.arange(len(set(snapshots)))
 
+    offset = mean_pos[-1, 0]
+
     for i, nprog, ndesc, pstrt, dstrt, npart, z, snap, mp, r in zip(halo_ids,
                                                                     nprogs,
                                                                     ndescs,
@@ -82,10 +84,8 @@ for g in graphs:
 
         # pos[i] = (snap_count, int(snap))
 
-        pos[i] = (mp[0], int(snap) * y_correction)
+        pos[i] = ((mp[0] - offset) * 6, int(snap) * y_correction)
         posz[i] = (mp[0], z)
-
-        print(mp)
 
         nodes.append(i)
 
@@ -108,10 +108,10 @@ for g in graphs:
     G.add_nodes_from(nodes)
     G.add_edges_from(list(edges))
 
-    fig = plt.figure(figsize=(20, 20))
+    fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
 
-    im = nx.draw_networkx_nodes(G, pos, node_size=10,
+    im = nx.draw_networkx_nodes(G, pos, node_size=0.1,
                                 cmap=plt.get_cmap('plasma'), ax=ax,
                                 node_color=sizes)
     nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color='k', arrows=True,
@@ -121,13 +121,12 @@ for g in graphs:
 
     cmap = plt.get_cmap('plasma')
 
-    for i in pos:
-
-        circle = plt.Circle(pos[i], radius=rs[i], alpha=.9,
-                            facecolor=None,
-                            edgecolor=cmap(norm(sizes[i])))
-
-        ax.add_patch(circle)
+    # for i, c in zip(pos, cmap(norm(sizes))):
+    #
+    #     circle = plt.Circle(pos[i], radius=rs[i], alpha=0.9,
+    #                         color=c)
+    #
+    #     ax.add_patch(circle)
 
     cbar = fig.colorbar(im)
 
@@ -135,18 +134,18 @@ for g in graphs:
     ax.set_ylabel("$S$")
     cbar.set_label("$\log_{10}(M)$")
 
-    ax.set_yticklabels(tick_labels)
     ax.set_aspect("equal")
 
     ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
-    plt.savefig("visualise/Graphs/Graph_" + g + "snap.png", bbox_inches="tight")
+    plt.savefig("visualise/Graphs/Graph_" + g + "snap.png",
+                bbox_inches="tight", dpi=300)
 
     plt.close()
 
     fig = plt.figure(figsize=(15, 10))
     ax = fig.add_subplot(111)
 
-    im = nx.draw_networkx_nodes(G, posz, node_size=10, cmap=plt.get_cmap('plasma'), ax=ax, node_color=sizes)
+    im = nx.draw_networkx_nodes(G, posz, node_size=1, cmap=plt.get_cmap('plasma'), ax=ax, node_color=sizes)
     nx.draw_networkx_edges(G, posz, edgelist=edges, edge_color='k', arrows=True, ax=ax)
 
     cbar = fig.colorbar(im)
@@ -156,6 +155,7 @@ for g in graphs:
     cbar.set_label("$\log_{10}(M)$")
 
     ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
-    plt.savefig("visualise/Graphs/Graph_" + g + "z.png", bbox_inches="tight")
+    plt.savefig("visualise/Graphs/Graph_" + g + "z.png",
+                bbox_inches="tight", dpi=300)
 
     plt.close()

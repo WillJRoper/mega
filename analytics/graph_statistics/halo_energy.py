@@ -123,14 +123,17 @@ def energyplot():
     total_GE = np.array(total_GE)
     mass = np.array(mass)
 
+    ratio = total_KE / total_GE
+    print("There are", ratio[ratio > 1].size, "unbound halos")
+
     # Set up plot
     fig = plt.figure(figsize=(8, 6))
     axtwin = fig.add_subplot(111)
     ax = axtwin.twiny()
 
     # Plot data
-    axtwin.scatter(mass, total_KE / total_GE, facecolors="none", edgecolors="none")
-    cbar = ax.hexbin(mass / pmass, total_KE / total_GE, gridsize=50, xscale="log", yscale="log", mincnt=1,
+    axtwin.scatter(mass, ratio, facecolors="none", edgecolors="none")
+    cbar = ax.hexbin(mass / pmass, ratio, gridsize=50, xscale="log", yscale="log", mincnt=1,
                      norm=LogNorm(), linewidths=0.2)
     ax.axhline(1.0, linestyle="--", color="k", label="$E=0$")
     ax.axhline(0.5, linestyle="--", color="g", label="$2KE=|GE|$")
@@ -139,7 +142,7 @@ def energyplot():
     axtwin.grid(True)
 
     # Label axes
-    ax.set_ylabel(r"$\mathrm{KE}/|\mathrm{GE}|$")
+    axtwin.set_ylabel(r"$\mathrm{KE}/|\mathrm{GE}|$")
     axtwin.set_xlabel(r"$M_{h} / M_{\odot}$")
     ax.set_xlabel(r"$N_{p}$")
 

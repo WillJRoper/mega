@@ -1696,7 +1696,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                     data=subhalo_ids,
                                     compression='gzip')
             sub_root.create_dataset('host_IDs',
-                                    shape=host_ids.shape, 
+                                    shape=host_ids.shape,
                                     dtype=int, data=host_ids,
                                     compression='gzip')
             sub_root.create_dataset('mean_positions',
@@ -1787,5 +1787,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     if profile:
         prof_d["END"] = time.time()
 
-        with open(profile_path + "Halo_" + str(rank) + '_' + snapshot + '.pck', 'wb') as pfile:
+        with open(profile_path + "Halo_" + str(rank) + '_'
+                  + snapshot + '.pck', 'wb') as pfile:
             pickle.dump(prof_d, pfile)
