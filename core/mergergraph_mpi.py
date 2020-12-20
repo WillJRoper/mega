@@ -174,9 +174,9 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
             reals = hdf_current['Subhalos']['real_flag'][...]
 
         hdf_current.close()  # close the root group
-        old_reals = np.copy(reals)
+
         # Get only the real halo ids
-        halo_ids = halo_ids[reals]
+        real_halo_ids = halo_ids[reals]
 
         if verbose:
             print("Master data reading took", time.time() - read_start, "seconds")
@@ -190,7 +190,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         results = {}
 
         # Master process executes code below
-        tasks = set(halo_ids)
+        tasks = set(real_halo_ids)
         num_workers = size - 1
         closed_workers = 0
         while closed_workers < num_workers:
@@ -359,11 +359,8 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         notreals = 0
 
         # Set up arrays to store host results
-        if len(halo_ids) != 0:
-            nhalo = np.max(halo_ids) + 1
-        else:
-            nhalo = 0
-        index_haloids = np.arange(nhalo, dtype=int)
+        nhalo = halo_ids.size
+        index_haloids = halo_ids.copy()
         halo_nparts = np.full(nhalo, -2, dtype=int)
         nprogs = np.full(nhalo, -2, dtype=int)
         ndescs = np.full(nhalo, -2, dtype=int)
@@ -540,7 +537,6 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         print(np.unique(nprogs, return_counts=True))
         print(np.unique(ndescs, return_counts=True))
         print("Not real halos", notreals, 'of', halo_ids.size)
-        print("Reals arrays are equal:", np.unique(old_reals == reals))
         print("Descendant reals arrays are equal:", np.unique(old_desc_reals == desc_reals))
 
     if profile:

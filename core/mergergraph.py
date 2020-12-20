@@ -513,7 +513,7 @@ for snap in range(0, 62):
 if __name__ == '__main__':
     start = time.time()
     for snap in snaplist:
-        if int(snap) > 24:
+        if int(snap) > 30:
             continue
         print(snap)
         main(snap)

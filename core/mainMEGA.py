@@ -3,11 +3,11 @@ import kdhalofinder as kd
 import kdhalofinder_mpi as kdmpi
 import mergergraph as mg
 import mergergraph_mpi as mgmpi
+import build_graph_mpi as bgmpi
 # import mergertrees as mt
 # import lumberjack as ld
 import time
 import sys
-import multiprocessing as mp
 import utilities
 
 
@@ -22,12 +22,6 @@ snap_ind = int(sys.argv[2])
 
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
-
-# Print out the snapshots to ensure they are correct
-if flags['verbose']:
-    print("Read out snapshots:")
-    for snap in snaplist:
-        print(snap)
 
 
 def main_kd(snap):
@@ -104,46 +98,6 @@ if flags['useserial']:
 
     print('Total: ', time.time() - walltime_start)
 
-elif flags['usemultiprocessing']:
-
-    # ===================== Run The Halo Finder =====================
-    if flags['halo']:
-        pool = mp.Pool(int(mp.cpu_count() - 6))
-        pool.map(main_kd, snaplist)
-
-        pool.close()
-        pool.join()
-
-    # ===================== Find Direct Progenitors and Descendents =====================
-    if flags['graphdirect']:
-        for snap in snaplist:
-            main_mg(snap, 0)
-    if flags['subgraphdirect']:
-        for snap in snaplist:
-            main_mg(snap, 1)
-
-    # ===================== Build The Graphs =====================
-    if flags['graph']:
-        mg.get_graph_members(treepath=inputs['directgraphSavePath'] + '/Mgraph_',
-                             graphpath=inputs['graphSavePath'] +'/FullMgraphs',
-                             halopath=inputs['haloSavePath'] + '/halos_')
-
-    # ===================== Split Graphs Into Trees =====================
-    if flags['treehalos']:
-        ld.mainLumberjack(halopath=inputs['haloSavePath'], newhalopath=inputs['treehaloSavePath'])
-
-    # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
-    if flags['treedirect']:
-        for snap in snaplist:
-            main_mt(snap)
-        mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
-
-    # ===================== Build The Trees =====================
-    if flags['tree']:
-        mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
-                             graphpath=inputs['treeSavePath'] + '/FullMtrees',
-                             halopath=inputs['treehaloSavePath'] + '/halos_')
-
 elif flags['usempi']:
 
     import mpi4py
@@ -183,6 +137,7 @@ elif flags['usempi']:
     comm.barrier()
 
     if flags['subgraphdirect']:
+
         snap = snaplist[snap_ind]
 
         if snap_ind - 1 < 0:
@@ -190,7 +145,7 @@ elif flags['usempi']:
         else:
             prog_snap = snaplist[snap_ind - 1]
 
-        if snap_ind + 1 > len(snaplist):
+        if snap_ind + 1 >= len(snaplist):
             desc_snap = None
         else:
             desc_snap = snaplist[snap_ind + 1]
@@ -200,3 +155,9 @@ elif flags['usempi']:
     if rank == 0:
         print('Total: ', time.time() - walltime_start)
 
+
+    if flags["graph"]:
+
+        bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'], graphpath=inputs['graphSavePath'],
+                                     snaplist=snaplist, verbose=flags['verbose'],
+                                     halopath=inputs['haloSavePath'])
