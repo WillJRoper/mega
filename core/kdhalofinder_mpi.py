@@ -312,7 +312,7 @@ def find_phase_space_halos(halo_phases, z, cosmo):
     ihaloid = -1
 
     cent = np.mean(halo_phases[:, :3], axis=0)
-    halo_phases[:, 3:] += cosmo.H(z) * np.linalg.norm(
+    halo_phases[:, 3:] += cosmo.H(z).value * np.linalg.norm(
         halo_phases[:, :3] - cent, axis=1)
 
     # Initialise the halo kd tree in 6D phase space
