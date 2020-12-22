@@ -1,28 +1,26 @@
-from scipy.spatial import cKDTree
-from scipy.sparse import lil_matrix
-from collections import defaultdict
 # from guppy import hpy; hp = hpy()
-import itertools
 import pickle
-import numpy as np
+from collections import defaultdict
+
 import mpi4py
+import numpy as np
 from mpi4py import MPI
+from scipy.spatial import cKDTree
+
 mpi4py.rc.recv_mprobe = False
 import astropy.constants as const
 import astropy.units as u
 import time
 import h5py
-import gc
 import sys
 import utilities
 import halo_properties as hprop
 
-
 # Initializations and preliminaries
-comm = MPI.COMM_WORLD   # get MPI communicator object
-size = comm.size        # total number of processes
-rank = comm.rank        # rank of this process
-status = MPI.Status()   # get MPI status object
+comm = MPI.COMM_WORLD  # get MPI communicator object
+size = comm.size  # total number of processes
+rank = comm.rank  # rank of this process
+status = MPI.Status()  # get MPI status object
 
 
 def find_halos(tree, pos, linkl, npart):
@@ -45,11 +43,14 @@ def find_halos(tree, pos, linkl, npart):
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise the arrays and dictionaries for storing halo data
-    part_haloids = np.full(npart, -1, dtype=np.int32)  # halo ID containing each particle
-    assigned_parts = defaultdict(set)  # dictionary to store the particles in a particular halo
+    part_haloids = np.full(npart, -1,
+                           dtype=np.int32)  # halo ID containing each particle
+    assigned_parts = defaultdict(
+        set)  # dictionary to store the particles in a particular halo
     # A dictionary where each key is an initial halo ID and the item is the halo IDs it has been linked with
     linked_halos_dict = defaultdict(set)
-    final_halo_ids = np.full(npart, -1, dtype=np.int32)  # final halo ID of linked halos (index is initial halo ID)
+    final_halo_ids = np.full(npart, -1,
+                             dtype=np.int32)  # final halo ID of linked halos (index is initial halo ID)
 
     # Initialise the halo ID counter (IDs start at 0)
     ihaloid = -1
@@ -72,7 +73,8 @@ def find_halos(tree, pos, linkl, npart):
         assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
 
         # Find only the particles not already in a halo
-        new_parts = query_part_inds[np.where(part_haloids[query_part_inds] == -1)]
+        new_parts = query_part_inds[
+            np.where(part_haloids[query_part_inds] == -1)]
 
         # If only one particle is returned by the query and it is new it is a 'single particle halo'
         if new_parts.size == query_part_inds.size == 1:
@@ -121,13 +123,15 @@ def find_halos(tree, pos, linkl, npart):
                 # Get all the linked halos from dictionary so as to not miss out any halos IDs that are linked
                 # but not returned by this particular query
                 linked_halos_set = set()  # initialise linked halo set
-                linked_halos = linked_halos_set.union(*[linked_halos_dict.get(halo) for halo in uni_cont_halos])
+                linked_halos = linked_halos_set.union(
+                    *[linked_halos_dict.get(halo) for halo in uni_cont_halos])
 
             # Find the minimum halo ID to make the final halo ID
             final_ID = min(linked_halos)
 
             # Assign the linked halos to all the entries in the linked halos dictionary
-            linked_halos_dict.update(dict.fromkeys(list(linked_halos), linked_halos))
+            linked_halos_dict.update(
+                dict.fromkeys(list(linked_halos), linked_halos))
 
             # Assign the final halo ID array entries
             final_halo_ids[list(linked_halos)] = final_ID
@@ -172,8 +176,10 @@ def find_subhalos(halo_pos, sub_linkl):
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise arrays and dictionaries for storing subhalo data
-    part_subhaloids = np.full(halo_pos.shape[0], -1, dtype=int)  # subhalo ID of the halo each particle is in
-    assignedsub_parts = defaultdict(set)  # Dictionary to store the particles in a particular subhalo
+    part_subhaloids = np.full(halo_pos.shape[0], -1,
+                              dtype=int)  # subhalo ID of the halo each particle is in
+    assignedsub_parts = defaultdict(
+        set)  # Dictionary to store the particles in a particular subhalo
     # A dictionary where each key is an initial subhalo ID and the item is the subhalo IDs it has been linked with
     linked_subhalos_dict = defaultdict(set)
     # Final subhalo ID of linked halos (index is initial subhalo ID)
@@ -185,7 +191,8 @@ def find_subhalos(halo_pos, sub_linkl):
     npart = halo_pos.shape[0]
 
     # Build the halo kd tree
-    tree = cKDTree(halo_pos, leafsize=32, compact_nodes=True, balanced_tree=True)
+    tree = cKDTree(halo_pos, leafsize=32, compact_nodes=True,
+                   balanced_tree=True)
 
     query = tree.query_ball_point(halo_pos, r=sub_linkl)
 
@@ -199,7 +206,8 @@ def find_subhalos(halo_pos, sub_linkl):
         assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
 
         # Find only the particles not already in a halo
-        new_parts = query_part_inds[np.where(part_subhaloids[query_part_inds] == -1)]
+        new_parts = query_part_inds[
+            np.where(part_subhaloids[query_part_inds] == -1)]
 
         # If only one particle is returned by the query and it is new it is a 'single particle subhalo'
         if new_parts.size == query_part_inds.size == 1:
@@ -235,7 +243,8 @@ def find_subhalos(halo_pos, sub_linkl):
             # assert any(uni_cont_subhalos != -2), 'Single particle halos should never be found'
 
             # Remove any unassigned subhalos
-            uni_cont_subhalos = uni_cont_subhalos[np.where(uni_cont_subhalos != -1)]
+            uni_cont_subhalos = uni_cont_subhalos[
+                np.where(uni_cont_subhalos != -1)]
 
             # If there is only one subhalo ID returned avoid the slower code to combine IDs
             if uni_cont_subhalos.size == 1:
@@ -248,14 +257,16 @@ def find_subhalos(halo_pos, sub_linkl):
                 # Get all linked subhalos from the dictionary so as to not miss out any subhalos IDs that are linked
                 # but not returned by this particular query
                 linked_subhalos_set = set()  # initialise linked subhalo set
-                linked_subhalos = linked_subhalos_set.union(*[linked_subhalos_dict.get(subhalo)
-                                                              for subhalo in uni_cont_subhalos])
+                linked_subhalos = linked_subhalos_set.union(
+                    *[linked_subhalos_dict.get(subhalo)
+                      for subhalo in uni_cont_subhalos])
 
             # Find the minimum subhalo ID to make the final subhalo ID
             final_ID = min(linked_subhalos)
 
             # Assign the linked subhalos to all the entries in the linked subhalos dict
-            linked_subhalos_dict.update(dict.fromkeys(list(linked_subhalos), linked_subhalos))
+            linked_subhalos_dict.update(
+                dict.fromkeys(list(linked_subhalos), linked_subhalos))
 
             # Assign the final subhalo array
             final_subhalo_ids[list(linked_subhalos)] = final_ID
@@ -286,11 +297,11 @@ def find_subhalos(halo_pos, sub_linkl):
 
 
 def find_phase_space_halos(halo_phases):
-
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise arrays and dictionaries for storing halo data
-    phase_part_haloids = np.full(halo_phases.shape[0], -1, dtype=int)  # halo ID of the halo each particle is in
+    phase_part_haloids = np.full(halo_phases.shape[0], -1,
+                                 dtype=int)  # halo ID of the halo each particle is in
     phase_assigned_parts = {}  # Dictionary to store the particles in a particular halo
     # A dictionary where each key is an initial subhalo ID and the item is the subhalo IDs it has been linked with
     phase_linked_halos_dict = {}
@@ -301,7 +312,8 @@ def find_phase_space_halos(halo_phases):
     ihaloid = -1
 
     # Initialise the halo kd tree in 6D phase space
-    halo_tree = cKDTree(halo_phases, leafsize=16, compact_nodes=True, balanced_tree=True)
+    halo_tree = cKDTree(halo_phases, leafsize=16, compact_nodes=True,
+                        balanced_tree=True)
 
     query = halo_tree.query_ball_point(halo_phases, r=np.sqrt(2))
 
@@ -312,7 +324,6 @@ def find_phase_space_halos(halo_phases):
 
         # If only one particle is returned by the query and it is new it is a 'single particle halo'
         if query_part_inds.size == 1:
-
             # Assign the 'single particle halo' halo ID to the particle
             phase_part_haloids[query_part_inds] = -2
 
@@ -323,7 +334,8 @@ def find_phase_space_halos(halo_phases):
         #     query_part_inds = query_part_inds[np.where(this_halo_ids == this_halo_ids[0])]
 
         # Find only the particles not already in a halo
-        new_parts = query_part_inds[np.where(phase_part_haloids[query_part_inds] < 0)]
+        new_parts = query_part_inds[
+            np.where(phase_part_haloids[query_part_inds] < 0)]
 
         # If all particles are new increment the halo ID and assign a new halo
         if new_parts.size == query_part_inds.size:
@@ -366,14 +378,16 @@ def find_phase_space_halos(halo_phases):
                 # Get all the linked halos from dictionary so as to not miss out any halos IDs that are linked
                 # but not returned by this particular query
                 linked_halos_set = set()  # initialise linked halo set
-                linked_halos = linked_halos_set.union(*[phase_linked_halos_dict.get(halo)
-                                                        for halo in uni_cont_halos])
+                linked_halos = linked_halos_set.union(
+                    *[phase_linked_halos_dict.get(halo)
+                      for halo in uni_cont_halos])
 
             # Find the minimum halo ID to make the final halo ID
             final_ID = min(linked_halos)
 
             # Assign the linked halos to all the entries in the linked halos dictionary
-            phase_linked_halos_dict.update(dict.fromkeys(list(linked_halos), linked_halos))
+            phase_linked_halos_dict.update(
+                dict.fromkeys(list(linked_halos), linked_halos))
 
             # Assign the final halo ID array entries
             final_phasehalo_ids[list(linked_halos)] = final_ID
@@ -407,11 +421,11 @@ halo_energy_calc = utilities.halo_energy_calc_exact
 
 
 def spatial_node_task(thisTask, pos, tree, linkl, npart):
-
     # =============== Run The Halo Finder And Reduce The Output ===============
 
     # Run the halo finder for this snapshot at the host linking length and get the spatial catalog
-    task_part_haloids, task_assigned_parts = find_halos(tree, pos, linkl, npart)
+    task_part_haloids, task_assigned_parts = find_halos(tree, pos, linkl,
+                                                        npart)
 
     # Get the positions
     halo_pids = {}
@@ -426,8 +440,7 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
 
 def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                         vlinkl_halo_indp, linkl, pmass, ini_vlcoeff,
-                        decrement, redshift, G, h, soft, min_vlcoeff):
-
+                        decrement, redshift, G, h, soft, min_vlcoeff, cosmo):
     # Initialise dicitonaries to store results
     results = {}
 
@@ -470,6 +483,13 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
         # Define the phase space linking length
         vlinkl = new_vlcoeff * vlinkl_halo_indp \
                  * pmass ** (1 / 3) * halo_npart ** (1 / 3)
+
+        # Add the hubble flow to the velocities
+        # *** NOTE: this includes a gadget factor of a^-1/2 ***
+        ini_cent = np.mean(halo_poss, axis=0)
+        sep = cosmo.H(redshift).value * (halo_poss - ini_cent) * (
+                    1 + redshift) ** -0.5
+        halo_vels += sep
 
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((halo_poss / linkl,
@@ -670,7 +690,6 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
 
 
 def get_sub_halos(halo_pids, halo_pos, sub_linkl):
-
     # Do a spatial search for subhalos
     part_subhaloids, assignedsub_parts = find_subhalos(halo_pos, sub_linkl)
 
@@ -684,7 +703,7 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                   ncells, profile, profile_path):
+                   ncells, profile, profile_path, cosmo):
     """ Run the halo finder, sort the output results, find subhalos and
         save to a HDF5 file.
 
@@ -1073,7 +1092,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                  vlinkl_indp, linkl, pmass,
                                                  ini_vlcoeff, decrement,
                                                  redshift, G, h, soft,
-                                                 min_vlcoeff)
+                                                 min_vlcoeff, cosmo)
 
                     # Save results
                     for res in result:
@@ -1133,7 +1152,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             task_end = time.time()
 
                             if profile:
-                                prof_d["Sub-Spatial"]["Start"].append(task_start)
+                                prof_d["Sub-Spatial"]["Start"].append(
+                                    task_start)
                                 prof_d["Sub-Spatial"]["End"].append(task_end)
 
                         # Loop over spatial subhalos
@@ -1176,7 +1196,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                          decrement,
                                                          redshift,
                                                          G, h, soft,
-                                                         min_vlcoeff)
+                                                         min_vlcoeff,
+                                                         cosmo)
 
                             # Save results
                             while len(result) > 0:
@@ -1246,7 +1267,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 result = get_real_host_halos(thisTask, pos, vel, boxsize,
                                              vlinkl_indp, linkl, pmass,
                                              ini_vlcoeff, decrement, redshift,
-                                             G, h, soft, min_vlcoeff)
+                                             G, h, soft, min_vlcoeff, cosmo)
 
                 # Save results
                 for res in result:
@@ -1346,7 +1367,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                      sub_linkl, pmass,
                                                      ini_vlcoeff, decrement,
                                                      redshift, G, h, soft,
-                                                     min_vlcoeff)
+                                                     min_vlcoeff, cosmo)
 
                         # Save results
                         while len(result) > 0:
@@ -1377,9 +1398,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
     if rank == 0:
 
-        print("============================ Halos computed per rank ============================")
+        print(
+            "============================ Halos computed per rank ============================")
         print([len(res) for res in collected_results])
-        print("============================ Subhalos computed per rank ============================")
+        print(
+            "============================ Subhalos computed per rank ============================")
         print([len(res) for res in sub_collected_results])
 
         newPhaseID = 0
@@ -1401,14 +1424,16 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         sub_results_dict = {}
         for subhalo_task in sub_collected_results:
             for subhalo in subhalo_task:
-                sub_results_dict[(subhalo, newPhaseSubID)] = subhalo_task[subhalo]
+                sub_results_dict[(subhalo, newPhaseSubID)] = subhalo_task[
+                    subhalo]
                 pids = subhalo_task[subhalo]['pids']
                 subhaloID_dict[(subhalo, newPhaseSubID)] = newPhaseSubID
                 phase_part_haloids[pids, 1] = newPhaseSubID
                 newPhaseSubID += 1
 
         if verbose:
-            print("Combining the results took", time.time() - collect_start, "seconds")
+            print("Combining the results took", time.time() - collect_start,
+                  "seconds")
             print("Results memory size", sys.getsizeof(results_dict), "bytes")
             print("This Rank:", rank)
             # print(hp.heap())
@@ -1421,41 +1446,59 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
         # Find the halos with 10 or more particles by finding the unique IDs in the particle
         # halo ids array and finding those IDs that are assigned to 10 or more particles
-        unique, counts = np.unique(phase_part_haloids[:, 0], return_counts=True)
+        unique, counts = np.unique(phase_part_haloids[:, 0],
+                                   return_counts=True)
         unique_haloids = unique[np.where(counts >= 10)]
 
         # Remove the null -2 value for single particle halos
         unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
 
         # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-        print("=========================== Phase halos ===========================")
+        print(
+            "=========================== Phase halos ===========================")
         print(unique_haloids.size, 'halos found with 10 or more particles')
-        print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
-        print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
-        print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
-        print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
-        print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
-        print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
-        print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
+        print(unique[np.where(counts >= 15)].size - 1,
+              'halos found with 15 or more particles')
+        print(unique[np.where(counts >= 20)].size - 1,
+              'halos found with 20 or more particles')
+        print(unique[np.where(counts >= 50)].size - 1,
+              'halos found with 50 or more particles')
+        print(unique[np.where(counts >= 100)].size - 1,
+              'halos found with 100 or more particles')
+        print(unique[np.where(counts >= 500)].size - 1,
+              'halos found with 500 or more particles')
+        print(unique[np.where(counts >= 1000)].size - 1,
+              'halos found with 1000 or more particles')
+        print(unique[np.where(counts >= 10000)].size - 1,
+              'halos found with 10000 or more particles')
 
         # Find the halos with 10 or more particles by finding the unique IDs in the particle
         # halo ids array and finding those IDs that are assigned to 10 or more particles
-        unique, counts = np.unique(phase_part_haloids[:, 1], return_counts=True)
+        unique, counts = np.unique(phase_part_haloids[:, 1],
+                                   return_counts=True)
         unique_haloids = unique[np.where(counts >= 10)]
 
         # Remove the null -2 value for single particle halos
         unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
 
         # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-        print("=========================== Phase subhalos ===========================")
+        print(
+            "=========================== Phase subhalos ===========================")
         print(unique_haloids.size, 'halos found with 10 or more particles')
-        print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
-        print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
-        print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
-        print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
-        print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
-        print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
-        print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
+        print(unique[np.where(counts >= 15)].size - 1,
+              'halos found with 15 or more particles')
+        print(unique[np.where(counts >= 20)].size - 1,
+              'halos found with 20 or more particles')
+        print(unique[np.where(counts >= 50)].size - 1,
+              'halos found with 50 or more particles')
+        print(unique[np.where(counts >= 100)].size - 1,
+              'halos found with 100 or more particles')
+        print(unique[np.where(counts >= 500)].size - 1,
+              'halos found with 500 or more particles')
+        print(unique[np.where(counts >= 1000)].size - 1,
+              'halos found with 1000 or more particles')
+        print(unique[np.where(counts >= 10000)].size - 1,
+              'halos found with 10000 or more particles')
 
         # ============================= Write out data =============================
 
@@ -1520,7 +1563,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'w')
 
         # Assign simulation attributes to the root of the z=0 snapshot
-        snap.attrs['snap_nPart'] = npart  # number of particles in the simulation
+        snap.attrs[
+            'snap_nPart'] = npart  # number of particles in the simulation
         snap.attrs['boxsize'] = boxsize  # box length along each axis
         snap.attrs['part_mass'] = pmass  # particle mass
         snap.attrs['h'] = h  # 'little h' (hubble constant parametrisation)
@@ -1534,7 +1578,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         halo_ids = np.arange(newPhaseID, dtype=int)
 
         for res in list(results_dict.keys()):
-
             halo_res = results_dict.pop(res)
             halo_id = haloID_dict[res]
             halo_pids = halo_res['pids']
@@ -1556,7 +1599,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
             # Create datasets in the current halo's group in the HDF5 file
             halo = snap.create_group(str(halo_id))  # create halo group
-            halo.create_dataset('Halo_Part_IDs', shape=halo_pids.shape, dtype=int,
+            halo.create_dataset('Halo_Part_IDs', shape=halo_pids.shape,
+                                dtype=int,
                                 data=halo_pids)  # halo particle ids
 
         # Save halo property arrays
@@ -1655,7 +1699,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             sub_root = snap.create_group('Subhalos')
 
             for res in list(sub_results_dict.keys()):
-
                 subhalo_res = sub_results_dict.pop(res)
                 subhalo_id = subhaloID_dict[res]
                 subhalo_pids = subhalo_res['pids']

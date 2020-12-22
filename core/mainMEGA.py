@@ -4,6 +4,7 @@ import kdhalofinder_mpi as kdmpi
 import mergergraph as mg
 import mergergraph_mpi as mgmpi
 import build_graph_mpi as bgmpi
+from astropy.cosmology import FlatLambdaCDM
 # import mergertrees as mt
 # import lumberjack as ld
 import time
@@ -16,12 +17,16 @@ walltime_start = time.time()
 
 # Read the parameter file
 paramfile = sys.argv[1]
-inputs, flags, params = utilities.read_param(paramfile)
+inputs, flags, params, cosmology = utilities.read_param(paramfile)
 
 snap_ind = int(sys.argv[2])
 
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
+
+# Initialise the astropy cosmology object
+cosmo = FlatLambdaCDM(H0=cosmology["H0"], Om0=cosmology["Om0"],
+                      Tcmb0=cosmology["Tcmb0"], Ob0=cosmology["Ob0"])
 
 
 def main_kd(snap):
@@ -37,7 +42,8 @@ def main_kdmpi(snap):
                          savepath=inputs['haloSavePath'], ini_vlcoeff=params['ini_alpha_v'],
                          min_vlcoeff=params['min_alpha_v'], decrement=params['decrement'], verbose=flags['verbose'],
                          findsubs=flags['subs'], ncells=params['N_cells'], profile=flags['profile'],
-                         profile_path=inputs["profilingPath"])
+                         profile_path=inputs["profilingPath"],
+                         cosmo=cosmo)
 
 
 def main_mg(snap, density_rank):
