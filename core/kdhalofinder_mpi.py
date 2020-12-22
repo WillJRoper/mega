@@ -296,7 +296,7 @@ def find_subhalos(halo_pos, sub_linkl):
     return part_subhaloids, assignedsub_parts
 
 
-def find_phase_space_halos(halo_phases, z, cosmo):
+def find_phase_space_halos(halo_phases):
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise arrays and dictionaries for storing halo data
@@ -310,13 +310,6 @@ def find_phase_space_halos(halo_phases, z, cosmo):
 
     # Initialise subhalo ID counter (IDs start at 0)
     ihaloid = -1
-
-    cent = np.mean(halo_phases[:, :3], axis=0)
-    print(cent)
-    print(cosmo.H(z).value * np.linalg.norm(halo_phases[:, :3] - cent, axis=1))
-    halo_phases[:, 3:] += cosmo.H(z).value * np.linalg.norm(
-        halo_phases[:, :3] - cent, axis=1)
-
 
     # Initialise the halo kd tree in 6D phase space
     halo_tree = cKDTree(halo_phases, leafsize=16, compact_nodes=True,
@@ -491,14 +484,19 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
         vlinkl = new_vlcoeff * vlinkl_halo_indp \
                  * pmass ** (1 / 3) * halo_npart ** (1 / 3)
 
+        # Add the hubble flow to the velocities
+        # *** NOTE: this includes a gadget factor of a^-1/2 ***
+        ini_cent = np.mean(halo_poss, axis=0)
+        sep = cosmo.H(redshift).value * (halo_poss - ini_cent) * (
+                    1 + redshift) ** -0.5
+        halo_vels += sep
+
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((halo_poss / linkl,
                                       halo_vels / vlinkl), axis=1)
 
         # Query these particles in phase space to find distinct bound halos
-        part_haloids, assigned_parts = find_phase_space_halos(halo_phases,
-                                                              redshift,
-                                                              cosmo)
+        part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
 
         not_real_pids = {}
 
