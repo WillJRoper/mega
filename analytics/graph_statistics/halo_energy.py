@@ -29,7 +29,7 @@ def energyplot():
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params = utilities.read_param(paramfile)
+    inputs, flags, params, _ = utilities.read_param(paramfile)
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs["snapList"], dtype=str))

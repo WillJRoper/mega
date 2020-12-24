@@ -27,7 +27,7 @@ def directprogdeschist(threshold=10):
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params = utilities.read_param(paramfile)
+    inputs, flags, params, _ = utilities.read_param(paramfile)
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
@@ -115,7 +115,10 @@ def directprogdeschist(threshold=10):
     ax.legend(handles, labels)
 
     # Save the plot as a png
-    plt.savefig('analytics/plots/ProgDescNumberHist.png', dpi=fig.dpi)
+    if density_rank == 0:
+        plt.savefig('analytics/plots/ProgDescNumberHist.png', dpi=fig.dpi)
+    else:
+        plt.savefig('analytics/plots/subProgDescNumberHist.png', dpi=fig.dpi)
 
     return
 

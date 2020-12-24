@@ -6,6 +6,7 @@ import mpi4py
 import numpy as np
 from mpi4py import MPI
 from scipy.spatial import cKDTree
+import matplotlib.pyplot as plt
 
 mpi4py.rc.recv_mprobe = False
 import astropy.constants as const
@@ -489,11 +490,11 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
         ini_cent = np.mean(halo_poss, axis=0)
         sep = cosmo.H(redshift).value * (halo_poss - ini_cent) * (
                     1 + redshift) ** -0.5
-        halo_vels += sep
+        halo_vels_with_HubFlow = halo_vels + sep
 
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((halo_poss / linkl,
-                                      halo_vels / vlinkl), axis=1)
+                                      halo_vels_with_HubFlow / vlinkl), axis=1)
 
         # Query these particles in phase space to find distinct bound halos
         part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
@@ -517,8 +518,17 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
             this_sim_halo_pids = sim_halo_pids[this_halo_pids]
 
             # Compute the centred positions and velocities
+            # *** NOTE: if all particles have the same mass this is the COM ***
             mean_halo_pos = this_halo_pos.mean(axis=0)
             mean_halo_vel = this_halo_vel.mean(axis=0)
+
+            # Add the hubble flow to the velocities
+            # *** NOTE: this includes a gadget factor of a^-1/2 ***
+            sep = cosmo.H(redshift).value * (this_halo_pos - mean_halo_pos) * (
+                    1 + redshift) ** -0.5
+            this_halo_vel += sep
+
+            # Centre positions and velocities relative to COM
             this_halo_pos -= mean_halo_pos
             this_halo_vel -= mean_halo_vel
 
@@ -1398,12 +1408,27 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
     if rank == 0:
 
-        print(
-            "============================ Halos computed per rank ============================")
-        print([len(res) for res in collected_results])
-        print(
-            "============================ Subhalos computed per rank ============================")
-        print([len(res) for res in sub_collected_results])
+        # If profiling enable plot the number of halos on each rank
+        if profile:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.bar(np.arange(len(collected_results)),
+                   [len(res) for res in collected_results],
+                   color="b", edgecolor="b")
+            ax.set_xlabel("Rank")
+            ax.set_ylabel("Number of halos computed")
+            fig.savefig("profiling/plots/halos_computed_"
+                        + str(snapshot) + ".png")
+        if profile and findsubs:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.bar(np.arange(len(sub_collected_results)),
+                   [len(res) for res in sub_collected_results],
+                   color="r", edgecolor="r")
+            ax.set_xlabel("Rank")
+            ax.set_ylabel("Number of subhalos computed")
+            fig.savefig("profiling/plots/subhalos_computed_"
+                        + str(snapshot) + ".png")
 
         newPhaseID = 0
         newPhaseSubID = 0
