@@ -522,12 +522,6 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
             mean_halo_pos = this_halo_pos.mean(axis=0)
             mean_halo_vel = this_halo_vel.mean(axis=0)
 
-            # Add the hubble flow to the velocities
-            # *** NOTE: this includes a gadget factor of a^-1/2 ***
-            sep = cosmo.H(redshift).value * (this_halo_pos - mean_halo_pos) * (
-                    1 + redshift) ** -0.5
-            this_halo_vel += sep
-
             # Centre positions and velocities relative to COM
             this_halo_pos -= mean_halo_pos
             this_halo_vel -= mean_halo_vel
@@ -538,6 +532,12 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                                    halo_npart,
                                                    pmass, redshift,
                                                    G, h, soft)
+
+            # Add the hubble flow to the velocities
+            # *** NOTE: this includes a gadget factor of a^-1/2 ***
+            sep = cosmo.H(redshift).value * (this_halo_pos) * (
+                    1 + redshift) ** -0.5
+            this_halo_vel += sep
 
             if KE / GE <= 1:
 
