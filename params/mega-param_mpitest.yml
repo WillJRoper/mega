@@ -25,10 +25,10 @@ cosmology:
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
-  halo:                1             # Flag for creating halo catalog
-  subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
-  graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
-  subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
+  halo:                0             # Flag for creating halo catalog
+  subs:                0              # Find substructure within halos (UNUSED CURRENTLY)
+  graphdirect:         1              # Flag for getting graph direct progenitor and descendant data
+  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
   graph:               0              # Flag for building complete graphs
   subgraph:            0              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
 
