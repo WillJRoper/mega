@@ -1,14 +1,13 @@
-import yaml
-import readgadgetdata
 import h5py
-import time
 import networkx
-from networkx.algorithms.components.connected import connected_components
 import numpy as np
+import readgadgetdata
+import time
+import yaml
+from networkx.algorithms.components.connected import connected_components
 
 
 def read_param(paramfile):
-
     # Read in the param file
     with open(paramfile) as yfile:
         parsed_yaml_file = yaml.load(yfile, Loader=yaml.FullLoader)
@@ -18,6 +17,7 @@ def read_param(paramfile):
     flags = parsed_yaml_file['flags']
     params = parsed_yaml_file['parameters']
     cosmology = parsed_yaml_file['cosmology']
+    simulation = parsed_yaml_file['cosmology']
 
     return inputs, flags, params, cosmology
 
@@ -40,6 +40,7 @@ def to_graph(l):
         # it also imlies a number of edges:
         G.add_edges_from(to_edges(part))
     return G
+
 
 def to_edges(l):
     """ https://stackoverflow.com/questions/4842613/merge-lists-that-share-common-elements
@@ -79,7 +80,8 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
 
     # Load snapshot data from gadget-2 file *** Note: will need to be changed for use with other simulations data ***
     snap = readgadgetdata.readsnapshot(snapshot, PATH)
-    pid, pos, vel = snap[0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
+    pid, pos, vel = snap[
+                    0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
     head = snap[3:]  # header values
     npart = head[0]  # number of particles in simulation
     boxsize = head[3]  # simulation box length(/size) along each axis
@@ -100,7 +102,7 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     # =============== Compute Linking Length ===============
 
     # Compute the mean separation
-    mean_sep = boxsize / npart**(1./3.)
+    mean_sep = boxsize / npart ** (1. / 3.)
 
     # Open hdf5 file
     hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'w')
@@ -114,10 +116,14 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     hdf.attrs['rhocrit'] = rhocrit
     hdf.attrs['pmass'] = pmass
     hdf.attrs['h'] = h
-    hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid, compression="gzip")
-    hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int, data=sinds, compression="gzip")
-    hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos, compression="gzip")
-    hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel, compression="gzip")
+    hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid,
+                       compression="gzip")
+    hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int, data=sinds,
+                       compression="gzip")
+    hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos,
+                       compression="gzip")
+    hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel,
+                       compression="gzip")
 
     hdf.close()
 
@@ -130,7 +136,6 @@ def upper_tri_masking(A):
 
 
 def kinetic(halo_vels, halo_npart, redshift, pmass):
-
     # Compute kinetic energy of the halo
     vel_disp = np.zeros(3, dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -141,20 +146,18 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
 
 
 def grav(rij_2, soft, pmass, redshift, h, G):
-
     # Compute the sum of the gravitational energy of each particle from
     # GE = G*Sum_i(m_i*Sum_{j<i}(m_j/sqrt(r_{ij}**2+s**2)))
-    invsqu_dist = 1 / np.sqrt(rij_2 + soft ** 2)
+    invsqu_dist = 1 / np.sqrt(rij_2 / (1 + redshift) ** 2 + soft ** 2)
     GE = G * pmass ** 2 * np.sum(invsqu_dist)
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * h * (1 + redshift) * 1 / 3.086e+19
+    GE = GE * h * 1 / 3.086e+19
 
     return GE
 
 
 def get_seps_lm(halo_poss, halo_npart):
-
     # Compute the separations of all halo particles along each dimension
     seps = np.zeros((halo_npart, halo_npart, 3), dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -169,24 +172,24 @@ def get_seps_lm(halo_poss, halo_npart):
 
 
 def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, h, G):
-
     GE = 0
 
     for i in range(1, halo_npart):
         sep = (halo_poss[:i, :] - halo_poss[i, :])
         rij2 = np.sum(sep * sep, axis=-1)
-        invsqu_dist = np.sum(1 / np.sqrt(rij2 + soft ** 2))
+        invsqu_dist = np.sum(
+            1 / np.sqrt(rij2 / (1 + redshift) ** 2 + soft ** 2))
 
         GE += G * pmass ** 2 * invsqu_dist
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * h * (1 + redshift) * 1 / 3.086e+19
+    GE = GE * h * 1 / 3.086e+19
 
     return GE
 
 
-def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft):
-
+def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift,
+                           G, h, soft):
     # Compute kinetic energy of the halo
     KE = kinetic(halo_vels, halo_npart, redshift, pmass)
 
@@ -211,7 +214,6 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift, G,
 
 
 def wrap_halo(halo_poss, boxsize, domean=False):
-
     # Define the comparison particle as the maximum position in the current dimension
     max_part_pos = halo_poss.max(axis=0)
 
@@ -238,18 +240,19 @@ def wrap_halo(halo_poss, boxsize, domean=False):
         return halo_poss
 
 
-def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, pmass, redshift, G, h, soft):
-
+def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, pmass, redshift,
+                            G, h, soft):
     # Compute kinetic energy of the halo
     vel_disp = np.var(halo_vels, axis=0)
     KE = 0.5 * halo_npart * pmass * np.sum(vel_disp) * 1 / (1 + redshift)
 
-    halo_radii = np.sqrt(halo_poss[:, 0]**2 + halo_poss[:, 1]**2 + halo_poss[:, 2]**2)
+    halo_radii = np.sqrt(
+        halo_poss[:, 0] ** 2 + halo_poss[:, 1] ** 2 + halo_poss[:, 2] ** 2)
 
     srtd_halo_radii = np.sort(halo_radii)
 
     n_within_radii = np.arange(0, halo_radii.size)
-    GE = np.sum(G * pmass**2 * n_within_radii / srtd_halo_radii)
+    GE = np.sum(G * pmass ** 2 * n_within_radii / srtd_halo_radii)
 
     # Compute halo's energy
     halo_energy = KE - GE * h * (1 + redshift) * 1 / 3.086e+19
@@ -258,13 +261,12 @@ def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, pmass, redshift, G
 
 
 def bin_nodes(pos, ncells, minmax, ranks):
-
     r0, r1 = minmax
 
     npart = pos.shape[0]
 
     cell_size = (r1 - r0) / ncells
-    cell_volume = cell_size**3
+    cell_volume = cell_size ** 3
 
     bin_inds = (float(ncells) / (r1 - r0) * (pos - r0)).astype(int)
     bin_edges = np.linspace(r0, r1, ncells + 1)
@@ -289,7 +291,6 @@ def bin_nodes(pos, ncells, minmax, ranks):
 
 
 def get_initasks(bin_inds):
-
     nodes = {}
     for ind, key in enumerate(bin_inds):
         nodes.setdefault(tuple(key), set()).update({ind, })
@@ -298,10 +299,10 @@ def get_initasks(bin_inds):
 
 
 def decomp_nodes(npart, ranks, cells_per_rank, rank):
-
     # Define the limits for particles on all ranks
     rank_edges = np.linspace(0, npart, ranks + 1, dtype=int)
-    rank_cell_edges = np.linspace(rank_edges[rank], rank_edges[rank + 1], cells_per_rank + 1, dtype=int)
+    rank_cell_edges = np.linspace(rank_edges[rank], rank_edges[rank + 1],
+                                  cells_per_rank + 1, dtype=int)
 
     # Define the nodes
     tasks = []
@@ -311,20 +312,22 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
     nnodes = cells_per_rank * ranks
 
     # Get the particles in this rank
-    parts_in_rank = np.arange(rank_edges[rank], rank_edges[rank + 1], dtype=int)
+    parts_in_rank = np.arange(rank_edges[rank], rank_edges[rank + 1],
+                              dtype=int)
 
     return tasks, parts_in_rank, nnodes, rank_edges
 
 
 def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
-
-    results_to_combine = {frozenset(results.pop(halo)) for halo in halos_to_combine}
+    results_to_combine = {frozenset(results.pop(halo)) for halo in
+                          halos_to_combine}
 
     # Convert results to a networkx graph for linking
     G = to_graph(results_to_combine)
 
     # Create list of unique lists of particles
-    combined_results = {frozenset(parts) for parts in connected_components(G) if len(parts) >= 10}
+    combined_results = {frozenset(parts) for parts in connected_components(G)
+                        if len(parts) >= 10}
     results = set(results.values())
     results.update(combined_results)
 
@@ -349,21 +352,28 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
     unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
 
     # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-    print("=========================== Spatial halos ===========================")
+    print(
+        "=========================== Spatial halos ===========================")
     print(unique_haloids.size, 'halos found with 10 or more particles')
-    print(unique[np.where(counts >= 15)].size - 1, 'halos found with 15 or more particles')
-    print(unique[np.where(counts >= 20)].size - 1, 'halos found with 20 or more particles')
-    print(unique[np.where(counts >= 50)].size - 1, 'halos found with 50 or more particles')
-    print(unique[np.where(counts >= 100)].size - 1, 'halos found with 100 or more particles')
-    print(unique[np.where(counts >= 500)].size - 1, 'halos found with 500 or more particles')
-    print(unique[np.where(counts >= 1000)].size - 1, 'halos found with 1000 or more particles')
-    print(unique[np.where(counts >= 10000)].size - 1, 'halos found with 10000 or more particles')
+    print(unique[np.where(counts >= 15)].size - 1,
+          'halos found with 15 or more particles')
+    print(unique[np.where(counts >= 20)].size - 1,
+          'halos found with 20 or more particles')
+    print(unique[np.where(counts >= 50)].size - 1,
+          'halos found with 50 or more particles')
+    print(unique[np.where(counts >= 100)].size - 1,
+          'halos found with 100 or more particles')
+    print(unique[np.where(counts >= 500)].size - 1,
+          'halos found with 500 or more particles')
+    print(unique[np.where(counts >= 1000)].size - 1,
+          'halos found with 1000 or more particles')
+    print(unique[np.where(counts >= 10000)].size - 1,
+          'halos found with 10000 or more particles')
 
     return tasks
 
 
 def decomp_halos(results, nnodes):
-
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
     ini_parts_in_rank = []
@@ -371,7 +381,6 @@ def decomp_halos(results, nnodes):
     # Store halo ids and halo data for the halos found out in the spatial search
     newtaskID = nnodes + 1
     while len(results) > 0:
-
         # Extract particle IDs
         parts_arr = np.array(list(results.pop()))
 
@@ -390,7 +399,6 @@ def decomp_halos(results, nnodes):
 
 
 def decomp_subhalos(subhalo_pids_per_rank, ranks):
-
     # Split into a list containing a list of halos for each rank
     newTaskID = 0
     chunked_part_load = np.zeros(ranks)
@@ -415,13 +423,13 @@ def decomp_subhalos(subhalo_pids_per_rank, ranks):
 
     # Convert sets of included particles on a rank to sorted arrays
     for i in range(ranks):
-        chunked_pids[i]["parts_on_rank"] = np.sort(list(chunked_pids[i]["parts_on_rank"]))
+        chunked_pids[i]["parts_on_rank"] = np.sort(
+            list(chunked_pids[i]["parts_on_rank"]))
 
     return chunked_pids
 
 
 def combine_tasks_per_thread(results, rank, thisRank_parts):
-
     # Initialise halo dictionaries read for the phase space test
     halo_pids = {}
 

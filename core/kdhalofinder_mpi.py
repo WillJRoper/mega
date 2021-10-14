@@ -713,7 +713,7 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                   ncells, profile, profile_path, cosmo):
+                   ncells, profile, profile_path, cosmo, softs):
     """ Run the halo finder, sort the output results, find subhalos and
         save to a HDF5 file.
 
@@ -790,7 +790,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     linkl = llcoeff * mean_sep
 
     # Compute the softening length
-    soft = 0.05 * boxsize / npart ** (1. / 3.)
+    soft = np.max((softs[0] / (1 + redshift), softs[1]))
 
     # Define the gravitational constant
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value

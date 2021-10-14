@@ -21,14 +21,19 @@ cosmology:
   Ob0: 0.05                              # The Value of the hubble constant at z=0
   Tcmb0: 2.725                           # The temperature of the CMB at z=0
 
+simulation:
+
+  comoving_DM_softening: 0.011584        # Comoving softening length
+  max_physical_DM_softening: 0.003130    # Max physical softening length
+
 
 flags:
 
-  # Flags for processes, NOTE: To enable a process all above processes must be enabled
-  halo:                0             # Flag for creating halo catalog
-  subs:                0              # Find substructure within halos (UNUSED CURRENTLY)
-  graphdirect:         1              # Flag for getting graph direct progenitor and descendant data
-  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
+  # Flags for processes, NOTE: To enable a process, all above processes must be enabled
+  halo:                1              # Flag for creating halo catalog
+  subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
+  graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
+  subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
   graph:               0              # Flag for building complete graphs
   subgraph:            0              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
 
