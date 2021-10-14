@@ -14,6 +14,20 @@ inputs:
   analyticPlotPath:    analytics/plots/  # The filepath and basename for profiling files
 
 
+cosmology:
+
+  H0: 70                                 # The value of the hubble constant at z=0
+  Om0: 0.3                               # The Value of the hubble constant at z=0
+  Ob0: 0.05                              # The Value of the hubble constant at z=0
+  Tcmb0: 2.725                           # The temperature of the CMB at z=0
+
+
+simulation:
+
+  comoving_DM_softening: 0.011584        # Comoving softening length
+  max_physical_DM_softening: 0.003130    # Max physical softening length
+
+
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
@@ -36,7 +50,7 @@ flags:
 
   # Input type flags (only enable 1)
   internalInput:       1              # Flag to use internal HDF5 input
-  binaryInput:         0              # Flag for HDF5 inputs, if False binary format is assumed
+  HDF5Input:           0              # Flag for HDF5 inputs, if both are False binary format is assumed
 
   verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
   profile:             1              # Flag for producing profiling txt files while running

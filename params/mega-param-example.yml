@@ -12,6 +12,20 @@ inputs:
   treeSavePath:        <filepath>     # The filepath and basename for tree output
 
 
+cosmology:
+
+  H0: 70                                 # The value of the hubble constant at z=0
+  Om0: 0.3                               # The Value of the hubble constant at z=0
+  Ob0: 0.05                              # The Value of the hubble constant at z=0
+  Tcmb0: 2.725                           # The temperature of the CMB at z=0
+
+
+simulation:
+
+  comoving_DM_softening: 0.011584        # Comoving softening length
+  max_physical_DM_softening: 0.003130    # Max physical softening length
+
+
 flags:
 
   # Flags for processes, NOTE: To enable a process all above processes must be enabled
@@ -47,4 +61,4 @@ parameters:
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
   decrement:           0.05           # The amount alpha_v is decremented by in each phase-space iteration
   part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
-                                      # with real progenitors will be kept below this threshold
+  # with real progenitors will be kept below this threshold

@@ -21,6 +21,7 @@ cosmology:
   Ob0: 0.05                              # The Value of the hubble constant at z=0
   Tcmb0: 2.725                           # The temperature of the CMB at z=0
 
+
 simulation:
 
   comoving_DM_softening: 0.011584        # Comoving softening length
