@@ -19,7 +19,7 @@ def read_param(paramfile):
     cosmology = parsed_yaml_file['cosmology']
     simulation = parsed_yaml_file['cosmology']
 
-    return inputs, flags, params, cosmology
+    return inputs, flags, params, cosmology, simulation
 
 
 def enum(*sequential, **named):
@@ -57,6 +57,83 @@ def to_edges(l):
 
 def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     """ Reads in gadget-2 simulation data and computes the host halo linking length. (For more information see Docs)
+
+    :param snapshot: The snapshot ID as a string (e.g. '061')
+    :param PATH: The filepath to the directory containing the simulation data.
+    :param llcoeff: The host halo linking length coefficient.
+
+    :return: pid: An array containing the particle IDs.
+             pos: An array of the particle position vectors.
+             vel: An array of the particle velocity vectors.
+             npart: The number of particles used in the simulation.
+             boxsize: The length of the simulation box along a single axis.
+             redshift: The redshift of the current snapshot.
+             t: The elapsed time of the current snapshot.
+             rhocrit: The critical density at the current snapshot.
+             pmass: The mass of a dark matter particle.
+             h: 'Little h', The hubble parameter parametrisation.
+             linkl: The linking length.
+
+    """
+
+    # =============== Load Simulation Data ===============
+
+    # Load snapshot data from SWIFT hdf5
+    # Open HDF5 file
+    hdf = h5py.File(PATH, "r")
+    pid, pos, vel = snap[
+                    0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
+    # Get metadata
+    boxsize = hdf["Header"].attrs["BoxSize"][0]
+    redshift = hdf["Header"].attrs["Redshift"]
+    npart = hdf["Header"].attrs["NumPart_Total"][1]
+    nparts_this_file = hdf["Header"].attrs["NumPart_ThisFile"][1]
+
+    assert npart == nparts_this_file, "Opening a file split " \
+                                      "across multiple files as if " \
+                                      "it is a standalone"
+    pid = hdf["PartType1"]["ParticleIDs"][...]
+    pos = hdf["PartType1"]["Coordinates"][...]
+    vel = hdf["PartType1"]["Velocities"][...]
+    pmass = np.unique(hdf["PartType1"]["Masses"][...])
+
+    # =============== Sort particles ===============
+
+    # Sort the simulation data arrays by the particle ID
+    sinds = pid.argsort()
+    pid = pid[sinds]
+    pos = pos[sinds, :]
+    vel = vel[sinds, :]
+
+    # =============== Compute Linking Length ===============
+
+    # Compute the mean separation
+    mean_sep = boxsize / npart ** (1. / 3.)
+
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'w')
+
+    # Write out the inputs
+    hdf.attrs['mean_sep'] = mean_sep
+    hdf.attrs['boxsize'] = boxsize
+    hdf.attrs['npart'] = npart
+    hdf.attrs['redshift'] = redshift
+    hdf.attrs['pmass'] = pmass
+    hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid,
+                       compression="gzip")
+    hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int, data=sinds,
+                       compression="gzip")
+    hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos,
+                       compression="gzip")
+    hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel,
+                       compression="gzip")
+
+    hdf.close()
+
+
+def SWIFT_to_MEGA_hdf5(PATH, inputpath='input/'):
+    """ Reads in gadget-2 simulation data and computes the host
+    halo linking length. (For more information see Docs)
 
     :param snapshot: The snapshot ID as a string (e.g. '061')
     :param PATH: The filepath to the directory containing the simulation data.

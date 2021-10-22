@@ -17,8 +17,9 @@ inputs:
 cosmology:
 
   H0: 70                                 # The value of the hubble constant at z=0
-  Om0: 0.3                               # The Value of the hubble constant at z=0
-  Ob0: 0.05                              # The Value of the hubble constant at z=0
+  h: 0.677                               # The value of little h
+  Om0: 0.3                               # The value of omega matter
+  Ob0: 0.05                              # The value of omega baryon
   Tcmb0: 2.725                           # The temperature of the CMB at z=0
 
 
@@ -32,11 +33,11 @@ flags:
 
   # Flags for processes, NOTE: To enable a process, all above processes must be enabled
   halo:                1              # Flag for creating halo catalog
-  subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
+  subs:                1              # Find substructure within halos
   graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
   subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
   graph:               0              # Flag for building complete graphs
-  subgraph:            0              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
+  subgraph:            0              # Flag to include subhalos in complete graphs
 
   # Subhalos aren't currently included in trees
   treehalos:           0              # Flag for splitting halos in tree halo catalog
@@ -53,13 +54,15 @@ flags:
 
 parameters:
 
+  # FUNDAMENTAL PART OF MEGA, CHANGE AT YOUR OWN RISK
+  part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
+                                      # with real progenitors will be kept below this threshold
+
   batchsize:           2000000        # The number of particles that are tested in the KDTree at once
   ini_alpha_v:         10             # The initial velocity linking length coefficient for phase-space iteration
   min_alpha_v:         0.8           # The initial velocity linking length coefficient for phase-space iteration
   llcoeff:             0.2            # Spatial linking length coefficient for host halos
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
   decrement:           0.1           # The amount alpha_v is decremented by in each phase-space iteration
-  part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
-                                      # with real progenitors will be kept below this threshold
   N_cells:             500            # The number of cells to split the particles into for spatial search,
                                       # (i.e. npart_per_cell = npart / N_cells)

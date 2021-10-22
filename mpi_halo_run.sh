@@ -7,7 +7,6 @@
 # #SBATCH --cpus-per-task=16
 # #SBATCH --ntasks-per-node=16
 #SBATCH -o logs/out_std_halo.%J
-#SBATCH -e logs/err_std_halo.%J
 #SBATCH --exclusive
 
 module purge

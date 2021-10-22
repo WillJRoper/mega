@@ -864,6 +864,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
     comm_start = time.time()
 
+    # Broadcast the KD-Tree to all ranks
     tree = comm.bcast(tree, root=0)
 
     if profile:
