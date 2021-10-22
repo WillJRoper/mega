@@ -713,7 +713,7 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                   ncells, profile, profile_path, cosmo, softs):
+                   ncells, profile, profile_path, cosmo, h, softs):
     """ Run the halo finder, sort the output results, find subhalos and
         save to a HDF5 file.
 
@@ -774,7 +774,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     npart = hdf.attrs['npart']
     redshift = hdf.attrs['redshift']
     pmass = hdf.attrs['pmass']
-    h = hdf.attrs['h']
 
     hdf.close()
 

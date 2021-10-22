@@ -38,7 +38,7 @@ def main_kd(snap):
                       min_vlcoeff=params['min_alpha_v'],
                       decrement=params['decrement'], verbose=flags['verbose'],
                       internal_input=flags['internalInput'],
-                      findsubs=flags['subs'],
+                      findsubs=flags['subs'], h=cosmology["h"],
                       softs=(simulation["comoving_DM_softening"],
                              simulation["max_physical_DM_softening"]))
 
