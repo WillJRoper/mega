@@ -55,35 +55,25 @@ def to_edges(l):
         last = current
 
 
-def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
-    """ Reads in gadget-2 simulation data and computes the host halo linking length. (For more information see Docs)
+def SWIFT_to_MEGA_hdf5(snapshot, PATH, inputpath='input/'):
+    """ Reads in SWIFT format simulation data from standalone HDF5 files
+    and writes the necessary fields into the expected MEGA format.
 
-    :param snapshot: The snapshot ID as a string (e.g. '061')
+    :param snapshot: The snapshot ID as a string (e.g. '061', "00001", etc)
     :param PATH: The filepath to the directory containing the simulation data.
-    :param llcoeff: The host halo linking length coefficient.
+    :param inputpath: The file path for storing the MEGA format
+                      input data read from the simulation files.
 
-    :return: pid: An array containing the particle IDs.
-             pos: An array of the particle position vectors.
-             vel: An array of the particle velocity vectors.
-             npart: The number of particles used in the simulation.
-             boxsize: The length of the simulation box along a single axis.
-             redshift: The redshift of the current snapshot.
-             t: The elapsed time of the current snapshot.
-             rhocrit: The critical density at the current snapshot.
-             pmass: The mass of a dark matter particle.
-             h: 'Little h', The hubble parameter parametrisation.
-             linkl: The linking length.
+    :return:
 
     """
 
     # =============== Load Simulation Data ===============
 
     # Load snapshot data from SWIFT hdf5
-    # Open HDF5 file
     hdf = h5py.File(PATH, "r")
-    pid, pos, vel = snap[
-                    0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
-    # Get metadata
+
+    # Get metadata about the simulation
     boxsize = hdf["Header"].attrs["BoxSize"][0]
     redshift = hdf["Header"].attrs["Redshift"]
     npart = hdf["Header"].attrs["NumPart_Total"][1]
@@ -92,6 +82,8 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     assert npart == nparts_this_file, "Opening a file split " \
                                       "across multiple files as if " \
                                       "it is a standalone"
+
+    # Get the particle data
     pid = hdf["PartType1"]["ParticleIDs"][...]
     pos = hdf["PartType1"]["Coordinates"][...]
     vel = hdf["PartType1"]["Velocities"][...]
@@ -105,7 +97,7 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     pos = pos[sinds, :]
     vel = vel[sinds, :]
 
-    # =============== Compute Linking Length ===============
+    # =============== Compute and store the necessary values ===============
 
     # Compute the mean separation
     mean_sep = boxsize / npart ** (1. / 3.)
@@ -131,34 +123,26 @@ def binary_to_hdf5(snapshot, PATH, inputpath='input/'):
     hdf.close()
 
 
-def SWIFT_to_MEGA_hdf5(PATH, inputpath='input/'):
-    """ Reads in gadget-2 simulation data and computes the host
-    halo linking length. (For more information see Docs)
+def GADGET_binary_to_hdf5(snapshot, PATH, inputpath='input/'):
+    """ Reads in GADGET binary format simulation data
+    and writes the necessary fields into the expected MEGA format.
 
     :param snapshot: The snapshot ID as a string (e.g. '061')
     :param PATH: The filepath to the directory containing the simulation data.
-    :param llcoeff: The host halo linking length coefficient.
+    :param inputpath: The file path for storing the MEGA format
+                      input data read from the simulation files.
 
-    :return: pid: An array containing the particle IDs.
-             pos: An array of the particle position vectors.
-             vel: An array of the particle velocity vectors.
-             npart: The number of particles used in the simulation.
-             boxsize: The length of the simulation box along a single axis.
-             redshift: The redshift of the current snapshot.
-             t: The elapsed time of the current snapshot.
-             rhocrit: The critical density at the current snapshot.
-             pmass: The mass of a dark matter particle.
-             h: 'Little h', The hubble parameter parametrisation.
-             linkl: The linking length.
-
+    :return:
     """
 
     # =============== Load Simulation Data ===============
 
-    # Load snapshot data from gadget-2 file *** Note: will need to be changed for use with other simulations data ***
+    # Load snapshot data from gadget-2 file *** Note: will need to be
+    # changed for use with other simulations data ***
     snap = readgadgetdata.readsnapshot(snapshot, PATH)
     pid, pos, vel = snap[
-                    0:3]  # pid=particle ID, pos=all particle's position, vel=all particle's velocity
+                    0:3]  # pid=particle ID, pos=all particle's position,
+                          # vel=all particle's velocity
     head = snap[3:]  # header values
     npart = head[0]  # number of particles in simulation
     boxsize = head[3]  # simulation box length(/size) along each axis
