@@ -75,7 +75,7 @@ def SWIFT_to_MEGA_hdf5(snapshot, PATH, basename, inputpath='input/'):
         PATH = PATH + "/"
 
     # Load snapshot data from SWIFT hdf5
-    hdf = h5py.File(PATH + basename, "r")
+    hdf = h5py.File(PATH + basename + snapshot + ".hdf5", "r")
 
     # Get metadata about the simulation
     boxsize = hdf["Header"].attrs["BoxSize"][0]
