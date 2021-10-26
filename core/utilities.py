@@ -55,12 +55,13 @@ def to_edges(l):
         last = current
 
 
-def SWIFT_to_MEGA_hdf5(snapshot, PATH, inputpath='input/'):
+def SWIFT_to_MEGA_hdf5(snapshot, PATH, basename, inputpath='input/'):
     """ Reads in SWIFT format simulation data from standalone HDF5 files
     and writes the necessary fields into the expected MEGA format.
 
     :param snapshot: The snapshot ID as a string (e.g. '061', "00001", etc)
     :param PATH: The filepath to the directory containing the simulation data.
+    :param basename: The name of the snapshot files WIHTOUT the snapshot string.
     :param inputpath: The file path for storing the MEGA format
                       input data read from the simulation files.
 
@@ -70,8 +71,11 @@ def SWIFT_to_MEGA_hdf5(snapshot, PATH, inputpath='input/'):
 
     # =============== Load Simulation Data ===============
 
+    if PATH[-1] != "/":
+        PATH = PATH + "/"
+
     # Load snapshot data from SWIFT hdf5
-    hdf = h5py.File(PATH, "r")
+    hdf = h5py.File(PATH + basename, "r")
 
     # Get metadata about the simulation
     boxsize = hdf["Header"].attrs["BoxSize"][0]
