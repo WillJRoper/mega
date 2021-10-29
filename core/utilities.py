@@ -323,6 +323,7 @@ def get_seps_lm(halo_poss, halo_npart):
 
 
 def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G):
+
     # Initialise gravitational potential
     GE = 0.
 
