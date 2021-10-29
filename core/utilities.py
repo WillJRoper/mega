@@ -2,7 +2,6 @@ import h5py
 import networkx
 import numpy as np
 # import readgadgetdata
-import time
 import yaml
 from networkx.algorithms.components.connected import connected_components
 
@@ -128,6 +127,92 @@ def SWIFT_to_MEGA_hdf5(snapshot, PATH, basename, inputpath='input/'):
     hdf.close()
 
 
+def SWIFT_to_MEGA_hdf5_allsnaps(snaplist_path, PATH, basename,
+                                inputpath='input/'):
+    """ Reads in SWIFT format simulation data from standalone HDF5 files
+    and writes the necessary fields into the expected MEGA format.
+    NOTE: hless units are expected!
+
+    :param snapshot: The snapshot ID as a string (e.g. '061', "00001", etc)
+    :param PATH: The filepath to the directory containing the simulation data.
+    :param basename: The name of the snapshot files WIHTOUT the snapshot string.
+    :param inputpath: The file path for storing the MEGA format
+                      input data read from the simulation files.
+
+    :return:
+
+    """
+
+    # Ensure paths are as expected
+    if PATH[-1] != "/":
+        PATH = PATH + "/"
+    if inputpath[-1] != "/":
+        inputpath = inputpath + "/"
+
+    # Load the snapshot list
+    snaplist = list(np.loadtxt(snaplist_path, dtype=str))
+
+    # Loop over all snapshots
+    for snapshot in snaplist:
+
+        print("Writing snapshot:", snapshot, end="\r")
+
+        # =============== Load Simulation Data ===============
+
+        # Load snapshot data from SWIFT hdf5
+        hdf = h5py.File(PATH + basename + snapshot + ".hdf5", "r")
+
+        # Get metadata about the simulation
+        boxsize = hdf["Header"].attrs["BoxSize"][0]
+        redshift = hdf["Header"].attrs["Redshift"]
+        npart = hdf["Header"].attrs["NumPart_Total"][1]
+        nparts_this_file = hdf["Header"].attrs["NumPart_ThisFile"][1]
+
+        assert npart == nparts_this_file, "Opening a file split " \
+                                          "across multiple files as if " \
+                                          "it is a standalone"
+
+        # Get the particle data
+        pid = hdf["PartType1"]["ParticleIDs"][...]
+        pos = hdf["PartType1"]["Coordinates"][...]
+        vel = hdf["PartType1"]["Velocities"][...]
+        pmass = np.unique(hdf["PartType1"]["Masses"][...])
+
+        # =============== Sort particles ===============
+
+        # Sort the simulation data arrays by the particle ID
+        sinds = pid.argsort()
+        pid = pid[sinds]
+        pos = pos[sinds, :]
+        vel = vel[sinds, :]
+
+        # =============== Compute and store the necessary values ===============
+
+        # Compute the mean separation
+        mean_sep = boxsize / npart ** (1. / 3.)
+
+        # Open hdf5 file
+        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'w')
+
+        # Write out the inputs
+        hdf.attrs['mean_sep'] = mean_sep
+        hdf.attrs['boxsize'] = boxsize
+        hdf.attrs['npart'] = npart
+        hdf.attrs['redshift'] = redshift
+        hdf.attrs['pmass'] = pmass
+        hdf.create_dataset('part_pid', shape=pid.shape, dtype=float, data=pid,
+                           compression="gzip")
+        hdf.create_dataset('sort_inds', shape=sinds.shape, dtype=int,
+                           data=sinds,
+                           compression="gzip")
+        hdf.create_dataset('part_pos', shape=pos.shape, dtype=float, data=pos,
+                           compression="gzip")
+        hdf.create_dataset('part_vel', shape=vel.shape, dtype=float, data=vel,
+                           compression="gzip")
+
+        hdf.close()
+
+
 # def GADGET_binary_to_hdf5(snapshot, PATH, inputpath='input/'):
 #     """ Reads in GADGET binary format simulation data
 #     and writes the necessary fields into the expected MEGA format.
@@ -212,7 +297,6 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
 
 
 def grav(rij_2, soft, pmass, redshift, G):
-
     # Compute the sum of the gravitational energy of each particle from
     # GE = G*Sum_i(m_i*Sum_{j<i}(m_j/sqrt(r_{ij}**2+s**2)))
     invsqu_dist = 1 / np.sqrt(rij_2 + soft ** 2)
@@ -225,7 +309,6 @@ def grav(rij_2, soft, pmass, redshift, G):
 
 
 def get_seps_lm(halo_poss, halo_npart):
-
     # Compute the separations of all halo particles along each dimension
     seps = np.zeros((halo_npart, halo_npart, 3), dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -240,7 +323,6 @@ def get_seps_lm(halo_poss, halo_npart):
 
 
 def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G):
-
     # Initialise gravitational potential
     GE = 0.
 

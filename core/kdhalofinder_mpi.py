@@ -796,7 +796,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     linkl = llcoeff * mean_sep
 
     # Compute the softening length
-    # NOTE: softening is converted to physical where necessary
+    # NOTE: softening is comoving and converted to physical where necessary
     if comoving_soft * a > max_physical_soft:
         soft = max_physical_soft / a
     else:
@@ -805,7 +805,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     # Define the gravitational constant
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
-    # Define and convert particle mass to M_sun
+    # Convert particle mass to M_sun
     pmass *= 1e10
 
     # Compute the linking length for subhalos
@@ -829,8 +829,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         print("Particle Mass:", pmass, "M_sun")
         print("Spatial Host Linking Length:", linkl, "cMpc")
         print("Spatial Subhalo Linking Length:", sub_linkl, "cMpc")
-        print("Initial Phase Space Linking Length:",
-              ini_vlcoeff * vlinkl_indp, "cMpc")
+        print("Initial Phase Space Host Linking Length:",
+              ini_vlcoeff * vlinkl_indp, "km / s")
+        print("Initial Phase Space Subhalo Linking Length:",
+              ini_vlcoeff * vlinkl_indp * (1600 / 200) ** (1 / 6), "km / s")
 
     if profile:
         prof_d["Housekeeping"]["Start"].append(set_up_start)
@@ -1736,7 +1738,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             compression='gzip')
 
         # Get how many halos were found be real
-        print("Halos found to initially not be real:",
+        print("Halos with unbound energies after phase space iteration:",
               halo_ids.size - halo_ids[reals].size, "of", halo_ids.size)
 
         if findsubs:
