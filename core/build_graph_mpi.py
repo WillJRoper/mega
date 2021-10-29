@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 # from guppy import hpy;
 
-hp = hpy()
+# hp = hpy()
 from mpi4py import MPI
 import utilities
 
