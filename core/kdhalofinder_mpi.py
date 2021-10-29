@@ -1417,7 +1417,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    color="b", edgecolor="b")
             ax.set_xlabel("Rank")
             ax.set_ylabel("Number of halos computed")
-            fig.savefig("profiling/plots/halos_computed_"
+            fig.savefig(profile_path + "/plots/halos_computed_"
                         + str(snapshot) + ".png")
         if profile and findsubs:
             fig = plt.figure()
@@ -1427,7 +1427,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    color="r", edgecolor="r")
             ax.set_xlabel("Rank")
             ax.set_ylabel("Number of subhalos computed")
-            fig.savefig("profiling/plots/subhalos_computed_"
+            fig.savefig(profile_path + "/plots/subhalos_computed_"
                         + str(snapshot) + ".png")
 
         newPhaseID = 0

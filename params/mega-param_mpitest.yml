@@ -10,7 +10,7 @@ inputs:
   treehaloSavePath:    <filepath>        # The filepath and basename for split-halo outputs
   directtreeSavePath:  <filepath>        # The filepath and basename for tree direct progenitor and descendant outputs
   treeSavePath:        <filepath>        # The filepath and basename for tree output
-  profilingPath:       profiling/task_   # The filepath and basename for profiling files
+  profilingPath:       profiling/   # The filepath and basename for profiling files
   analyticPlotPath:    analytics/plots/  # The filepath and basename for profiling files
 
 
