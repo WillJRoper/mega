@@ -3,7 +3,7 @@ import h5py
 import multiprocessing
 from multiprocessing import Lock
 from functools import partial
-from guppy import hpy; hp = hpy()
+# from guppy import hpy; hp = hpy()
 import pickle
 from utilities import get_linked_halo_data
 
