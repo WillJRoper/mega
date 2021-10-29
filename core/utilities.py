@@ -17,7 +17,7 @@ def read_param(paramfile):
     flags = parsed_yaml_file['flags']
     params = parsed_yaml_file['parameters']
     cosmology = parsed_yaml_file['cosmology']
-    simulation = parsed_yaml_file['cosmology']
+    simulation = parsed_yaml_file['simulation']
 
     return inputs, flags, params, cosmology, simulation
 
