@@ -2,7 +2,7 @@ from scipy.spatial import cKDTree
 from collections import defaultdict
 import pickle
 import numpy as np
-from guppy import hpy; hp = hpy()
+# from guppy import hpy; hp = hpy()
 import multiprocessing as mp
 import astropy.constants as const
 import astropy.units as u
