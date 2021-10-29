@@ -791,6 +791,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     # Compute the softening length
     soft = np.max((softs[0] / (1 + redshift), softs[1]))
 
+    if verbose:
+        print("Physical Softening Length:", soft)
+
     # Define the gravitational constant
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
