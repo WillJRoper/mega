@@ -55,7 +55,9 @@ def main_kdmpi(snap):
                          findsubs=flags['subs'], ncells=params['N_cells'],
                          profile=flags['profile'],
                          profile_path=inputs["profilingPath"],
-                         cosmo=cosmo)
+                         cosmo=cosmo, h=cosmology["h"],
+                      softs=(simulation["comoving_DM_softening"],
+                             simulation["max_physical_DM_softening"]))
 
 
 def main_mg(snap, density_rank):
@@ -76,10 +78,10 @@ def main_mgmpi(snap, prog_snap, desc_snap, density_rank):
                                profile_path=inputs["profilingPath"])
 
 
-def main_mt(snap):
-    mt.directProgDescWriter(snap, halopath=inputs['treehaloSavePath'],
-                            savepath=inputs['directtreeSavePath'],
-                            part_threshold=params['part_threshold'])
+# def main_mt(snap):
+#     mt.directProgDescWriter(snap, halopath=inputs['treehaloSavePath'],
+#                             savepath=inputs['directtreeSavePath'],
+#                             part_threshold=params['part_threshold'])
 
 
 if flags['useserial']:
@@ -107,21 +109,21 @@ if flags['useserial']:
             halopath=inputs['haloSavePath'] + '/halos_')
 
     # ===================== Split Graphs Into Trees =====================
-    if flags['treehalos']:
-        ld.mainLumberjack(halopath=inputs['haloSavePath'],
-                          newhalopath=inputs['treehaloSavePath'])
+    # if flags['treehalos']:
+    #     ld.mainLumberjack(halopath=inputs['haloSavePath'],
+    #                       newhalopath=inputs['treehaloSavePath'])
 
-    # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
-    if flags['treedirect']:
-        for snap in snaplist:
-            main_mt(snap)
-        mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
+    # # ===================== Find Post Splitting Direct Progenitors and Descendents =====================
+    # if flags['treedirect']:
+    #     for snap in snaplist:
+    #         main_mt(snap)
+    #     mt.link_cutter(treepath=inputs['directtreeSavePath'] + '/Mtree_')
 
-    # ===================== Build The Trees =====================
-    if flags['tree']:
-        mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
-                             graphpath=inputs['treeSavePath'] + '/FullMtrees',
-                             halopath=inputs['treehaloSavePath'] + '/halos_')
+    # # ===================== Build The Trees =====================
+    # if flags['tree']:
+    #     mt.get_graph_members(treepath=inputs['directtreeSavePath'] + '/Mtree_',
+    #                          graphpath=inputs['treeSavePath'] + '/FullMtrees',
+    #                          halopath=inputs['treehaloSavePath'] + '/halos_')
 
     print('Total: ', time.time() - walltime_start)
 
