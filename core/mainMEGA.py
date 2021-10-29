@@ -56,7 +56,7 @@ def main_kdmpi(snap):
                          profile=flags['profile'],
                          profile_path=inputs["profilingPath"],
                          cosmo=cosmo, h=cosmology["h"],
-                      softs=(simulation["comoving_DM_softening"],
+                         softs=(simulation["comoving_DM_softening"],
                              simulation["max_physical_DM_softening"]))
 
 

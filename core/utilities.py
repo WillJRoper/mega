@@ -58,6 +58,7 @@ def to_edges(l):
 def SWIFT_to_MEGA_hdf5(snapshot, PATH, basename, inputpath='input/'):
     """ Reads in SWIFT format simulation data from standalone HDF5 files
     and writes the necessary fields into the expected MEGA format.
+    NOTE: hless units are expected!
 
     :param snapshot: The snapshot ID as a string (e.g. '061', "00001", etc)
     :param PATH: The filepath to the directory containing the simulation data.
@@ -210,19 +211,21 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
     return KE
 
 
-def grav(rij_2, soft, pmass, redshift, h, G):
+def grav(rij_2, soft, pmass, redshift, G):
+
     # Compute the sum of the gravitational energy of each particle from
     # GE = G*Sum_i(m_i*Sum_{j<i}(m_j/sqrt(r_{ij}**2+s**2)))
-    invsqu_dist = 1 / np.sqrt(rij_2 / (1 + redshift) ** 2 + soft ** 2)
+    invsqu_dist = 1 / np.sqrt(rij_2 + soft ** 2)
     GE = G * pmass ** 2 * np.sum(invsqu_dist)
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * h * 1 / 3.086e+19
+    GE = GE * (1 + redshift) * 1 / 3.086e+19
 
     return GE
 
 
 def get_seps_lm(halo_poss, halo_npart):
+
     # Compute the separations of all halo particles along each dimension
     seps = np.zeros((halo_npart, halo_npart, 3), dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -236,19 +239,21 @@ def get_seps_lm(halo_poss, halo_npart):
     return rij2
 
 
-def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, h, G):
-    GE = 0
+def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G):
 
+    # Initialise gravitational potential
+    GE = 0.
+
+    # Explict loop over each particle
     for i in range(1, halo_npart):
         sep = (halo_poss[:i, :] - halo_poss[i, :])
         rij2 = np.sum(sep * sep, axis=-1)
-        invsqu_dist = np.sum(
-            1 / np.sqrt(rij2 / (1 + redshift) ** 2 + soft ** 2))
+        invsqu_dist = np.sum(1 / np.sqrt(rij2 + soft ** 2))
 
         GE += G * pmass ** 2 * invsqu_dist
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * h * 1 / 3.086e+19
+    GE = GE * (1 + redshift) * 1 / 3.086e+19
 
     return GE
 
@@ -266,11 +271,11 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift,
         rij_2 = upper_tri_masking(rij2)
 
         # Compute gravitational potential energy
-        GE = grav(rij_2, soft, pmass, redshift, h, G)
+        GE = grav(rij_2, soft, pmass, redshift, G)
 
     else:
 
-        GE = get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, h, G)
+        GE = get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G)
 
     # Compute halo's energy
     halo_energy = KE - GE

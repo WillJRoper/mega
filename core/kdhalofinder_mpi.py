@@ -785,20 +785,28 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
     set_up_start = time.time()
 
+    # Compute scale factor
+    a = 1 / (1 + redshift)
+
+    # Extract softening lengths
+    comoving_soft = softs[0]
+    max_physical_soft = softs[1]
+
     # Compute the linking length for host halos
     linkl = llcoeff * mean_sep
 
     # Compute the softening length
-    soft = np.max((softs[0] / (1 + redshift), softs[1]))
-
-    if verbose:
-        print("Physical Softening Length:", soft)
+    # NOTE: softening is converted to physical where necessary
+    if comoving_soft * a > max_physical_soft:
+        soft = max_physical_soft / a
+    else:
+        soft = comoving_soft
 
     # Define the gravitational constant
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
     # Define and convert particle mass to M_sun
-    pmass *= 1e10 * 1 / h
+    pmass *= 1e10
 
     # Compute the linking length for subhalos
     sub_linkl = sub_llcoeff * mean_sep
@@ -811,6 +819,18 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     # Define the velocity space linking length
     vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6)
                    * (1 + redshift) ** 0.5).value
+
+    if verbose and rank == 0:
+        print("Redshift/Scale Factor:", str(redshift) + "/" + str(a))
+        print("Npart:", npart)
+        print("Boxsize:", boxsize, "cMpc")
+        print("Comoving Softening Length:", soft, "cMpc")
+        print("Physical Softening Length:", soft * a, "pMpc")
+        print("Particle Mass:", pmass, "M_sun")
+        print("Spatial Host Linking Length:", linkl, "cMpc")
+        print("Spatial Subhalo Linking Length:", sub_linkl, "cMpc")
+        print("Initial Phase Space Linking Length:",
+              ini_vlcoeff * vlinkl_indp, "cMpc")
 
     if profile:
         prof_d["Housekeeping"]["Start"].append(set_up_start)
