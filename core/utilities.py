@@ -1,6 +1,8 @@
 import h5py
 import networkx
 import numpy as np
+from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist
 # import readgadgetdata
 import yaml
 from networkx.algorithms.components.connected import connected_components
@@ -287,6 +289,7 @@ def upper_tri_masking(A):
 
 
 def kinetic(halo_vels, halo_npart, redshift, pmass):
+
     # Compute kinetic energy of the halo
     vel_disp = np.zeros(3, dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -296,19 +299,22 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
     return KE
 
 
-def grav(rij_2, soft, pmass, redshift, G):
+def grav(rij_2, soft, pm, redshift, G):
+
     # Compute the sum of the gravitational energy of each particle from
     # GE = G*Sum_i(m_i*Sum_{j<i}(m_j/sqrt(r_{ij}**2+s**2)))
     invsqu_dist = 1 / np.sqrt(rij_2 + soft ** 2)
-    GE = G * pmass ** 2 * np.sum(invsqu_dist)
+
+    GE = pm ** 2 * np.sum(invsqu_dist)
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * (1 + redshift) * 1 / 3.086e+19
+    GE = G * GE * (1 + redshift) / 3.086e+19
 
     return GE
 
 
 def get_seps_lm(halo_poss, halo_npart):
+
     # Compute the separations of all halo particles along each dimension
     seps = np.zeros((halo_npart, halo_npart, 3), dtype=np.float32)
     for ixyz in [0, 1, 2]:
@@ -322,7 +328,7 @@ def get_seps_lm(halo_poss, halo_npart):
     return rij2
 
 
-def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G):
+def get_grav_hm(halo_poss, halo_npart, soft, pm, redshift, G):
 
     # Initialise gravitational potential
     GE = 0.
@@ -333,16 +339,17 @@ def get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G):
         rij2 = np.sum(sep * sep, axis=-1)
         invsqu_dist = np.sum(1 / np.sqrt(rij2 + soft ** 2))
 
-        GE += G * pmass ** 2 * invsqu_dist
+        GE += pm ** 2 * invsqu_dist
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = GE * (1 + redshift) * 1 / 3.086e+19
+    GE = G * GE * (1 + redshift) * 1 / 3.086e+19
 
     return GE
 
 
 def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift,
                            G, h, soft):
+
     # Compute kinetic energy of the halo
     KE = kinetic(halo_vels, halo_npart, redshift, pmass)
 
@@ -359,6 +366,27 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift,
     else:
 
         GE = get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G)
+
+    # Compute halo's energy
+    halo_energy = KE - GE
+
+    return halo_energy, KE, GE
+
+
+def halo_energy_calc_cdist(halo_poss, halo_vels, halo_npart, pmass, redshift,
+                           G, h, soft):
+
+    # Compute kinetic energy of the halo
+    KE = kinetic(halo_vels, halo_npart, redshift, pmass)
+
+    # Calculate separations
+    rij = cdist(halo_poss, halo_poss, metric='sqeuclidean')
+
+    # Extract only the upper triangle of rij
+    rij_2 = upper_tri_masking(rij)
+
+    # Calculate the gravitational potential
+    GE = grav(rij_2, soft, pmass / (10 ** 10), redshift, G) * 10 ** 20
 
     # Compute halo's energy
     halo_energy = KE - GE

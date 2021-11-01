@@ -418,7 +418,7 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-halo_energy_calc = utilities.halo_energy_calc_exact
+halo_energy_calc = utilities.halo_energy_calc_cdist
 
 
 def spatial_node_task(thisTask, pos, tree, linkl, npart):
@@ -486,10 +486,9 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                  * pmass ** (1 / 3) * halo_npart ** (1 / 3)
 
         # Add the hubble flow to the velocities
-        # *** NOTE: this includes a gadget factor of a^-1/2 ***
+        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
         ini_cent = np.mean(halo_poss, axis=0)
-        sep = cosmo.H(redshift).value * (halo_poss - ini_cent) * (
-                    1 + redshift) ** -0.5
+        sep = cosmo.H(redshift).value * (halo_poss - ini_cent)
         halo_vels_with_HubFlow = halo_vels + sep
 
         # Define the phase space vectors for this halo
@@ -534,9 +533,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                                    G, h, soft)
 
             # Add the hubble flow to the velocities
-            # *** NOTE: this includes a gadget factor of a^-1/2 ***
-            sep = cosmo.H(redshift).value * (this_halo_pos) * (
-                    1 + redshift) ** -0.5
+            # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
+            sep = cosmo.H(redshift).value * this_halo_pos
             this_halo_vel += sep
 
             if KE / GE <= 1:
@@ -832,7 +830,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         print("Initial Phase Space Host Linking Length:",
               ini_vlcoeff * vlinkl_indp, "km / s")
         print("Initial Phase Space Subhalo Linking Length:",
-              ini_vlcoeff * vlinkl_indp * (1600 / 200) ** (1 / 6), "km / s")
+              ini_vlcoeff * vlinkl_indp * 8 ** (1 / 6), "km / s")
 
     if profile:
         prof_d["Housekeeping"]["Start"].append(set_up_start)
@@ -1224,8 +1222,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             result = get_real_host_halos(thisSub, pos, vel,
                                                          boxsize,
                                                          vlinkl_indp
-                                                         * (1600 / 200)
-                                                         ** (1 / 6),
+                                                         * 8 ** (1 / 6),
                                                          sub_linkl, pmass,
                                                          ini_vlcoeff,
                                                          decrement,
@@ -1398,7 +1395,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                         result = get_real_host_halos(thisSub, pos, vel,
                                                      boxsize,
                                                      vlinkl_indp
-                                                     * (1600 / 200) ** (1 / 6),
+                                                     * 8 ** (1 / 6),
                                                      sub_linkl, pmass,
                                                      ini_vlcoeff, decrement,
                                                      redshift, G, h, soft,
