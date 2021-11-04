@@ -482,8 +482,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
         new_vlcoeff -= decrement * new_vlcoeff
 
         # Define the phase space linking length
-        vlinkl = new_vlcoeff * vlinkl_halo_indp \
-                 * pmass ** (1 / 3) * halo_npart ** (1 / 3)
+        vlinkl = (new_vlcoeff * vlinkl_halo_indp
+                  * pmass ** (1 / 3) * halo_npart ** (1 / 3))
 
         # Add the hubble flow to the velocities
         # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
@@ -805,19 +805,19 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
     # Convert particle mass to M_sun
     true_pmass = pmass * 1e10
-    pmass *= 10**10
 
     # Compute the linking length for subhalos
     sub_linkl = sub_llcoeff * mean_sep
 
     # Compute the mean density
-    mean_den = npart * true_pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 \
-               * (1 + redshift) ** 3
+    mean_den = (npart * true_pmass * u.M_sun / boxsize ** 3
+                / u.Mpc ** 3 * (1 + redshift) ** 3)
     mean_den = mean_den.to(u.M_sun / u.km ** 3)
 
     # Define the velocity space linking length
-    vlinkl_indp = (np.sqrt(G / 2) * (4 * np.pi * 200 * mean_den / 3) ** (1 / 6)
-                   * (1 + redshift) ** 0.5).value
+    vlinkl_indp = (np.sqrt(G / 2)
+                   * (4 * np.pi * 200
+                      * mean_den / 3) ** (1 / 6)).value * (10 ** 10) ** (1 / 3)
 
     if verbose and rank == 0:
         print("Redshift/Scale Factor:", str(redshift) + "/" + str(a))
@@ -828,10 +828,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         print("Particle Mass:", true_pmass, "M_sun")
         print("Spatial Host Linking Length:", linkl, "cMpc")
         print("Spatial Subhalo Linking Length:", sub_linkl, "cMpc")
-        print("Initial Phase Space Host Linking Length:",
-              ini_vlcoeff * vlinkl_indp, "km / s")
-        print("Initial Phase Space Subhalo Linking Length:",
-              ini_vlcoeff * vlinkl_indp * 8 ** (1 / 6), "km / s")
+        print("Initial Phase Space Host Linking Length "
+              "(for 1600 a particle halo):",
+              ini_vlcoeff * vlinkl_indp
+              * pmass ** (1 / 3) * 1600 ** (1 / 3), "km / s")
+        print("Initial Phase Space Subhalo Linking Length "
+              "(for 200 a particle subhalo):",
+              ini_vlcoeff * vlinkl_indp
+              * pmass ** (1 / 3) * 200 ** (1 / 3) * 8 ** (1 / 6), "km / s")
 
     if profile:
         prof_d["Housekeeping"]["Start"].append(set_up_start)

@@ -368,6 +368,8 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, pmass, redshift,
         GE = get_grav_hm(halo_poss, halo_npart, soft, pmass, redshift, G)
 
     # Compute halo's energy
+    KE *= 10.**10
+    GE *= 10.**20
     halo_energy = KE - GE
 
     return halo_energy, KE, GE
