@@ -418,7 +418,7 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-halo_energy_calc = utilities.halo_energy_calc_cdist
+halo_energy_calc = utilities.halo_energy_calc_exact
 
 
 def spatial_node_task(thisTask, pos, tree, linkl, npart):
@@ -804,13 +804,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
     # Convert particle mass to M_sun
-    pmass *= 1e10
+    true_pmass = pmass * 1e10
+    pmass *= 10**10
 
     # Compute the linking length for subhalos
     sub_linkl = sub_llcoeff * mean_sep
 
     # Compute the mean density
-    mean_den = npart * pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 \
+    mean_den = npart * true_pmass * u.M_sun / boxsize ** 3 / u.Mpc ** 3 \
                * (1 + redshift) ** 3
     mean_den = mean_den.to(u.M_sun / u.km ** 3)
 
@@ -824,7 +825,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         print("Boxsize:", boxsize, "cMpc")
         print("Comoving Softening Length:", soft, "cMpc")
         print("Physical Softening Length:", soft * a, "pMpc")
-        print("Particle Mass:", pmass, "M_sun")
+        print("Particle Mass:", true_pmass, "M_sun")
         print("Spatial Host Linking Length:", linkl, "cMpc")
         print("Spatial Subhalo Linking Length:", sub_linkl, "cMpc")
         print("Initial Phase Space Host Linking Length:",
@@ -1613,7 +1614,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         snap.attrs[
             'snap_nPart'] = npart  # number of particles in the simulation
         snap.attrs['boxsize'] = boxsize  # box length along each axis
-        snap.attrs['part_mass'] = pmass  # particle mass
+        snap.attrs['part_mass'] = true_pmass  # particle mass
         snap.attrs['h'] = h  # 'little h' (hubble constant parametrisation)
 
         # Assign snapshot attributes

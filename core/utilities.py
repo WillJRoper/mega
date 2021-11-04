@@ -342,7 +342,7 @@ def get_grav_hm(halo_poss, halo_npart, soft, pm, redshift, G):
         GE += pm ** 2 * invsqu_dist
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = G * GE * (1 + redshift) * 1 / 3.086e+19
+    GE = G * np.float64(GE) * (1 + redshift) * 1 / 3.086e+19
 
     return GE
 
@@ -386,7 +386,7 @@ def halo_energy_calc_cdist(halo_poss, halo_vels, halo_npart, pmass, redshift,
     rij_2 = upper_tri_masking(rij)
 
     # Calculate the gravitational potential
-    GE = grav(rij_2, soft, pmass / (10 ** 10), redshift, G) * 10 ** 20
+    GE = grav(rij_2, soft, pmass, redshift, G)
 
     # Compute halo's energy
     halo_energy = KE - GE
