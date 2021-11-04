@@ -294,7 +294,7 @@ def kinetic(halo_vels, halo_npart, redshift, pmass):
     vel_disp = np.zeros(3, dtype=np.float32)
     for ixyz in [0, 1, 2]:
         vel_disp[ixyz] = np.var(halo_vels[:, ixyz])
-    KE = 0.5 * halo_npart * pmass * np.sum(vel_disp) * 1 / (1 + redshift)
+    KE = 0.5 * halo_npart * pmass * np.sum(vel_disp)
 
     return KE
 
