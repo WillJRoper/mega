@@ -9,6 +9,7 @@ import sys
 # import lumberjack as ld
 import time
 import utilities
+import param_utils as p_utils
 from astropy.cosmology import FlatLambdaCDM
 
 # Assign start time
@@ -16,16 +17,28 @@ walltime_start = time.time()
 
 # Read the parameter file
 paramfile = sys.argv[1]
-inputs, flags, params, cosmology, simulation = utilities.read_param(paramfile)
+inputs, flags, params, cosmology, simulation = p_utils.read_param(paramfile)
 
 snap_ind = int(sys.argv[2])
 
 # Load the snapshot list
 snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
 
-# Initialise the astropy cosmology object
-cosmo = FlatLambdaCDM(H0=cosmology["H0"], Om0=cosmology["Om0"],
-                      Tcmb0=cosmology["Tcmb0"], Ob0=cosmology["Ob0"])
+# Set up object containing housekeeping information
+meta = p_utils.Metadata(snaplist[snap_ind], cosmology,
+                        params['llcoeff'], params['sub_llcoeff'],
+                        inputs['data'] + inputs["basename"],
+                        inputs['haloSavePath'], params['ini_alpha_v'],
+                        params['min_alpha_v'], params['decrement'],
+                        flags['verbose'], flags['subs'],
+                        params['N_cells'], flags['profile'],
+                        inputs["profilingPath"], cosmology["h"],
+                        (simulation["comoving_DM_softening"],
+                         simulation["max_physical_DM_softening"]),
+                        flags["DMO"])
+
+# Extract the cosmology object
+cosmo = meta.cosmo
 
 
 def main_kd(snap):
@@ -43,22 +56,8 @@ def main_kd(snap):
                              simulation["max_physical_DM_softening"]))
 
 
-def main_kdmpi(snap):
-    kdmpi.hosthalofinder(snap, llcoeff=params['llcoeff'],
-                         sub_llcoeff=params['sub_llcoeff'],
-                         inputpath=inputs['data'] + inputs["basename"],
-                         savepath=inputs['haloSavePath'],
-                         ini_vlcoeff=params['ini_alpha_v'],
-                         min_vlcoeff=params['min_alpha_v'],
-                         decrement=params['decrement'],
-                         verbose=flags['verbose'],
-                         findsubs=flags['subs'], ncells=params['N_cells'],
-                         profile=flags['profile'],
-                         profile_path=inputs["profilingPath"],
-                         cosmo=cosmo, h=cosmology["h"],
-                         softs=(simulation["comoving_DM_softening"],
-                             simulation["max_physical_DM_softening"]),
-                         dmo=flags["DMO"])
+def main_kdmpi(meta):
+    kdmpi.hosthalofinder(meta)
 
 
 def main_mg(snap, density_rank):
@@ -146,7 +145,7 @@ elif flags['usempi']:
 
     # ===================== Run The Halo Finder =====================
     if flags['halo']:
-        main_kdmpi(snaplist[snap_ind])
+        main_kdmpi(meta)
 
     # ===================== Find Direct Progenitors and Descendents =====================
     if flags['graphdirect']:

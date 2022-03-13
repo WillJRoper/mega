@@ -3,10 +3,8 @@ import numpy as np
 from halo_energy import kinetic, grav
 import halo_properties as hprop
 
-# [np.sum(self.masses[self.types == i])
-#                                 for i in range(7)]
 
-class Halo():
+class Halo:
 
     # Predefine possible attributes to avoid overhead
     __slots__ = ["pids", "sim_pids", "pos", "vel", "types", "masses",
@@ -88,7 +86,7 @@ class Halo():
         self.vlcoeff -= decrement
 
     def wrap_pos(self, boxsize):
-        
+
         # Define the comparison particle as the maximum
         # position in the current dimension
         max_part_pos = self.pos.max(axis=0)

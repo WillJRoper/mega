@@ -11,20 +11,6 @@ def hdf5_write_dataset(grp, key, data, compression="gzip"):
     grp.create_dataset(key, shape=data.shape, dtype=data.dtype, data=data,
                        compression=compression)
 
-def read_param(paramfile):
-    # Read in the param file
-    with open(paramfile) as yfile:
-        parsed_yaml_file = yaml.load(yfile, Loader=yaml.FullLoader)
-
-    # Extract individual dictionaries
-    inputs = parsed_yaml_file['inputs']
-    flags = parsed_yaml_file['flags']
-    params = parsed_yaml_file['parameters']
-    cosmology = parsed_yaml_file['cosmology']
-    simulation = parsed_yaml_file['simulation']
-
-    return inputs, flags, params, cosmology, simulation
-
 
 def enum(*sequential, **named):
     """Handy way to fake an enumerated type in Python
