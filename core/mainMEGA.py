@@ -46,7 +46,7 @@ def main_kd(snap):
 def main_kdmpi(snap):
     kdmpi.hosthalofinder(snap, llcoeff=params['llcoeff'],
                          sub_llcoeff=params['sub_llcoeff'],
-                         inputpath=inputs['data'],
+                         inputpath=inputs['data'] + inputs["basename"],
                          savepath=inputs['haloSavePath'],
                          ini_vlcoeff=params['ini_alpha_v'],
                          min_vlcoeff=params['min_alpha_v'],
@@ -57,7 +57,8 @@ def main_kdmpi(snap):
                          profile_path=inputs["profilingPath"],
                          cosmo=cosmo, h=cosmology["h"],
                          softs=(simulation["comoving_DM_softening"],
-                             simulation["max_physical_DM_softening"]))
+                             simulation["max_physical_DM_softening"]),
+                         dmo=flags["DMO"])
 
 
 def main_mg(snap, density_rank):

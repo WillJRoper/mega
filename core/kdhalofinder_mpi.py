@@ -15,6 +15,7 @@ import time
 import h5py
 import sys
 import utilities
+import halo_energy
 import halo_properties as hprop
 
 # Initializations and preliminaries
@@ -418,7 +419,7 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-halo_energy_calc = utilities.halo_energy_calc_exact
+halo_energy_calc = halo_energy.halo_energy_calc_exact
 
 
 def spatial_node_task(thisTask, pos, tree, linkl, npart):
@@ -439,9 +440,11 @@ def spatial_node_task(thisTask, pos, tree, linkl, npart):
     return halo_pids
 
 
-def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
-                        vlinkl_halo_indp, linkl, pmass, ini_vlcoeff,
-                        decrement, redshift, G, h, soft, min_vlcoeff, cosmo):
+def get_real_host_halos_iterate(sim_halo_pids, halo_poss, halo_vels, boxsize,
+                        vlinkl_halo_indp, linkl, halo_masses, halo_part_types,
+                        ini_vlcoeff, decrement, redshift, G, h, soft,
+                        min_vlcoeff, cosmo):
+
     # Initialise dicitonaries to store results
     results = {}
 
@@ -465,6 +468,9 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
     candidate_halos = {0: {"pos": halo_poss,
                            "vel": halo_vels,
                            "pid": sim_halo_pids,
+                           "mass": np.sum(halo_masses),
+                           "masses": halo_masses,
+                           "part_types": halo_part_types,
                            "vlcoeff": ini_vlcoeff}}
     candidateID = 0
     thisresultID = 0
@@ -476,14 +482,13 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
         halo_poss = candidate_halo["pos"]
         halo_vels = candidate_halo["vel"]
         sim_halo_pids = candidate_halo["pid"]
-        halo_npart = sim_halo_pids.size
+        halo_masses = candidate_halo["masses"]
+        halo_mass = candidate_halo["mass"]
+        halo_part_types = candidate_halo["part_types"]
         new_vlcoeff = candidate_halo["vlcoeff"]
 
-        new_vlcoeff -= decrement * new_vlcoeff
-
         # Define the phase space linking length
-        vlinkl = (new_vlcoeff * vlinkl_halo_indp
-                  * pmass ** (1 / 3) * halo_npart ** (1 / 3))
+        vlinkl = (new_vlcoeff * vlinkl_halo_indp * halo_mass ** (1 / 3))
 
         # Add the hubble flow to the velocities
         # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
@@ -514,12 +519,17 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
             halo_npart = len(this_halo_pids)
             this_halo_pos = halo_poss[this_halo_pids, :]
             this_halo_vel = halo_vels[this_halo_pids, :]
+            this_halo_masses = halo_masses[this_halo_pids]
+            this_part_types = halo_part_types[this_halo_pids]
             this_sim_halo_pids = sim_halo_pids[this_halo_pids]
 
             # Compute the centred positions and velocities
-            # *** NOTE: if all particles have the same mass this is the COM ***
-            mean_halo_pos = this_halo_pos.mean(axis=0)
-            mean_halo_vel = this_halo_vel.mean(axis=0)
+            mean_halo_pos = np.average(this_halo_pos,
+                                       weights=this_halo_masses,
+                                       axis=0)
+            mean_halo_vel = np.average(this_halo_vel,
+                                       weights=this_halo_masses,
+                                       axis=0)
 
             # Centre positions and velocities relative to COM
             this_halo_pos -= mean_halo_pos
@@ -529,7 +539,7 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
             halo_energy, KE, GE = halo_energy_calc(this_halo_pos,
                                                    this_halo_vel,
                                                    halo_npart,
-                                                   pmass, redshift,
+                                                   this_halo_masses, redshift,
                                                    G, h, soft)
 
             # Add the hubble flow to the velocities
@@ -546,23 +556,27 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                 # Compute the velocity dispersion
                 veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
 
-                # Define "masses" for property computation
-                masses = np.ones(len(this_sim_halo_pids))
-
                 # Compute maximal rotational velocity
-                vmax = hprop.vmax(this_halo_pos, masses, G)
+                vmax = hprop.vmax(this_halo_pos, this_halo_masses, G)
 
                 # Calculate half mass radius in position and velocity space
-                hmr = hprop.half_mass_rad(this_halo_pos, masses)
-                hmvr = hprop.half_mass_rad(this_halo_vel, masses)
+                hmr = hprop.half_mass_rad(this_halo_pos, this_halo_masses)
+                hmvr = hprop.half_mass_rad(this_halo_vel, this_halo_masses)
 
                 # Define realness flag
                 real = True
+
+                # Define mass in each particle type
+                part_type_mass = [np.sum(this_halo_masses[this_part_types
+                                                          == i])
+                                  for i in range(6)]
 
                 results[thisresultID] = {'pids': this_sim_halo_pids,
                                          'npart': halo_npart, 'real': real,
                                          'mean_halo_pos': mean_halo_pos,
                                          'mean_halo_vel': mean_halo_vel,
+                                         'halo_mass': np.sum(this_halo_masses),
+                                         'halo_ptype_mass': part_type_mass,
                                          'halo_energy': halo_energy,
                                          'KE': KE, 'GE': GE,
                                          "rms_r": r, "rms_vr": vr,
@@ -570,7 +584,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                          "veldisp1d": veldisp1d,
                                          "vmax": vmax,
                                          "hmr": hmr,
-                                         "hmvr": hmvr}
+                                         "hmvr": hmvr,
+                                         "vlcoeff": new_vlcoeff}
 
                 thisresultID += 1
 
@@ -583,23 +598,27 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                 # Compute the velocity dispersion
                 veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
 
-                # Define "masses" for property computation
-                masses = np.ones(len(this_sim_halo_pids))
-
                 # Compute maximal rotational velocity
-                vmax = hprop.vmax(this_halo_pos, masses, G)
+                vmax = hprop.vmax(this_halo_pos, this_halo_masses, G)
 
                 # Calculate half mass radius in position and velocity space
-                hmr = hprop.half_mass_rad(this_halo_pos, masses)
-                hmvr = hprop.half_mass_rad(this_halo_vel, masses)
+                hmr = hprop.half_mass_rad(this_halo_pos, this_halo_masses)
+                hmvr = hprop.half_mass_rad(this_halo_vel, this_halo_masses)
 
                 # Define realness flag
                 real = False
+
+                # Define mass in each particle type
+                part_type_mass = [np.sum(this_halo_masses[this_part_types
+                                                          == i])
+                                  for i in range(6)]
 
                 results[thisresultID] = {'pids': this_sim_halo_pids,
                                          'npart': halo_npart, 'real': real,
                                          'mean_halo_pos': mean_halo_pos,
                                          'mean_halo_vel': mean_halo_vel,
+                                         'halo_mass': np.sum(this_halo_masses),
+                                         'halo_ptype_mass': part_type_mass,
                                          'halo_energy': halo_energy,
                                          'KE': KE, 'GE': GE,
                                          "rms_r": r, "rms_vr": vr,
@@ -607,7 +626,8 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                          "veldisp1d": veldisp1d,
                                          "vmax": vmax,
                                          "hmr": hmr,
-                                         "hmvr": hmvr}
+                                         "hmvr": hmvr,
+                                         "vlcoeff": new_vlcoeff}
 
                 thisresultID += 1
 
@@ -618,40 +638,105 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                                 "vel": (this_halo_vel
                                                         + mean_halo_vel),
                                                 "pid": this_sim_halo_pids,
-                                                "vlcoeff": new_vlcoeff}
+                                                "mass": np.sum(this_halo_masses),
+                                                "masses": this_halo_masses,
+                                                "part_types": this_part_types,
+                                                "vlcoeff": new_vlcoeff - decrement}
 
                 candidateID += 1
                 thiscontID += 1
 
-    else:
+    return results
 
-        if len(not_real_pids) > 0:
-            print("Made it to the else in phase test", len(not_real_pids))
 
-        while len(not_real_pids) > 0:
+def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
+                        vlinkl_halo_indp, linkl, halo_masses, halo_part_types,
+                        new_vlcoeff, decrement, redshift, G, h, soft,
+                        min_vlcoeff, cosmo):
+    # Initialise dicitonaries to store results
+    results = {}
 
-            # Extract halo particle data
-            key, val = not_real_pids.popitem()
-            this_halo_pids = list(val)
-            halo_npart = len(this_halo_pids)
-            if halo_npart < 10:
-                continue
-            this_halo_pos = halo_poss[this_halo_pids, :]
-            this_halo_vel = halo_vels[this_halo_pids, :]
-            this_sim_halo_pids = sim_halo_pids[this_halo_pids]
+    # Define the comparison particle as the maximum position
+    # in the current dimension
+    max_part_pos = halo_poss.max(axis=0)
 
-            # Compute the centred positions and velocities
-            mean_halo_pos = this_halo_pos.mean(axis=0)
-            mean_halo_vel = this_halo_vel.mean(axis=0)
-            this_halo_pos -= mean_halo_pos
-            this_halo_vel -= mean_halo_vel
+    # Compute all the halo particle separations from the maximum position
+    sep = max_part_pos - halo_poss
 
-            # Compute halo's energy
-            halo_energy, KE, GE = halo_energy_calc(this_halo_pos,
-                                                   this_halo_vel,
-                                                   halo_npart,
-                                                   pmass, redshift,
-                                                   G, h, soft)
+    # If any separations are greater than 50% the boxsize
+    # (i.e. the halo is split over the boundary)
+    # bring the particles at the lower boundary together with
+    # the particles at the upper boundary (ignores halos where
+    # constituent particles aren't separated by at least 50% of the boxsize)
+    # *** Note: fails if halo's extent is greater than 50% of
+    # the boxsize in any dimension ***
+    halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
+
+    # Get the total mass of the halo
+    halo_mass = np.sum(halo_masses)
+
+    # Initialise counters
+    thisresultID = 0
+
+    # Define the phase space linking length
+    vlinkl = (new_vlcoeff * vlinkl_halo_indp * halo_mass ** (1 / 3))
+
+    # Add the hubble flow to the velocities
+    # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
+    ini_cent = np.mean(halo_poss, axis=0)
+    sep = cosmo.H(redshift).value * (halo_poss - ini_cent)
+    halo_vels_with_HubFlow = halo_vels + sep
+
+    # Define the phase space vectors for this halo
+    halo_phases = np.concatenate((halo_poss / linkl,
+                                  halo_vels_with_HubFlow / vlinkl), axis=1)
+
+    # Query these particles in phase space to find distinct bound halos
+    part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
+
+    # Loop over the halos found in phase space
+    while len(assigned_parts) > 0:
+
+        # Get the next halo from the dictionary and ensure
+        # it has more than 10 particles
+        key, val = assigned_parts.popitem()
+        if len(val) < 10:
+            continue
+
+        # Extract halo particle data
+        this_halo_pids = list(val)
+        halo_npart = len(this_halo_pids)
+        this_halo_pos = halo_poss[this_halo_pids, :]
+        this_halo_vel = halo_vels[this_halo_pids, :]
+        this_halo_masses = halo_masses[this_halo_pids]
+        this_part_types = halo_part_types[this_halo_pids]
+        this_sim_halo_pids = sim_halo_pids[this_halo_pids]
+
+        # Compute the centred positions and velocities
+        mean_halo_pos = np.average(this_halo_pos,
+                                   weights=this_halo_masses,
+                                   axis=0)
+        mean_halo_vel = np.average(this_halo_vel,
+                                   weights=this_halo_masses,
+                                   axis=0)
+
+        # Centre positions and velocities relative to COM
+        this_halo_pos -= mean_halo_pos
+        this_halo_vel -= mean_halo_vel
+
+        # Compute halo's energy
+        halo_energy, KE, GE = halo_energy_calc(this_halo_pos,
+                                               this_halo_vel,
+                                               halo_npart,
+                                               this_halo_masses, redshift,
+                                               G, h, soft)
+
+        # Add the hubble flow to the velocities
+        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
+        sep = cosmo.H(redshift).value * this_halo_pos
+        this_halo_vel += sep
+
+        if KE / GE <= 1 or new_vlcoeff <= min_vlcoeff:
 
             # Get rms radii from the centred position and velocity
             r = hprop.rms_rad(this_halo_pos)
@@ -659,30 +744,25 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
 
             # Compute the velocity dispersion
             veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
-            # Define "masses" for property computation
-            masses = np.ones(len(this_sim_halo_pids))
 
             # Compute maximal rotational velocity
-            vmax = hprop.vmax(this_halo_pos, masses, G)
+            vmax = hprop.vmax(this_halo_pos, this_halo_masses, G)
 
             # Calculate half mass radius in position and velocity space
-            hmr = hprop.half_mass_rad(this_halo_pos, masses)
-            hmvr = hprop.half_mass_rad(this_halo_vel, masses)
+            hmr = hprop.half_mass_rad(this_halo_pos, this_halo_masses)
+            hmvr = hprop.half_mass_rad(this_halo_vel, this_halo_masses)
 
-            if KE / GE <= 1:
-
-                # Define realness flag
-                real = True
-
-            else:
-
-                # Define realness flag
-                real = False
+            # Define mass in each particle type
+            part_type_mass = [np.sum(this_halo_masses[this_part_types == i])
+                              for i in range(6)]
 
             results[thisresultID] = {'pids': this_sim_halo_pids,
-                                     'npart': halo_npart, 'real': real,
+                                     'npart': halo_npart,
+                                     'real': KE / GE <= 1,
                                      'mean_halo_pos': mean_halo_pos,
                                      'mean_halo_vel': mean_halo_vel,
+                                     'halo_mass': np.sum(this_halo_masses),
+                                     'halo_ptype_mass': part_type_mass,
                                      'halo_energy': halo_energy,
                                      'KE': KE, 'GE': GE,
                                      "rms_r": r, "rms_vr": vr,
@@ -690,9 +770,27 @@ def get_real_host_halos(sim_halo_pids, halo_poss, halo_vels, boxsize,
                                      "veldisp1d": veldisp1d,
                                      "vmax": vmax,
                                      "hmr": hmr,
-                                     "hmvr": hmvr}
+                                     "hmvr": hmvr,
+                                     "vlcoeff": new_vlcoeff}
 
             thisresultID += 1
+
+        else:
+
+            # We need to run this halo again
+            temp_res = get_real_host_halos(this_sim_halo_pids,
+                                           this_halo_pos + mean_halo_pos,
+                                           this_halo_vel + mean_halo_vel,
+                                           boxsize, vlinkl_halo_indp, linkl,
+                                           this_halo_masses, this_part_types,
+                                           new_vlcoeff - decrement, decrement,
+                                           redshift, G, h, soft,
+                                           min_vlcoeff, cosmo)
+
+            # Include these results
+            for key in temp_res:
+                results[thisresultID] = temp_res[key]
+                thisresultID += 1
 
     return results
 
@@ -711,7 +809,7 @@ def get_sub_halos(halo_pids, halo_pos, sub_linkl):
 
 def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                    ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                   ncells, profile, profile_path, cosmo, h, softs):
+                   ncells, profile, profile_path, cosmo, h, softs, dmo):
     """ Run the halo finder, sort the output results, find subhalos and
         save to a HDF5 file.
 
@@ -764,14 +862,18 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     read_start = time.time()
 
     # Open hdf5 file
-    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+    hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
     # Get parameters for decomposition
-    mean_sep = hdf.attrs['mean_sep']
+    mean_sep = hdf["PartType1"].attrs['mean_sep']
     boxsize = hdf.attrs['boxsize']
     npart = hdf.attrs['npart']
+    if dmo:
+        temp_npart = np.zeros(npart.size, dtype=np.int64)
+        temp_npart[1] = npart[1]
+        npart = temp_npart
     redshift = hdf.attrs['redshift']
-    pmass = hdf.attrs['pmass']
+    tot_mass = hdf["PartType1"].attrs['tot_mass'] * 10**10
 
     hdf.close()
 
@@ -803,21 +905,18 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     # Define the gravitational constant
     G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
-    # Convert particle mass to M_sun
-    true_pmass = pmass * 1e10
-
     # Compute the linking length for subhalos
     sub_linkl = sub_llcoeff * mean_sep
 
     # Compute the mean density
-    mean_den = (npart * true_pmass * u.M_sun / boxsize ** 3
+    mean_den = (tot_mass * u.M_sun / boxsize ** 3
                 / u.Mpc ** 3 * (1 + redshift) ** 3)
     mean_den = mean_den.to(u.M_sun / u.km ** 3)
 
     # Define the velocity space linking length
     vlinkl_indp = (np.sqrt(G / 2)
                    * (4 * np.pi * 200
-                      * mean_den / 3) ** (1 / 6)).value * (10 ** 10) ** (1 / 3)
+                      * mean_den / 3) ** (1 / 6)).value
 
     if verbose and rank == 0:
         print("Redshift/Scale Factor:", str(redshift) + "/" + str(a))
@@ -825,17 +924,16 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         print("Boxsize:", boxsize, "cMpc")
         print("Comoving Softening Length:", soft, "cMpc")
         print("Physical Softening Length:", soft * a, "pMpc")
-        print("Particle Mass:", true_pmass, "M_sun")
         print("Spatial Host Linking Length:", linkl, "cMpc")
         print("Spatial Subhalo Linking Length:", sub_linkl, "cMpc")
         print("Initial Phase Space Host Linking Length "
-              "(for 1600 a particle halo):",
+              "(for 10**12 M_sun a particle halo):",
               ini_vlcoeff * vlinkl_indp
-              * pmass ** (1 / 3) * 1600 ** (1 / 3), "km / s")
+              * 10**12 ** (1 / 3), "km / s")
         print("Initial Phase Space Subhalo Linking Length "
-              "(for 200 a particle subhalo):",
+              "(for 10**9 M_sun a particle subhalo):",
               ini_vlcoeff * vlinkl_indp
-              * pmass ** (1 / 3) * 200 ** (1 / 3) * 8 ** (1 / 6), "km / s")
+              * 10**9 ** (1 / 3) * 8 ** (1 / 6), "km / s")
 
     if profile:
         prof_d["Housekeeping"]["Start"].append(set_up_start)
@@ -846,10 +944,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         start_dd = time.time()
 
         # Open hdf5 file
-        hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+        hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
         # Get positions to perform the decomposition
-        pos = hdf['part_pos'][...]
+        pos = hdf["PartType1"]['part_pos'][...]
 
         hdf.close()
 
@@ -874,15 +972,13 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
             print("Tree memory size", sys.getsizeof(tree), "bytes")
 
-            # print(hp.heap())
-
     else:
 
         start_dd = time.time()
 
         tree = None
 
-    dd_data = utilities.decomp_nodes(npart, size, cells_per_rank, rank)
+    dd_data = utilities.decomp_nodes(npart[1], size, cells_per_rank, rank)
     thisRank_tasks, thisRank_parts, nnodes, rank_edges = dd_data
 
     if profile:
@@ -914,14 +1010,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     read_start = time.time()
 
     # Open hdf5 file
-    hdf = h5py.File(inputpath + "mega_inputs_" + snapshot + ".hdf5", 'r')
+    hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
     # Get the position and velocity of each particle in this rank
-    pos = hdf['part_pos'][low_lim: up_lim, :]
-    # hdfpos = hdf['part_pos'][...]
-    # pos = hdfpos[low_lim: up_lim, :]
-
-    # del hdfpos
+    pos = hdf["PartType1"]['part_pos'][low_lim: up_lim, :]
 
     hdf.close()
 
@@ -950,7 +1042,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         # Extract the spatial halos for this tasks particles
         result = spatial_node_task(thisTask,
                                    pos[thisTask_parts - rank_index_offset],
-                                   tree, linkl, npart)
+                                   tree, linkl, npart[1])
 
         # Store the results in a dictionary for later combination
         results[thisTask] = result
@@ -1011,7 +1103,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         halo_tasks = utilities.combine_tasks_networkx(results,
                                                       size,
                                                       halos_to_combine,
-                                                      npart)
+                                                      npart[1])
 
         if verbose:
             print("Combining the results took",
@@ -1032,6 +1124,13 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
     # ============ Test Halos in Phase Space and find substructure ============
 
     set_up_start = time.time()
+
+    # Get input data hdf5 key (DM particle for DMO, concatenated
+    # array of all species otherwise)
+    if dmo:
+        hdf_part_key = "PartType1"
+    else:
+        hdf_part_key = "All"
 
     # Extract this ranks spatial halo dictionaries
     haloID_dict = {}
@@ -1107,13 +1206,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                     thisTask.sort()
 
                     # Open hdf5 file
-                    hdf = h5py.File(inputpath +
-                                    "mega_inputs_" + snapshot + ".hdf5", 'r')
+                    hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
                     # Get the position and velocity of
                     # each particle in this rank
-                    pos = hdf['part_pos'][thisTask, :]
-                    vel = hdf['part_vel'][thisTask, :]
+                    pos = hdf[hdf_part_key]['part_pos'][thisTask, :]
+                    vel = hdf[hdf_part_key]['part_vel'][thisTask, :]
+                    masses = hdf[hdf_part_key]['part_masses'][thisTask] * 10**10
+                    part_types = hdf[hdf_part_key]['part_types'][thisTask]
 
                     hdf.close()
 
@@ -1127,9 +1227,10 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
                     # Do the work here
                     result = get_real_host_halos(thisTask, pos, vel, boxsize,
-                                                 vlinkl_indp, linkl, pmass,
-                                                 ini_vlcoeff, decrement,
-                                                 redshift, G, h, soft,
+                                                 vlinkl_indp, linkl, masses,
+                                                 part_types, ini_vlcoeff,
+                                                 decrement, redshift, G,
+                                                 h, soft,
                                                  min_vlcoeff, cosmo)
 
                     # Save results
@@ -1158,13 +1259,12 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             thishalo_pids = np.sort(res["pids"])
 
                             # Open hdf5 file
-                            hdf = h5py.File(inputpath
-                                            + "mega_inputs_"
-                                            + snapshot + ".hdf5", 'r')
+                            hdf = h5py.File(inputpath + snapshot + ".hdf5",
+                                            'r')
 
                             # Get the position and velocity of each
                             # particle in this rank
-                            subhalo_poss = hdf['part_pos'][thishalo_pids, :]
+                            subhalo_poss = hdf[hdf_part_key]['part_pos'][thishalo_pids, :]
 
                             hdf.close()
 
@@ -1204,14 +1304,15 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             thisSub.sort()
 
                             # Open hdf5 file
-                            hdf = h5py.File(inputpath
-                                            + "mega_inputs_"
-                                            + snapshot + ".hdf5", 'r')
+                            hdf = h5py.File(inputpath + snapshot + ".hdf5",
+                                            'r')
 
                             # Get the position and velocity of each
                             # particle in this rank
-                            pos = hdf['part_pos'][thisSub, :]
-                            vel = hdf['part_vel'][thisSub, :]
+                            pos = hdf[hdf_part_key]['part_pos'][thisSub, :]
+                            vel = hdf[hdf_part_key]['part_vel'][thisSub, :]
+                            masses = hdf[hdf_part_key]['part_masses'][thisSub] * 10**10
+                            part_types = hdf[hdf_part_key]['part_types'][thisSub]
 
                             hdf.close()
 
@@ -1228,7 +1329,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                          boxsize,
                                                          vlinkl_indp
                                                          * 8 ** (1 / 6),
-                                                         sub_linkl, pmass,
+                                                         sub_linkl, masses,
+                                                         part_types,
                                                          ini_vlcoeff,
                                                          decrement,
                                                          redshift,
@@ -1282,13 +1384,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 thisTask.sort()
 
                 # Open hdf5 file
-                hdf = h5py.File(inputpath
-                                + "mega_inputs_"
-                                + snapshot + ".hdf5", 'r')
+                hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
-                # Get the position and velocity of each particle in this rank
-                pos = hdf['part_pos'][thisTask, :]
-                vel = hdf['part_vel'][thisTask, :]
+                # Get the position and velocity of
+                # each particle in this rank
+                pos = hdf[hdf_part_key]['part_pos'][thisTask, :]
+                vel = hdf[hdf_part_key]['part_vel'][thisTask, :]
+                masses = hdf[hdf_part_key]['part_masses'][thisTask] * 10 ** 10
+                part_types = hdf[hdf_part_key]['part_types'][thisTask]
 
                 hdf.close()
 
@@ -1302,7 +1405,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
 
                 # Do the work here
                 result = get_real_host_halos(thisTask, pos, vel, boxsize,
-                                             vlinkl_indp, linkl, pmass,
+                                             vlinkl_indp, linkl, masses,
+                                             part_types,
                                              ini_vlcoeff, decrement, redshift,
                                              G, h, soft, min_vlcoeff, cosmo)
 
@@ -1332,13 +1436,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                         thishalo_pids = np.sort(res["pids"])
 
                         # Open hdf5 file
-                        hdf = h5py.File(inputpath
-                                        + "mega_inputs_"
-                                        + snapshot + ".hdf5", 'r')
+                        hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
                         # Get the position and velocity of each
                         # particle in this rank
-                        subhalo_poss = hdf['part_pos'][thishalo_pids, :]
+                        subhalo_poss = hdf[hdf_part_key]['part_pos'][thishalo_pids, :]
 
                         hdf.close()
 
@@ -1377,14 +1479,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                         thisSub.sort()
 
                         # Open hdf5 file
-                        hdf = h5py.File(inputpath
-                                        + "mega_inputs_"
-                                        + snapshot + ".hdf5", 'r')
+                        hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
 
                         # Get the position and velocity of each
                         # particle in this rank
-                        pos = hdf['part_pos'][thisSub, :]
-                        vel = hdf['part_vel'][thisSub, :]
+                        pos = hdf[hdf_part_key]['part_pos'][thisSub, :]
+                        vel = hdf[hdf_part_key]['part_vel'][thisSub, :]
+                        masses = hdf[hdf_part_key]['part_masses'][thisSub] * 10**10
+                        part_types = hdf[hdf_part_key]['part_types'][thisSub]
 
                         hdf.close()
 
@@ -1401,7 +1503,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                                      boxsize,
                                                      vlinkl_indp
                                                      * 8 ** (1 / 6),
-                                                     sub_linkl, pmass,
+                                                     sub_linkl, masses,
+                                                     part_types,
                                                      ini_vlcoeff, decrement,
                                                      redshift, G, h, soft,
                                                      min_vlcoeff, cosmo)
@@ -1460,7 +1563,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         newPhaseID = 0
         newPhaseSubID = 0
 
-        phase_part_haloids = np.full((npart, 2), -2, dtype=np.int32)
+        phase_part_haloids = np.full((np.sum(npart), 2), -2, dtype=np.int32)
 
         # Collect host halo results
         results_dict = {}
@@ -1557,6 +1660,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         # Set up arrays to store subhalo results
         nhalo = newPhaseID
         halo_nparts = np.full(nhalo, -1, dtype=int)
+        halo_masses = np.full(nhalo, -1, dtype=float)
+        halo_type_masses = np.full((nhalo, 6), -1, dtype=float)
         mean_poss = np.full((nhalo, 3), -1, dtype=float)
         mean_vels = np.full((nhalo, 3), -1, dtype=float)
         reals = np.full(nhalo, 0, dtype=bool)
@@ -1571,12 +1676,15 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         vmaxs = np.zeros(nhalo, dtype=float)
         hmrs = np.zeros(nhalo, dtype=float)
         hmvrs = np.zeros(nhalo, dtype=float)
+        exit_vlcoeff = np.zeros(nhalo, dtype=float)
 
         if findsubs:
 
             # Set up arrays to store host results
             nsubhalo = newPhaseSubID
             subhalo_nparts = np.full(nsubhalo, -1, dtype=int)
+            subhalo_masses = np.full(nsubhalo, -1, dtype=float)
+            subhalo_type_masses = np.full((nsubhalo, 6), -1, dtype=float)
             sub_mean_poss = np.full((nsubhalo, 3), -1, dtype=float)
             sub_mean_vels = np.full((nsubhalo, 3), -1, dtype=float)
             sub_reals = np.full(nsubhalo, 0, dtype=bool)
@@ -1591,11 +1699,14 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             sub_vmaxs = np.zeros(nsubhalo, dtype=float)
             sub_hmrs = np.zeros(nsubhalo, dtype=float)
             sub_hmvrs = np.zeros(nsubhalo, dtype=float)
+            sub_exit_vlcoeff = np.zeros(nhalo, dtype=float)
 
         else:
 
             # Set up dummy subhalo results
             subhalo_nparts = None
+            subhalo_masses = None
+            subhalo_type_masses = None
             sub_mean_poss = None
             sub_mean_vels = None
             sub_reals = None
@@ -1610,6 +1721,9 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             sub_vmaxs = None
             sub_hmrs = None
             sub_hmvrs = None
+            sub_exit_vlcoeff = None
+
+        # TODO: nPart should also be split by particle type
 
         # Create the root group
         snap = h5py.File(savepath + 'halos_' + str(snapshot) + '.hdf5', 'w')
@@ -1618,7 +1732,6 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
         snap.attrs[
             'snap_nPart'] = npart  # number of particles in the simulation
         snap.attrs['boxsize'] = boxsize  # box length along each axis
-        snap.attrs['part_mass'] = true_pmass  # particle mass
         snap.attrs['h'] = h  # 'little h' (hubble constant parametrisation)
 
         # Assign snapshot attributes
@@ -1637,6 +1750,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             mean_poss[halo_id, :] = halo_res['mean_halo_pos']
             mean_vels[halo_id, :] = halo_res['mean_halo_vel']
             halo_nparts[halo_id] = halo_res['npart']
+            halo_masses[halo_id] = halo_res["halo_mass"]
+            halo_type_masses[halo_id, :] = halo_res["halo_ptype_mass"]
             reals[halo_id] = halo_res['real']
             halo_energies[halo_id] = halo_res['halo_energy']
             KEs[halo_id] = halo_res['KE']
@@ -1648,6 +1763,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
             vmaxs[halo_id] = halo_res["vmax"]
             hmrs[halo_id] = halo_res["hmr"]
             hmvrs[halo_id] = halo_res["hmvr"]
+            exit_vlcoeff[halo_id] = halo_res["vlcoeff"]
 
             # Create datasets in the current halo's group in the HDF5 file
             halo = snap.create_group(str(halo_id))  # create halo group
@@ -1696,6 +1812,16 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             dtype=int,
                             data=halo_nparts,
                             compression='gzip')
+        snap.create_dataset('total_masses',
+                            shape=halo_masses.shape,
+                            dtype=float,
+                            data=halo_masses,
+                            compression='gzip')
+        snap.create_dataset('masses',
+                            shape=halo_type_masses.shape,
+                            dtype=float,
+                            data=halo_type_masses,
+                            compression='gzip')
         snap.create_dataset('real_flag',
                             shape=reals.shape,
                             dtype=bool,
@@ -1731,6 +1857,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                             dtype=hmvrs.dtype,
                             data=hmvrs,
                             compression='gzip')
+        snap.create_dataset('exit_vlcoeff',
+                            shape=exit_vlcoeff.shape,
+                            dtype=exit_vlcoeff.dtype,
+                            data=exit_vlcoeff,
+                            compression='gzip')
 
         # Assign the full halo IDs array to the snapshot group
         snap.create_dataset('particle_halo_IDs',
@@ -1763,6 +1894,8 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 sub_mean_poss[subhalo_id, :] = subhalo_res['mean_halo_pos']
                 sub_mean_vels[subhalo_id, :] = subhalo_res['mean_halo_vel']
                 subhalo_nparts[subhalo_id] = subhalo_res['npart']
+                subhalo_masses[subhalo_id] = subhalo_res["halo_mass"]
+                subhalo_type_masses[subhalo_id, :] = subhalo_res["halo_ptype_mass"]
                 sub_reals[subhalo_id] = subhalo_res['real']
                 subhalo_energies[subhalo_id] = subhalo_res['halo_energy']
                 sub_KEs[subhalo_id] = subhalo_res['KE']
@@ -1776,6 +1909,7 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                 sub_vmaxs[subhalo_id] = subhalo_res["vmax"]
                 sub_hmrs[subhalo_id] = subhalo_res["hmr"]
                 sub_hmvrs[subhalo_id] = subhalo_res["hmvr"]
+                sub_exit_vlcoeff[subhalo_id] = subhalo_res["vlcoeff"]
 
                 # Create subhalo group
                 subhalo = sub_root.create_group(str(subhalo_id))
@@ -1829,6 +1963,16 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                     dtype=int,
                                     data=subhalo_nparts,
                                     compression='gzip')
+            sub_root.create_dataset('total_masses',
+                                shape=subhalo_masses.shape,
+                                dtype=float,
+                                data=subhalo_masses,
+                                compression='gzip')
+            sub_root.create_dataset('masses',
+                                shape=subhalo_type_masses.shape,
+                                dtype=float,
+                                data=subhalo_type_masses,
+                                compression='gzip')
             sub_root.create_dataset('real_flag',
                                     shape=sub_reals.shape,
                                     dtype=bool,
@@ -1864,6 +2008,11 @@ def hosthalofinder(snapshot, llcoeff, sub_llcoeff, inputpath, savepath,
                                     dtype=sub_hmvrs.dtype,
                                     data=sub_hmvrs,
                                     compression='gzip')
+            sub_root.create_dataset('exit_vlcoeff',
+                                shape=sub_exit_vlcoeff.shape,
+                                dtype=sub_exit_vlcoeff.dtype,
+                                data=sub_exit_vlcoeff,
+                                compression='gzip')
 
         snap.create_dataset('occupancy',
                             shape=nsubhalos.shape,

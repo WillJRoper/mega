@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 sys.path.insert(1, "core/")
+sys.path.insert(1, "../mega_global_phase/core/")
 import utilities
 from matplotlib.colors import LogNorm
 import h5py
@@ -26,49 +27,54 @@ def energyplot():
     total_KE = []
     total_GE = []
     mass = []
+    npart = []
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params, _ = utilities.read_param(paramfile)
+    inputs, flags, params, cosmology, simulation = utilities.read_param(paramfile)
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs["snapList"], dtype=str))
     
     halo_sub = int(sys.argv[2])
-    
-    pmass = 1
 
     # Loop through Merger Graph data assigning each value to the relevant list
     for snap in snaplist:
+
+        if len(sys.argv) > 3:
+            if snap != snaplist[int(sys.argv[3])]:
+                continue
 
         print(snap)
 
         # Create file to store this snapshots graph results
         hdf = h5py.File(inputs["haloSavePath"] + "halos_" + str(snap) + ".hdf5", "r")
-        
-        pmass = hdf.attrs["part_mass"]
 
         if halo_sub == 0:
 
             # Get the number of progenitors and descendants
             KE = hdf["halo_kinetic_energies"][...]
             GE = hdf["halo_gravitational_energies"][...]
-            m = hdf["nparts"][...] * pmass
+            m = hdf["total_masses"][...]
+            n = hdf["nparts"][...]
             reals = hdf["real_flag"][...]
             total_KE.extend(KE[reals])
             total_GE.extend(GE[reals])
             mass.extend(m[reals])
+            npart.extend(n[reals])
 
         else:
 
             # Get the number of progenitors and descendants
             KE = hdf["Subhalos"]["halo_kinetic_energies"][...]
             GE = hdf["Subhalos"]["halo_gravitational_energies"][...]
-            m = hdf["Subhalos"]["nparts"][...] * pmass
+            m = hdf["Subhalos"]["total_masses"][...]
+            n = hdf["Subhalos"]["nparts"][...]
             reals = hdf["Subhalos"]["real_flag"][...]
             total_KE.extend(KE[reals])
             total_GE.extend(GE[reals])
             mass.extend(m[reals])
+            npart.extend(n[reals])
 
         hdf.close()
 
@@ -81,7 +87,7 @@ def energyplot():
 
             # Plot data
             axtwin.scatter(m, KE / GE, facecolors="none", edgecolors="none")
-            cbar = ax.hexbin(m / pmass, KE / GE, gridsize=50, xscale="log", yscale="log", mincnt=1,
+            cbar = ax.hexbin(n, KE / GE, gridsize=50, xscale="log", yscale="log", mincnt=1,
                              norm=LogNorm(), linewidths=0.2)
             ax.axhline(1.0, linestyle="--", color="k", label="$E=0$")
             ax.axhline(0.5, linestyle="--", color="g", label="$2KE=|GE|$")
@@ -110,9 +116,9 @@ def energyplot():
 
             # Save figure
             if halo_sub == 0:
-                fig.savefig("analytics/energy_plots/halo_energies_" + snap + ".png", bbox_inches="tight")
+                fig.savefig(inputs["analyticPlotPath"] + "energy_plots/halo_energies_" + snap + ".png", bbox_inches="tight")
             else:
-                fig.savefig("analytics/energy_plots/subhalo_energies_" + snap + ".png", bbox_inches="tight")
+                fig.savefig(inputs["analyticPlotPath"] + "energy_plots/subhalo_energies_" + snap + ".png", bbox_inches="tight")
 
             plt.close(fig)
 
@@ -122,6 +128,7 @@ def energyplot():
     total_KE = np.array(total_KE)
     total_GE = np.array(total_GE)
     mass = np.array(mass)
+    npart = np.array(npart)
 
     ratio = total_KE / total_GE
     print("There are", ratio[ratio > 1].size, "unbound halos")
@@ -133,7 +140,7 @@ def energyplot():
 
     # Plot data
     axtwin.scatter(mass, ratio, facecolors="none", edgecolors="none")
-    cbar = ax.hexbin(mass / pmass, ratio, gridsize=50, xscale="log", yscale="log", mincnt=1,
+    cbar = ax.hexbin(npart, ratio, gridsize=50, xscale="log", yscale="log", mincnt=1,
                      norm=LogNorm(), linewidths=0.2)
     ax.axhline(1.0, linestyle="--", color="k", label="$E=0$")
     ax.axhline(0.5, linestyle="--", color="g", label="$2KE=|GE|$")
@@ -162,9 +169,9 @@ def energyplot():
 
     # Save figure
     if halo_sub == 0:
-        fig.savefig("analytics/energy_plots/halo_energies.png", bbox_inches="tight")
+        fig.savefig(inputs["analyticPlotPath"] + "energy_plots/halo_energies.png", bbox_inches="tight")
     else:
-        fig.savefig("analytics/energy_plots/subhalo_energies.png", bbox_inches="tight")
+        fig.savefig(inputs["analyticPlotPath"] + "energy_plots/subhalo_energies.png", bbox_inches="tight")
 
     return
 

@@ -13,6 +13,10 @@ inputs:
   profilingPath:       profiling/   # The filepath and basename for profiling files
   analyticPlotPath:    analytics/plots/  # The filepath and basename for profiling files
 
+  # Snapshot string information
+  nSnaps:              99                # Total number of snapshots (assumes numbering starts at 0)
+  snapshot_tag_form:   0000              # The form of the snapshot string, used to define the number of leading zeros
+
 
 cosmology:
 
@@ -30,6 +34,9 @@ simulation:
 
 
 flags:
+
+  # Flags for type of halos desired
+  DMO:                 1              # Flag for only considering dark matter
 
   # Flags for processes, NOTE: To enable a process, all above processes must be enabled
   halo:                1              # Flag for creating halo catalog

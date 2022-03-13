@@ -17,6 +17,9 @@ size = comm.size  # total number of processes
 rank = comm.rank  # density_rank of this process
 status = MPI.Status()  # get MPI status object
 
+# TODO: All mentions of mass need to be converted to Npart and mass arrays
+#  need to be introduced
+
 
 def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_reals,
                          prog_nparts, desc_nparts, npart):
