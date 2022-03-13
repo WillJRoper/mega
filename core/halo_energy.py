@@ -36,10 +36,10 @@ def kinetic(v, masses):
     vel2 = np.sum([v2[:, 0], v2[:, 1], v2[:, 2]], axis=0)
     KE_part = 0.5 * masses * vel2
 
-    return np.sum(KE_part), KE_part
+    return KE_part
 
 
-def get_grav(halo_poss, halo_npart, soft, masses, redshift, G):
+def grav(halo_poss, halo_npart, soft, masses, redshift, G):
 
     # Explict loop over each particle
     GE_part = np.zeros(halo_poss.shape[0])
@@ -53,7 +53,7 @@ def get_grav(halo_poss, halo_npart, soft, masses, redshift, G):
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
     GE_part = G * np.float64(GE_part) * (1 + redshift) * 1 / 3.086e+19
 
-    return np.sum(GE_part), GE_part
+    return GE_part
 
 
 def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, masses, redshift,

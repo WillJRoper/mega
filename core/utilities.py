@@ -1,8 +1,7 @@
 import h5py
 import networkx
 import numpy as np
-from scipy.spatial import cKDTree
-from scipy.spatial.distance import cdist
+from halo import Halo
 # import readgadgetdata
 import yaml
 from networkx.algorithms.components.connected import connected_components
@@ -299,16 +298,21 @@ def SWIFT_to_MEGA_hdf5_allsnaps(snaplist_path, PATH, basename,
 
 
 def wrap_halo(halo_poss, boxsize, domean=False):
-    # Define the comparison particle as the maximum position in the current dimension
+    # Define the comparison particle as the maximum
+    # position in the current dimension
     max_part_pos = halo_poss.max(axis=0)
 
     # Compute all the halo particle separations from the maximum position
     sep = max_part_pos - halo_poss
 
-    # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-    # bring the particles at the lower boundary together with the particles at the upper boundary
-    # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-    # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
+    # If any separations are greater than 50% the boxsize
+    # (i.e. the halo is split over the boundary)
+    # bring the particles at the lower boundary together
+    # with the particles at the upper boundary
+    # (ignores halos where constituent particles aren't
+    # separated by at least 50% of the boxsize)
+    # *** Note: fails if halo's extent is greater than 50%
+    # of the boxsize in any dimension ***
     halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
     if domean:
@@ -523,6 +527,30 @@ def combine_tasks_per_thread(results, rank, thisRank_parts):
         newtaskID += 1
 
     return halo_pids, halos_in_other_ranks
+
+
+def read_halo_data(part_inds, inputpath, snapshot, hdf_part_key,
+                   ini_vlcoeff, boxsize, soft, redshift, G, cosmo):
+
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
+
+    # Get the position and velocity of
+    # each particle in this rank
+    sim_pids = hdf[hdf_part_key]['part_pid'][part_inds]
+    pos = hdf[hdf_part_key]['part_pos'][part_inds, :]
+    vel = hdf[hdf_part_key]['part_vel'][part_inds, :]
+    masses = hdf[hdf_part_key]['part_masses'][part_inds] * 10 ** 10
+    part_types = hdf[hdf_part_key]['part_types'][part_inds]
+
+    hdf.close()
+
+    # Instantiate halo object
+    halo = Halo(part_inds, sim_pids, pos, vel, part_types,
+                masses, ini_vlcoeff, boxsize, soft,
+                redshift, G, cosmo)
+
+    return halo
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):
