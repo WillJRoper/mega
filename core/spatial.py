@@ -2,6 +2,10 @@ import numpy as np
 from collections import defaultdict
 from scipy.spatial import cKDTree
 
+from timing import timer
+import utilities
+from halo_stitching import add_halo
+
 
 def find_halos(tree, pos, linkl, npart):
     """ A function which creates a KD-Tree using scipy.CKDTree and queries it to find particles
@@ -20,17 +24,21 @@ def find_halos(tree, pos, linkl, npart):
              query_func: The tree query object assigned to a variable.
     """
 
-    # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
+    # ===== Initialise The Halo Finder Variables/Arrays and The KD-Tree =====
 
     # Initialise the arrays and dictionaries for storing halo data
     part_haloids = np.full(npart, -1,
                            dtype=np.int32)  # halo ID containing each particle
-    assigned_parts = defaultdict(
-        set)  # dictionary to store the particles in a particular halo
-    # A dictionary where each key is an initial halo ID and the item is the halo IDs it has been linked with
+
+    # Dictionary to store the particles in a particular halo
+    assigned_parts = defaultdict(set)
+
+    # A dictionary where each key is an initial halo ID and the item is the
+    # halo IDs it has been linked with
     linked_halos_dict = defaultdict(set)
-    final_halo_ids = np.full(npart, -1,
-                             dtype=np.int32)  # final halo ID of linked halos (index is initial halo ID)
+
+    # Final halo ID of linked halos (index is initial halo ID)
+    final_halo_ids = np.full(npart, -1, dtype=np.int32)
 
     # Initialise the halo ID counter (IDs start at 0)
     ihaloid = -1
@@ -46,14 +54,17 @@ def find_halos(tree, pos, linkl, npart):
         # Convert the particle index list to an array for ease of use
         query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
 
-        # Assert that the query particle is returned by the tree query. Otherwise the program fails
-        assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
+        # Assert that the query particle is returned by the tree query.
+        # Otherwise the program fails
+        assert query_part_inds.size != 0, \
+            'Must always return particle that you are sitting on'
 
         # Find only the particles not already in a halo
         new_parts = query_part_inds[
             np.where(part_haloids[query_part_inds] == -1)]
 
-        # If only one particle is returned by the query and it is new it is a 'single particle halo'
+        # If only one particle is returned by the query and
+        # it is new it is a 'single particle halo'
         if new_parts.size == query_part_inds.size == 1:
 
             # Assign the 'single particle halo' halo ID to the particle
@@ -83,21 +94,21 @@ def find_halos(tree, pos, linkl, npart):
             # Get only the unique halo IDs
             uni_cont_halos = np.unique(contained_halos)
 
-            # # Assure no single particle halos are included in the query results
-            # assert any(uni_cont_halos != -2), 'Single particle halos should never be found'
-
             # Remove any unassigned halos
             uni_cont_halos = uni_cont_halos[np.where(uni_cont_halos != -1)]
 
-            # If there is only one halo ID returned avoid the slower code to combine IDs
+            # If there is only one halo ID returned avoid the slower
+            # code to combine IDs
             if uni_cont_halos.size == 1:
 
-                # Get the list of linked halos linked to the current halo from the linked halo dictionary
+                # Get the list of linked halos linked to the current halo
+                # from the linked halo dictionary
                 linked_halos = linked_halos_dict[uni_cont_halos[0]]
 
             else:
 
-                # Get all the linked halos from dictionary so as to not miss out any halos IDs that are linked
+                # Get all the linked halos from dictionary so as to not
+                # miss out any halos IDs that are linked
                 # but not returned by this particular query
                 linked_halos_set = set()  # initialise linked halo set
                 linked_halos = linked_halos_set.union(
@@ -106,14 +117,16 @@ def find_halos(tree, pos, linkl, npart):
             # Find the minimum halo ID to make the final halo ID
             final_ID = min(linked_halos)
 
-            # Assign the linked halos to all the entries in the linked halos dictionary
+            # Assign the linked halos to all the entries in the linked
+            # halos dictionary
             linked_halos_dict.update(
                 dict.fromkeys(list(linked_halos), linked_halos))
 
             # Assign the final halo ID array entries
             final_halo_ids[list(linked_halos)] = final_ID
 
-            # Assign new particles to the particle halo IDs array with the final ID
+            # Assign new particles to the particle halo IDs array with
+            # the final ID
             part_haloids[new_parts] = final_ID
 
             # Assign the new particles to the final ID in halo dictionary entry
@@ -273,20 +286,43 @@ def find_subhalos(halo_pos, sub_linkl):
     return part_subhaloids, assignedsub_parts
 
 
-def spatial_node_task(thisTask, pos, tree, linkl, npart):
-    # =============== Run The Halo Finder And Reduce The Output ===============
+@timer("Host-Spatial")
+def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
+                      pos, tree, linkl):
 
-    # Run the halo finder for this snapshot at the host linking length and get the spatial catalog
-    task_part_haloids, task_assigned_parts = find_halos(tree, pos, linkl,
-                                                        npart)
+    # Define array to store particle halo ids
+    rank_part_haloids = np.full(rank_tree_parts.size, -2, dtype=int)
 
-    # Get the positions
-    halo_pids = {}
-    while len(task_assigned_parts) > 0:
-        item = task_assigned_parts.popitem()
-        halo, part_inds = item
-        # halo_pids[(thisTask, halo)] = np.array(list(part_inds))
-        halo_pids[(thisTask, halo)] = frozenset(part_inds)
+    # Define bins for the spatial search
+    part_bins = np.linspace(0, rank_parts.size,
+                            int(np.ceil(rank_parts.size / meta.spatial_task_size)) + 1,
+                            dtype=int)
+
+    # Loop over spatial search bins
+    ihalo = 0  # counter for halo dictionary key
+    halo_pids = {}  # store the halos we have found
+    for ind in range(part_bins.size - 1):
+
+        # Get the edges of this patial search bin
+        low, high = part_bins[ind], part_bins[ind + 1]
+
+        # Run the host halo finder to get the spatial catalog
+        task_part_haloids, task_assigned_parts = find_halos(tree,
+                                                            pos[low: high, :],
+                                                            linkl,
+                                                            rank_tree_parts.shape[0])
+
+        # Get the positions
+        while len(task_assigned_parts) > 0:
+            item = task_assigned_parts.popitem()
+            halo, part_inds = item
+            ihalo, rank_part_haloids, halo_pids = add_halo(ihalo, part_inds, rank_part_haloids, halo_pids)
+
+    if meta.debug:
+
+        utilities.count_and_report_halos(rank_part_haloids, meta,
+                                         halo_type="Rank %d Spatial Host Halos"
+                                                   % meta.rank)
 
     return halo_pids
 

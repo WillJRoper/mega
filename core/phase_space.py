@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial import cKDTree
-from collections import defaultdict
+import sys
+import utilities
 
 from halo import Halo
 
@@ -128,11 +129,8 @@ def find_phase_space_halos(halo_phases):
 
 def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
                         redshift, G, h, soft, min_vlcoeff, cosmo):
-    # Initialise dictionaries to store results
-    results = {}
-
-    # Initialise halo counter
-    thisresultID = 0
+    # Initialise list to store finished halos
+    results = []
 
     # Define the phase space linking length
     vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
@@ -171,9 +169,10 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
             new_halo.compute_props(G)
 
             # # Store the resulting halo
-            # results[thisresultID] = halo
+            # results.append(new_halo)
 
-            results[thisresultID] = {'pids': new_halo.pids,
+
+            results.append({'pids': new_halo.pids,
                                      'sim_pids': new_halo.sim_pids,
                                      'npart': new_halo.npart,
                                      'real': new_halo.real,
@@ -190,9 +189,8 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
                                      "vmax": new_halo.vmax,
                                      "hmr": new_halo.hmr,
                                      "hmvr": new_halo.hmvr,
-                                     "vlcoeff": new_halo.vlcoeff}
-
-            thisresultID += 1
+                                     "vlcoeff": new_halo.vlcoeff,
+                            "memory": utilities.get_size(new_halo)})
 
         else:
 
@@ -205,9 +203,8 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
                                            soft, min_vlcoeff, cosmo)
 
             # Include these results
-            for key in temp_res:
-                results[thisresultID] = temp_res[key]
-                thisresultID += 1
+            for h in temp_res:
+                results.append(h)
 
     return results
 

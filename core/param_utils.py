@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import yaml
 import h5py
@@ -26,7 +28,11 @@ class Metadata:
     def __init__(self, snapshot, cosmology,
                  llcoeff, sub_llcoeff, inputpath, savepath,
                  ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                 ncells, profile, profile_path, h, softs, dmo):
+                 cdim, profile, profile_path, h, softs, dmo):
+
+        # MPI information (given value if needed)
+        self.rank = None
+        self.nranks = None
 
         # Information about the box
         # Open hdf5 file
@@ -75,6 +81,11 @@ class Metadata:
         self.findsubs = findsubs
         self.profile = profile
         self.dmo = dmo
+        self.debug = True
+
+        # Print parameters
+        self.report_width = 60
+        self.table_width = 100
 
         # Linking length
         self.llcoeff = llcoeff
@@ -82,6 +93,12 @@ class Metadata:
         self.ini_vlcoeff = ini_vlcoeff
         self.min_vlcoeff = min_vlcoeff
         self.decrement = decrement
+        self.linkl = self.llcoeff * self.mean_sep
+        self.sub_linkl = self.sub_llcoeff * self.mean_sep
 
         # Domain decomp
-        self.ncells = ncells
+        self.cdim = int(cdim)
+        self.ncells = self.cdim ** 3
+
+        # Tasks
+        self.spatial_task_size = 100000

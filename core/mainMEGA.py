@@ -140,6 +140,10 @@ elif flags['usempi']:
     rank = comm.rank  # rank of this process
     status = MPI.Status()  # get MPI status object
 
+    # Include MPI information in metadata object
+    meta.nranks = size
+    meta.rank = rank
+
     if rank == 0:
         print("Running on snapshot:", snaplist[snap_ind])
 
