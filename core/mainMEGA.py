@@ -144,7 +144,8 @@ elif flags['usempi']:
     meta.nranks = size
     meta.rank = rank
 
-    if rank == 0:
+    if meta.rank == 0:
+        utilities.say_hello()
         print("Running on snapshot:", snaplist[snap_ind])
 
     # ===================== Run The Halo Finder =====================

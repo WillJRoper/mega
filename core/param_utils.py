@@ -81,7 +81,7 @@ class Metadata:
         self.findsubs = findsubs
         self.profile = profile
         self.dmo = dmo
-        self.debug = True
+        self.debug = False
 
         # Print parameters
         self.report_width = 60

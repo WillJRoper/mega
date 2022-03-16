@@ -129,7 +129,9 @@ def hosthalofinder(meta):
     tictoc.get_toc()
 
     if meta.verbose:
-        tictoc.report("Reading positions")
+        comm.Barrier()
+        if meta.rank == 0:
+            tictoc.report("Reading positions")
 
     if meta.profile:
         tictoc.task_time["Reading"]["Start"].append(tictoc.tic)
@@ -152,8 +154,7 @@ def hosthalofinder(meta):
 
     if meta.verbose and meta.rank == 0:
         tictoc.report("Tree building")
-
-        print("Tree memory size", utils.get_size(tree), "bytes")
+        print("Tree memory footprint: %d bytes" % utils.get_size(tree))
 
     if meta.profile:
         tictoc.task_time["Domain-Decomp"]["Start"].append(tictoc.tic)
@@ -200,72 +201,10 @@ def hosthalofinder(meta):
 
     halo_tasks = combine_across_ranks(tictoc, meta, cell_ranks, tree_pos, result,
                                       rank_tree_parts, comm)
-
-    tictoc.report("Combining halos across ranks")
-
-    # # Convert to a set for set calculations
-    # rank_parts = set(rank_parts)
-    #
-    # comb_data = utils.combine_tasks_per_thread(results,
-    #                                                rank,
-    #                                                rank_parts)
-    # results, halos_in_other_ranks = comb_data
-    #
-    # comm.Barrier()
-    #
-    # if rank == 0:
-    #     tictoc.report("Spatial search")
-    #
-    # # Collect child process results
-    # tictoc.get_tic()
-    # collected_results = comm.gather(results, root=0)
-    # halos_in_other_ranks = comm.gather(halos_in_other_ranks, root=0)
-    # tictoc.get_toc()
-    #
-    # if meta.profile and rank != 0:
-    #     tictoc.task_time["Collecting"]["Start"].append(tictoc.tic)
-    #     tictoc.task_time["Collecting"]["End"].append(tictoc.toc)
-    #
-    # if rank == 0:
-    #
-    #     halos_to_combine = set().union(*halos_in_other_ranks)
-    #
-    #     # Combine collected results from children processes into a single dict
-    #     results = {k: v for d in collected_results for k, v in d.items()}
-    #
-    #     print(len(results), 'spatial "halos" collected from all ranks')
-    #
-    #     if meta.verbose:
-    #         tictoc.report("Collecting results")
-    #
-    #     if meta.profile:
-    #         tictoc.task_time["Collecting"]["Start"].append(tictoc.tic)
-    #         tictoc.task_time["Collecting"]["End"].append(tictoc.toc)
-    #
-    #     tictoc.get_tic()
-    #
-    #     halo_tasks = utils.combine_tasks_networkx(results,
-    #                                                   size,
-    #                                                   halos_to_combine,
-    #                                                   meta.npart[1],
-    #                                                   meta)
-    #
-    #     tictoc.get_toc()
-    #
-    #     if meta.verbose:
-    #         tictoc.report("Combining results")
-    #
-    #     if meta.profile:
-    #         tictoc.task_time["Housekeeping"]["Start"].append(tictoc.tic)
-    #         tictoc.task_time["Housekeeping"]["End"].append(tictoc.toc)
-    #
-    # else:
-    #
-    #     halo_tasks = None
-    #
-    # if meta.profile:
-    #     tictoc.task_time["Communication"]["Start"].append(tictoc.tic)
-    #     tictoc.task_time["Communication"]["End"].append(tictoc.toc)
+    if meta.verbose:
+        comm.Barrier()
+        if meta.rank == 0:
+            tictoc.report("Combining halos across ranks")
 
     # ============ Test Halos in Phase Space and find substructure ============
 
@@ -699,7 +638,7 @@ def hosthalofinder(meta):
                 newPhaseID += 1
                 memory_use += halo_task[halo]['memory']
 
-        print("Halo objects total footprint:", memory_use)
+        print("Halo objects total footprint: %.2f MB" % (memory_use * 10**-6))
 
         # Collect subhalo results
         sub_results_dict = {}
@@ -714,7 +653,8 @@ def hosthalofinder(meta):
 
         if meta.verbose:
             tictoc.report("Combining results")
-            print("Results memory size", utils.get_size(results_dict), "bytes")
+            print("Results total memory footprint: %.2f MB" % (
+                    utils.get_size(results_dict) * 10 ** -6))
 
         if meta.profile:
             tictoc.task_time["Collecting"]["Start"].append(tictoc.tic)
