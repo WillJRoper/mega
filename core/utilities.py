@@ -1,30 +1,57 @@
+import sys
+import inspect
+import logging
 import h5py
 import networkx
 import numpy as np
-from scipy.spatial import cKDTree
-from scipy.spatial.distance import cdist
+from halo import Halo
+from serial_io import hdf5_write_dataset
 # import readgadgetdata
-import yaml
 from networkx.algorithms.components.connected import connected_components
 
 
-def hdf5_write_dataset(grp, key, data, compression="gzip"):
-    grp.create_dataset(key, shape=data.shape, dtype=data.dtype, data=data,
-                       compression=compression)
+logger = logging.getLogger(__name__)
 
-def read_param(paramfile):
-    # Read in the param file
-    with open(paramfile) as yfile:
-        parsed_yaml_file = yaml.load(yfile, Loader=yaml.FullLoader)
 
-    # Extract individual dictionaries
-    inputs = parsed_yaml_file['inputs']
-    flags = parsed_yaml_file['flags']
-    params = parsed_yaml_file['parameters']
-    cosmology = parsed_yaml_file['cosmology']
-    simulation = parsed_yaml_file['simulation']
+def get_size(obj, seen=None):
+    """Recursively finds size of objects in bytes"""
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    # Important mark as seen *before* entering recursion to gracefully handle
+    # self-referential objects
+    seen.add(obj_id)
+    if hasattr(obj, '__dict__'):
+        for cls in obj.__class__.__mro__:
+            if '__dict__' in cls.__dict__:
+                d = cls.__dict__['__dict__']
+                if inspect.isgetsetdescriptor(d) or inspect.ismemberdescriptor(
+                        d):
+                    size += get_size(obj.__dict__, seen)
+                break
+    if isinstance(obj, dict):
+        size += sum((get_size(v, seen) for v in obj.values()))
+        size += sum((get_size(k, seen) for k in obj.keys()))
+    elif hasattr(obj, '__iter__') and not isinstance(obj,
+                                                     (str, bytes, bytearray)):
+        try:
+            size += sum((get_size(i, seen) for i in obj))
+        except TypeError:
+            logging.exception(
+                "Unable to get size of %r. This may lead to incorrect sizes. Please report this error.",
+                obj)
+    if hasattr(obj, '__slots__'):  # can have __slots__ with __dict__
+        size += sum(get_size(getattr(obj, s), seen) for s in obj.__slots__ if
+                    hasattr(obj, s))
 
-    return inputs, flags, params, cosmology, simulation
+    return size
+
+
+def get_cellid(cdim, i, j, k):
+    return (k + cdim * (j + cdim * i))
 
 
 def enum(*sequential, **named):
@@ -299,16 +326,21 @@ def SWIFT_to_MEGA_hdf5_allsnaps(snaplist_path, PATH, basename,
 
 
 def wrap_halo(halo_poss, boxsize, domean=False):
-    # Define the comparison particle as the maximum position in the current dimension
+    # Define the comparison particle as the maximum
+    # position in the current dimension
     max_part_pos = halo_poss.max(axis=0)
 
     # Compute all the halo particle separations from the maximum position
     sep = max_part_pos - halo_poss
 
-    # If any separations are greater than 50% the boxsize (i.e. the halo is split over the boundary)
-    # bring the particles at the lower boundary together with the particles at the upper boundary
-    # (ignores halos where constituent particles aren't separated by at least 50% of the boxsize)
-    # *** Note: fails if halo's extent is greater than 50% of the boxsize in any dimension ***
+    # If any separations are greater than 50% the boxsize
+    # (i.e. the halo is split over the boundary)
+    # bring the particles at the lower boundary together
+    # with the particles at the upper boundary
+    # (ignores halos where constituent particles aren't
+    # separated by at least 50% of the boxsize)
+    # *** Note: fails if halo's extent is greater than 50%
+    # of the boxsize in any dimension ***
     halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
 
     if domean:
@@ -383,7 +415,7 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
     return tasks, parts_in_rank, nnodes, rank_edges
 
 
-def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
+def combine_tasks_networkx(results, ranks, halos_to_combine, npart, meta):
     results_to_combine = {frozenset(results.pop(halo)) for halo in
                           halos_to_combine}
 
@@ -408,32 +440,8 @@ def combine_tasks_networkx(results, ranks, halos_to_combine, npart):
             spatial_part_haloids[list(res)] = newSpatialID
             newSpatialID += 1
 
-    # Find the halos with 10 or more particles by finding the unique IDs in the particle
-    # halo ids array and finding those IDs that are assigned to 10 or more particles
-    unique, counts = np.unique(spatial_part_haloids, return_counts=True)
-    unique_haloids = unique[np.where(counts >= 10)]
-
-    # Remove the null -2 value for single particle halos
-    unique_haloids = unique_haloids[np.where(unique_haloids != -2)]
-
-    # Print the number of halos found by the halo finder in >10, >100, >1000, >10000 criteria
-    print(
-        "=========================== Spatial halos ===========================")
-    print(unique_haloids.size, 'halos found with 10 or more particles')
-    print(unique[np.where(counts >= 15)].size - 1,
-          'halos found with 15 or more particles')
-    print(unique[np.where(counts >= 20)].size - 1,
-          'halos found with 20 or more particles')
-    print(unique[np.where(counts >= 50)].size - 1,
-          'halos found with 50 or more particles')
-    print(unique[np.where(counts >= 100)].size - 1,
-          'halos found with 100 or more particles')
-    print(unique[np.where(counts >= 500)].size - 1,
-          'halos found with 500 or more particles')
-    print(unique[np.where(counts >= 1000)].size - 1,
-          'halos found with 1000 or more particles')
-    print(unique[np.where(counts >= 10000)].size - 1,
-          'halos found with 10000 or more particles')
+    count_and_report_halos(spatial_part_haloids, meta,
+                           halo_type="Spatial Host Halos")
 
     return tasks
 
@@ -523,6 +531,110 @@ def combine_tasks_per_thread(results, rank, thisRank_parts):
         newtaskID += 1
 
     return halo_pids, halos_in_other_ranks
+
+
+def read_halo_data(part_inds, inputpath, snapshot, hdf_part_key,
+                   ini_vlcoeff, boxsize, soft, redshift, G, cosmo):
+
+    # Open hdf5 file
+    hdf = h5py.File(inputpath + snapshot + ".hdf5", 'r')
+
+    # Get the position and velocity of
+    # each particle in this rank
+    sim_pids = hdf[hdf_part_key]['part_pid'][part_inds]
+    pos = hdf[hdf_part_key]['part_pos'][part_inds, :]
+    vel = hdf[hdf_part_key]['part_vel'][part_inds, :]
+    masses = hdf[hdf_part_key]['part_masses'][part_inds] * 10 ** 10
+    part_types = hdf[hdf_part_key]['part_types'][part_inds]
+
+    hdf.close()
+
+    # Instantiate halo object
+    halo = Halo(part_inds, sim_pids, pos, vel, part_types,
+                masses, ini_vlcoeff, boxsize, soft,
+                redshift, G, cosmo)
+
+    return halo
+
+
+def count_and_report_halos(part_haloids, meta, halo_type="Spatial Host"):
+
+    # Get the unique halo ids
+    unique, counts = np.unique(part_haloids, return_counts=True)
+
+    # Remove "halos" with fewer than 10 particles
+    unique_haloids = unique[np.where(counts >= 10)]
+
+    # Print the number of halos found by the halo finder in npart bins
+    report_pad = meta.report_width // 2 - len(halo_type) // 2
+    report_string = ((report_pad - 1) * "="
+                     + " %s " % halo_type
+                     + "=" * (report_pad - 1))
+    print(report_string)
+    print(pad_print_middle("N_{part}",
+                           "N_{%s}" % "_".join(halo_type.lower().split()),
+                           length=meta.report_width))
+
+    # First loop over some standard counts
+    for count in [10, 15, 20, 50, 100, 500]:
+        halos = unique[np.where(counts >= count)].size - 1
+        print(pad_print_middle(">%d" % count,
+                               str(halos),
+                               length=meta.report_width))
+
+    # Then loop in powers of 10 until we find 0 particles
+    halos = np.inf
+    count = 1000
+    while halos > 0:
+        halos = unique[np.where(counts >= count)].size - 1
+        print(pad_print_middle(">%d" % count,
+                               str(halos),
+                               length=meta.report_width))
+        count *= 10
+
+    print("=" * len(report_string))
+
+
+def set_2_sorted_array(s):
+
+    # Convert to array and sort
+    sarr = np.array(list(s))
+    sarr.sort()
+
+    return sarr
+
+
+def pad_print_middle(string1, string2, length):
+
+    if type(string1) == list:
+        string1 = "[" + " ".join(str(x) for x in string1) + "]"
+    if type(string2) == list:
+        string2 = "[" + " ".join(str(x) for x in string2) + "]"
+
+    if type(string1) != str:
+        string1 = str(string1)
+    if type(string2) != str:
+        string2 = str(string2)
+
+    return string1 + " " * (length - (len(string1) + len(string2))) + string2
+
+
+def say_hello():
+
+    hello = r"          __/\\\\____________/\\\\___/\\\\\\\\\\\\\\\______/\\\\\\\\\\\\______/\\\\\\\\\--O-O-O-O-O-O-O         O-O         0          " + "\n"\
+            r"           _\/\\\\\\________/\\\\\\__\/\\\///////////_____/\\\//////////_____/\\\\\\\\\\\\\__      \ / \       /           /           " + "\n"\
+            r"            _\/\\\//\\\____/\\\//\\\__\/\\\_______________/\\\_______________/\\\/////////\\\_      O   O-O-O-O     O     O            " + "\n"\
+            r"             _\/\\\\///\\\/\\\/_\/\\\__\/\\\\\\\\\\\______\/\\\____/\\\\\\\__\/\\\_______\/\\\_          \     \   / \   /             " + "\n"\
+            r"              _\/\\\__\///\\\/___\/\\\__\/\\\///////_______\/\\\___\/////\\\__\/\\\\\\\\\\\\\\\-O-O-O-O   O-O-O-O-O-O-O-O-O-O-O-O-O-O-O" + "\n"\
+            r"               _\/\\\____\///_____\/\\\__\/\\\______________\/\\\_______\/\\\__\/\\\/////////\\\_      \ /   \       /     \           " + "\n"\
+            r"                _\/\\\_____________\/\\\__\/\\\______________\/\\\_______\/\\\__\/\\\_______\/\\\_      O     O     O       O          " + "\n"\
+            r"                 _\/\\\_____________\/\\\__\/\\\\\\\\\\\\\\\__\//\\\\\\\\\\\\/___\/\\\_______\/\\\_    / \     \   /                   " + "\n"\
+            r"                  _\///______________\///___\///////////////____\////////////_____\///________\///--O-O   O-O-O-O-O                    " + "\n"
+
+    print()
+    print()
+    print(hello)
+    print()
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):
