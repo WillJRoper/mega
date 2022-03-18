@@ -9,7 +9,7 @@ treedataloader.py
 scaling/
 profiling/*
 analytics/plots/*
-*/__pycache__/*
+#*/__pycache__/*
 
 # Exceptions
 !profiling/.gitkeep
