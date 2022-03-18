@@ -6,7 +6,7 @@ import numpy as np
 
 # hp = hpy()
 from mpi4py import MPI
-import utilities
+import core.utilities as utils 
 
 # Initializations and preliminaries
 comm = MPI.COMM_WORLD  # get MPI communicator object
@@ -89,7 +89,7 @@ def get_graph(z0halo, snaplist, data_dict):
 
                 if prog_snap != None:
                     # Get the progenitors
-                    these_progs = utilities.get_linked_halo_data(
+                    these_progs = utils.get_linked_halo_data(
                         data_dict['progs'][snap],
                         data_dict['prog_start_index'][snap][halo[0]],
                         data_dict['nprogs'][snap][halo[0]])
@@ -101,7 +101,7 @@ def get_graph(z0halo, snaplist, data_dict):
 
                 if desc_snap != None:
                     # Get the descendants
-                    these_descs = utilities.get_linked_halo_data(
+                    these_descs = utils.get_linked_halo_data(
                         data_dict['descs'][snap],
                         data_dict['desc_start_index'][snap][halo[0]],
                         data_dict['ndescs'][snap][halo[0]])
@@ -343,13 +343,13 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
             this_ndesc = data_dict['ndescs'][snap][halo_cat_id]
             this_prog_start = data_dict['prog_start_index'][snap][halo_cat_id]
             this_desc_start = data_dict['desc_start_index'][snap][halo_cat_id]
-            this_progs = utilities.get_linked_halo_data(
+            this_progs = utils.get_linked_halo_data(
                 data_dict['progs'][snap], this_prog_start, this_nprog)
-            this_descs = utilities.get_linked_halo_data(
+            this_descs = utils.get_linked_halo_data(
                 data_dict['descs'][snap], this_desc_start, this_ndesc)
-            this_prog_conts = utilities.get_linked_halo_data(
+            this_prog_conts = utils.get_linked_halo_data(
                 data_dict['prog_conts'][snap], this_prog_start, this_nprog)
-            this_desc_conts = utilities.get_linked_halo_data(
+            this_desc_conts = utils.get_linked_halo_data(
                 data_dict['desc_conts'][snap], this_desc_start, this_ndesc)
 
             mean_pos[haloID, :] = data_dict["mean_pos"][snap][halo_cat_id, :]
@@ -640,14 +640,14 @@ def graph_writer(graphs, sub_graphs, graphpath, treepath, snaplist, data_dict):
                 halo_cat_id]
             this_desc_start = data_dict["sub"]['desc_start_index'][snap][
                 halo_cat_id]
-            this_progs = utilities.get_linked_halo_data(
+            this_progs = utils.get_linked_halo_data(
                 data_dict["sub"]['progs'][snap], this_prog_start, this_nprog)
-            this_descs = utilities.get_linked_halo_data(
+            this_descs = utils.get_linked_halo_data(
                 data_dict["sub"]['descs'][snap], this_desc_start, this_ndesc)
-            this_prog_conts = utilities.get_linked_halo_data(
+            this_prog_conts = utils.get_linked_halo_data(
                 data_dict["sub"]['prog_conts'][snap], this_prog_start,
                 this_nprog)
-            this_desc_conts = utilities.get_linked_halo_data(
+            this_desc_conts = utils.get_linked_halo_data(
                 data_dict["sub"]['desc_conts'][snap], this_desc_start,
                 this_ndesc)
 

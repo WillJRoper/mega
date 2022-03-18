@@ -1,12 +1,18 @@
 import numpy as np
 from scipy.spatial import cKDTree
 import sys
-import utilities
 
-from halo import Halo
+import core.utilities as utils
+from core.halo import Halo
+from core.timing import timer
 
 
 def find_phase_space_halos(halo_phases):
+    """
+
+    :param halo_phases:
+    :return:
+    """
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
 
     # Initialise arrays and dictionaries for storing halo data
@@ -127,8 +133,23 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
-                        redshift, G, h, soft, min_vlcoeff, cosmo):
+def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
+                   redshift, G, soft, min_vlcoeff, cosmo):
+    """
+
+    :param halo:
+    :param boxsize:
+    :param vlinkl_halo_indp:
+    :param linkl:
+    :param decrement:
+    :param redshift:
+    :param G:
+    :param soft:
+    :param min_vlcoeff:
+    :param cosmo:
+    :return:
+    """
+
     # Initialise list to store finished halos
     results = []
 
@@ -168,29 +189,14 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
             # Compute the halo properties
             new_halo.compute_props(G)
 
-            # # Store the resulting halo
-            # results.append(new_halo)
+            # Get and store the memory footprint of this halo
+            new_halo.memory = utils.get_size(new_halo)
 
+            # Limit memory footprint of stored halo
+            new_halo.clean_halo()
 
-            results.append({'pids': new_halo.pids,
-                                     'sim_pids': new_halo.sim_pids,
-                                     'npart': new_halo.npart,
-                                     'real': new_halo.real,
-                                     'mean_halo_pos': new_halo.mean_pos,
-                                     'mean_halo_vel': new_halo.mean_vel,
-                                     'halo_mass': new_halo.mass,
-                                     'halo_ptype_mass': new_halo.ptype_mass,
-                                     'halo_energy': new_halo.KE - new_halo.GE,
-                                     'KE': new_halo.KE, 'GE': new_halo.GE,
-                                     "rms_r": new_halo.rms_r,
-                                     "rms_vr": new_halo.rms_vr,
-                                     "veldisp3d": new_halo.veldisp3d,
-                                     "veldisp1d": new_halo.veldisp1d,
-                                     "vmax": new_halo.vmax,
-                                     "hmr": new_halo.hmr,
-                                     "hmvr": new_halo.hmvr,
-                                     "vlcoeff": new_halo.vlcoeff,
-                            "memory": utilities.get_size(new_halo)})
+            # Store the resulting halo
+            results.append(new_halo)
 
         else:
 
@@ -198,9 +204,10 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
             new_halo.decrement(decrement)
 
             # We need to run this halo again
-            temp_res = get_real_host_halos(new_halo, boxsize, vlinkl_halo_indp,
-                                           linkl, decrement, redshift, G, h,
-                                           soft, min_vlcoeff, cosmo)
+            temp_res = get_real_halos(new_halo, boxsize,
+                                      vlinkl_halo_indp,
+                                      linkl, decrement, redshift, G,
+                                      soft, min_vlcoeff, cosmo)
 
             # Include these results
             for h in temp_res:
@@ -209,72 +216,45 @@ def get_real_host_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
     return results
 
 
-def get_real_host_halos_iterate(sim_halo_pids, halo_poss, halo_vels, boxsize,
-                                vlinkl_halo_indp, linkl, halo_masses,
-                                halo_part_types,
-                                ini_vlcoeff, decrement, redshift, G, h, soft,
-                                min_vlcoeff, cosmo):
-    # Initialise dicitonaries to store results
-    results = {}
+def get_real_halos_iterate(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
+                           redshift, G, soft, min_vlcoeff, cosmo):
+    """
 
-    # Define the comparison particle as the maximum position
-    # in the current dimension
-    max_part_pos = halo_poss.max(axis=0)
+    :param halo:
+    :param boxsize:
+    :param vlinkl_halo_indp:
+    :param linkl:
+    :param decrement:
+    :param redshift:
+    :param G:
+    :param soft:
+    :param min_vlcoeff:
+    :param cosmo:
+    :return:
+    """
 
-    # Compute all the halo particle separations from the maximum position
-    sep = max_part_pos - halo_poss
+    # Initialise list to store finished halos
+    results = []
 
-    # If any separations are greater than 50% the boxsize
-    # (i.e. the halo is split over the boundary)
-    # bring the particles at the lower boundary together with
-    # the particles at the upper boundary (ignores halos where
-    # constituent particles aren't separated by at least 50% of the boxsize)
-    # *** Note: fails if halo's extent is greater than 50% of
-    # the boxsize in any dimension ***
-    halo_poss[np.where(sep > 0.5 * boxsize)] += boxsize
+    # Create set to hold halos during iteration
+    halos = {halo, }
 
-    not_real_pids = {}
-    candidate_halos = {0: {"pos": halo_poss,
-                           "vel": halo_vels,
-                           "pid": sim_halo_pids,
-                           "mass": np.sum(halo_masses),
-                           "masses": halo_masses,
-                           "part_types": halo_part_types,
-                           "vlcoeff": ini_vlcoeff}}
-    candidateID = 0
-    thisresultID = 0
+    while len(halos) > 0:
 
-    while len(candidate_halos) > 0:
-
-        key, candidate_halo = candidate_halos.popitem()
-
-        halo_poss = candidate_halo["pos"]
-        halo_vels = candidate_halo["vel"]
-        sim_halo_pids = candidate_halo["pid"]
-        halo_masses = candidate_halo["masses"]
-        halo_mass = candidate_halo["mass"]
-        halo_part_types = candidate_halo["part_types"]
-        new_vlcoeff = candidate_halo["vlcoeff"]
+        # Get a halo to test
+        halo = halos.pop()
 
         # Define the phase space linking length
-        vlinkl = (new_vlcoeff * vlinkl_halo_indp * halo_mass ** (1 / 3))
-
-        # Add the hubble flow to the velocities
-        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
-        ini_cent = np.mean(halo_poss, axis=0)
-        sep = cosmo.H(redshift).value * (halo_poss - ini_cent)
-        halo_vels_with_HubFlow = halo_vels + sep
+        vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
         # Define the phase space vectors for this halo
-        halo_phases = np.concatenate((halo_poss / linkl,
-                                      halo_vels_with_HubFlow / vlinkl), axis=1)
+        halo_phases = np.concatenate((halo.pos / linkl, halo.vel / vlinkl),
+                                     axis=1)
 
         # Query these particles in phase space to find distinct bound halos
         part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
 
-        not_real_pids = {}
-
-        thiscontID = 0
+        # Loop over the halos found in phase space
         while len(assigned_parts) > 0:
 
             # Get the next halo from the dictionary and ensure
@@ -284,93 +264,98 @@ def get_real_host_halos_iterate(sim_halo_pids, halo_poss, halo_vels, boxsize,
                 continue
 
             # Extract halo particle data
-            this_halo_pids = list(val)
-            halo_npart = len(this_halo_pids)
-            this_halo_pos = halo_poss[this_halo_pids, :]
-            this_halo_vel = halo_vels[this_halo_pids, :]
-            this_halo_masses = halo_masses[this_halo_pids]
-            this_part_types = halo_part_types[this_halo_pids]
-            this_sim_halo_pids = sim_halo_pids[this_halo_pids]
+            this_pids = list(val)
 
-            # Compute the centred positions and velocities
-            mean_halo_pos = np.average(this_halo_pos,
-                                       weights=this_halo_masses,
-                                       axis=0)
-            mean_halo_vel = np.average(this_halo_vel,
-                                       weights=this_halo_masses,
-                                       axis=0)
+            # Instantiate halo object (auto calculates energy)
+            new_halo = Halo(halo.pids[this_pids],
+                            halo.sim_pids[this_pids],
+                            halo.pos[this_pids, :],
+                            halo.vel[this_pids, :],
+                            halo.types[this_pids],
+                            halo.masses[this_pids],
+                            halo.vlcoeff,
+                            boxsize, soft, redshift, G, cosmo)
 
-            # Centre positions and velocities relative to COM
-            this_halo_pos -= mean_halo_pos
-            this_halo_vel -= mean_halo_vel
+            if new_halo.real or new_halo.vlcoeff <= min_vlcoeff:
 
-            # Compute halo's energy
-            halo_energy, KE, GE = halo_energy_calc(this_halo_pos,
-                                                   this_halo_vel,
-                                                   halo_npart,
-                                                   this_halo_masses, redshift,
-                                                   G, h, soft)
+                # Compute the halo properties
+                new_halo.compute_props(G)
 
-            # Add the hubble flow to the velocities
-            # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
-            sep = cosmo.H(redshift).value * this_halo_pos
-            this_halo_vel += sep
+                # # Store the resulting halo
+                # results.append(new_halo)
 
-            if KE / GE <= 1 or new_vlcoeff <= min_vlcoeff:
 
-                # Get rms radii from the centred position and velocity
-                r = hprop.rms_rad(this_halo_pos)
-                vr = hprop.rms_rad(this_halo_vel)
-
-                # Compute the velocity dispersion
-                veldisp3d, veldisp1d = hprop.vel_disp(this_halo_vel)
-
-                # Compute maximal rotational velocity
-                vmax = hprop.vmax(this_halo_pos, this_halo_masses, G)
-
-                # Calculate half mass radius in position and velocity space
-                hmr = hprop.half_mass_rad(this_halo_pos, this_halo_masses)
-                hmvr = hprop.half_mass_rad(this_halo_vel, this_halo_masses)
-
-                # Define mass in each particle type
-                part_type_mass = [
-                    np.sum(this_halo_masses[this_part_types == i])
-                    for i in range(6)]
-
-                results[thisresultID] = {'pids': this_sim_halo_pids,
-                                         'npart': halo_npart,
-                                         'real': KE / GE <= 1,
-                                         'mean_halo_pos': mean_halo_pos,
-                                         'mean_halo_vel': mean_halo_vel,
-                                         'halo_mass': np.sum(this_halo_masses),
-                                         'halo_ptype_mass': part_type_mass,
-                                         'halo_energy': halo_energy,
-                                         'KE': KE, 'GE': GE,
-                                         "rms_r": r, "rms_vr": vr,
-                                         "veldisp3d": veldisp3d,
-                                         "veldisp1d": veldisp1d,
-                                         "vmax": vmax,
-                                         "hmr": hmr,
-                                         "hmvr": hmvr,
-                                         "vlcoeff": new_vlcoeff}
-
-                thisresultID += 1
+                results.append({'pids': new_halo.pids,
+                                         'sim_pids': new_halo.sim_pids,
+                                         'npart': new_halo.npart,
+                                         'real': new_halo.real,
+                                         'mean_halo_pos': new_halo.mean_pos,
+                                         'mean_halo_vel': new_halo.mean_vel,
+                                         'halo_mass': new_halo.mass,
+                                         'halo_ptype_mass': new_halo.ptype_mass,
+                                         'halo_energy': new_halo.KE - new_halo.GE,
+                                         'KE': new_halo.KE, 'GE': new_halo.GE,
+                                         "rms_r": new_halo.rms_r,
+                                         "rms_vr": new_halo.rms_vr,
+                                         "veldisp3d": new_halo.veldisp3d,
+                                         "veldisp1d": new_halo.veldisp1d,
+                                         "vmax": new_halo.vmax,
+                                         "hmr": new_halo.hmr,
+                                         "hmvr": new_halo.hmvr,
+                                         "vlcoeff": new_halo.vlcoeff,
+                                "memory": utils.get_size(new_halo)})
 
             else:
-                not_real_pids[thiscontID] = this_halo_pids
-                candidate_halos[candidateID] = {"pos": (this_halo_pos
-                                                        + mean_halo_pos),
-                                                "vel": (this_halo_vel
-                                                        + mean_halo_vel),
-                                                "pid": this_sim_halo_pids,
-                                                "mass": np.sum(
-                                                    this_halo_masses),
-                                                "masses": this_halo_masses,
-                                                "part_types": this_part_types,
-                                                "vlcoeff": new_vlcoeff - decrement}
 
-                candidateID += 1
-                thiscontID += 1
+                # Decrement the velocity space linking length coefficient
+                new_halo.decrement(decrement)
+
+                halos.update({new_halo, })
 
     return results
+
+
+@timer("Host-Phase")
+def get_real_host_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
+                        decrement, redshift, G, soft, min_vlcoeff, cosmo):
+    """
+
+    :param tictoc:
+    :param halo:
+    :param boxsize:
+    :param vlinkl_halo_indp:
+    :param linkl:
+    :param decrement:
+    :param redshift:
+    :param G:
+    :param soft:
+    :param min_vlcoeff:
+    :param cosmo:
+    :return:
+    """
+
+    return get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
+                          redshift, G, soft, min_vlcoeff, cosmo)
+
+
+@timer("Sub-Phase")
+def get_real_sub_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
+                       decrement, redshift, G, soft, min_vlcoeff, cosmo):
+    """
+
+    :param tictoc:
+    :param halo:
+    :param boxsize:
+    :param vlinkl_halo_indp:
+    :param linkl:
+    :param decrement:
+    :param redshift:
+    :param G:
+    :param soft:
+    :param min_vlcoeff:
+    :param cosmo:
+    :return:
+    """
+    return get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
+                          redshift, G, soft, min_vlcoeff, cosmo)
 

@@ -1,27 +1,21 @@
 import numpy as np
 from collections import defaultdict
 from scipy.spatial import cKDTree
+import time
 
-from timing import timer
-import utilities
-from halo_stitching import add_halo
+from core.timing import timer
+from core.halo_stitching import add_halo
+from core.talking_utils import count_and_report_halos
 
 
 def find_halos(tree, pos, linkl, npart):
-    """ A function which creates a KD-Tree using scipy.CKDTree and queries it to find particles
-    neighbours within a linking length. From This neighbour information particles are assigned
-    halo IDs and then returned.
-    :param pos: The particle position vectors array.
-    :param npart: The number of particles in the simulation.
-    :param boxsize: The length of the simulation box along one axis.
-    :param batchsize: The batchsize for each query to the KD-Tree (see Docs for more information).
-    :param linkl: The linking length.
-    :param debug_npart: Number of particles to sort during debugging if required.
-    :return: part_haloids: The array of halo IDs assigned to each particle (where the index is the particle ID)
-             assigned_parts: A dictionary containing the particle IDs assigned to each halo.
-             final_halo_ids: An array of final halo IDs (where the index is the initial halo ID and value is the
-             final halo ID.
-             query_func: The tree query object assigned to a variable.
+    """
+
+    :param tree:
+    :param pos:
+    :param linkl:
+    :param npart:
+    :return:
     """
 
     # ===== Initialise The Halo Finder Variables/Arrays and The KD-Tree =====
@@ -40,16 +34,24 @@ def find_halos(tree, pos, linkl, npart):
     # Final halo ID of linked halos (index is initial halo ID)
     final_halo_ids = np.full(npart, -1, dtype=np.int32)
 
+    # Define a dictionary to hold timings for halo weighting
+    weights = {}
+
     # Initialise the halo ID counter (IDs start at 0)
     ihaloid = -1
 
     # =============== Assign Particles To Initial Halos ===============
 
     # Query the tree returning a list of lists
+    query_start = time.time()
     query = tree.query_ball_point(pos, r=linkl)
+    query_time = time.time() - query_start
 
     # Loop through query results assigning initial halo IDs
     for query_part_inds in iter(query):
+        
+        # Start timer
+        mung_start = time.time()
 
         # Convert the particle index list to an array for ease of use
         query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
@@ -83,6 +85,9 @@ def find_halos(tree, pos, linkl, npart):
             # Assign the final halo ID to be the newly assigned halo ID
             final_halo_ids[ihaloid] = ihaloid
             linked_halos_dict[ihaloid] = {ihaloid}
+            
+            # Include weight (time taken for operations)
+            weights[ihaloid] = time.time() - mung_start
 
         else:
 
@@ -131,6 +136,9 @@ def find_halos(tree, pos, linkl, npart):
 
             # Assign the new particles to the final ID in halo dictionary entry
             assigned_parts[final_ID].update(new_parts)
+            
+            # Include weight (time taken for operations)
+            weights[ihaloid] = time.time() - mung_start
 
     # =============== Reassign All Halos To Their Final Halo ID ===============
 
@@ -143,24 +151,24 @@ def find_halos(tree, pos, linkl, npart):
         # Assign this final ID to all the particles in the initial halo ID
         part_haloids[list(assigned_parts[halo_id])] = final_ID
         assigned_parts[final_ID].update(assigned_parts[halo_id])
+        
+        # Combine weights
+        weights[final_ID] += weights[halo_id]
 
         # Remove non final ID entry from dictionary to save memory
         if halo_id != final_ID:
             del assigned_parts[halo_id]
+            del weights[halo_id]
 
-    return part_haloids, assigned_parts
+    return part_haloids, assigned_parts, weights, query_time
 
 
 def find_subhalos(halo_pos, sub_linkl):
-    """ A function that finds subhalos within host halos by applying the same KD-Tree algorithm at a
-    higher overdensity.
-    :param halo_pos: The position vectors of particles within the host halo.
-    :param sub_llcoeff: The linking length coefficient used to define a subhalo.
-    :param boxsize: The length of the simulation box along one axis.
-    :param npart: The number of particles in the simulation.
-    :return: part_subhaloids: The array of subhalo IDs assigned to each particle in the host halo
-             (where the index is the particle ID).
-             assignedsub_parts: A dictionary containing the particle IDs assigned to each subhalo.
+    """
+
+    :param halo_pos:
+    :param sub_linkl:
+    :return:
     """
 
     # =============== Initialise The Halo Finder Variables/Arrays and The KD-Tree ===============
@@ -289,45 +297,75 @@ def find_subhalos(halo_pos, sub_linkl):
 @timer("Host-Spatial")
 def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
                       pos, tree, linkl):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param rank_parts:
+    :param rank_tree_parts:
+    :param pos:
+    :param tree:
+    :param linkl:
+    :return:
+    """
 
     # Define array to store particle halo ids
     rank_part_haloids = np.full(rank_tree_parts.size, -2, dtype=int)
 
     # Define bins for the spatial search
     part_bins = np.linspace(0, rank_parts.size,
-                            int(np.ceil(rank_parts.size / meta.spatial_task_size)) + 1,
+                            int(np.ceil(rank_parts.size
+                                        / meta.spatial_task_size)) + 1,
                             dtype=int)
 
     # Loop over spatial search bins
     ihalo = 0  # counter for halo dictionary key
     halo_pids = {}  # store the halos we have found
+    qtime_dict = {}  # store time taking on each query for weighting
+    combined_weights = {}  # dictionary storing the weighting information
     for ind in range(part_bins.size - 1):
 
         # Get the edges of this patial search bin
         low, high = part_bins[ind], part_bins[ind + 1]
 
         # Run the host halo finder to get the spatial catalog
-        task_part_haloids, task_assigned_parts = find_halos(tree,
-                                                            pos[low: high, :],
-                                                            linkl,
-                                                            rank_tree_parts.shape[0])
+        res_tup = find_halos(tree, pos[low: high, :], linkl,
+                             rank_tree_parts.shape[0])
+        task_part_haloids, task_assigned_parts, task_weights, q_time = res_tup
 
         # Get the positions
         while len(task_assigned_parts) > 0:
             item = task_assigned_parts.popitem()
             halo, part_inds = item
-            ihalo, rank_part_haloids, halo_pids = add_halo(ihalo, part_inds, rank_part_haloids, halo_pids)
+            (ihalo, rank_part_haloids, halo_pids,
+             combined_weights, qtime_dict) = add_halo(ihalo, part_inds,
+                                                      rank_part_haloids,
+                                                      halo_pids,
+                                                      combined_weights,
+                                                      task_weights[halo],
+                                                      qtime_dict,
+                                                      q_time)
 
     if meta.debug:
 
-        utilities.count_and_report_halos(rank_part_haloids, meta,
-                                         halo_type="Rank %d Spatial Host Halos"
-                                                   % meta.rank)
+        count_and_report_halos(rank_part_haloids, meta,
+                               halo_type="Rank %d Spatial Host Halos"
+                                         % meta.rank)
 
-    return halo_pids
+    return halo_pids, combined_weights, qtime_dict
 
 
-def get_sub_halos(halo_pids, halo_pos, sub_linkl):
+@timer("Sub-Spatial")
+def get_sub_halos(tictoc, halo_pids, halo_pos, sub_linkl):
+    """
+
+    :param tictoc:
+    :param halo_pids:
+    :param halo_pos:
+    :param sub_linkl:
+    :return:
+    """
+
     # Do a spatial search for subhalos
     part_subhaloids, assignedsub_parts = find_subhalos(halo_pos, sub_linkl)
 

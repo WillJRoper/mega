@@ -1,20 +1,44 @@
 import numpy as np
 
-from halo_energy import kinetic, grav
-import halo_properties as hprop
+from core.halo_energy import kinetic, grav
+import core.halo_properties as hprop
 
 
 class Halo:
+    """
+    Attributes:
+
+    """
+
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["pids", "sim_pids", "pos", "vel", "types", "masses",
+    __slots__ = ["memory", "pids", "sim_pids", "pos", "vel", "types", "masses",
                  "part_KE", "part_GE", "vel_with_hubflow",
                  "npart", "real", "mean_pos", "mean_vel", "mean_vel_hubflow",
                  "mass", "ptype_mass", "KE", "GE",
                  "rms_r", "rms_vr", "veldisp3d", "veldisp1d", "vmax",
                  "hmr", "hmvr", "vlcoeff"]
+
     def __init__(self, pids, sim_pids, pos, vel, types, masses, vlcoeff,
                  boxsize, s, z, G, cosmo):
+        """
+
+        :param pids:
+        :param sim_pids:
+        :param pos:
+        :param vel:
+        :param types:
+        :param masses:
+        :param vlcoeff:
+        :param boxsize:
+        :param s:
+        :param z:
+        :param G:
+        :param cosmo:
+        """
+
+        # Define metadata
+        self.memory = None
 
         # Particle information
         self.pids = np.array(pids, dtype=int)
@@ -63,6 +87,11 @@ class Halo:
         self.real = (self.KE / self.GE) <= 1
 
     def compute_props(self, G):
+        """
+
+        :param G:
+        :return:
+        """
 
         # Get rms radii from the centred position and velocity
         self.rms_r = hprop.rms_rad(self.pos)
@@ -83,9 +112,19 @@ class Halo:
                            for i in range(6)]
 
     def decrement(self, decrement):
+        """
+
+        :param decrement:
+        :return:
+        """
         self.vlcoeff -= decrement
 
     def wrap_pos(self, boxsize):
+        """
+
+        :param boxsize:
+        :return:
+        """
 
         # Define the comparison particle as the maximum
         # position in the current dimension
@@ -103,3 +142,14 @@ class Halo:
         # *** Note: fails if halo's extent is greater than 50%
         # of the boxsize in any dimension ***
         self.pos[np.where(sep > 0.5 * boxsize)] += boxsize
+
+    def clean_halo(self):
+        """ A helper method to clean memory hogging attributes to limit the
+            memory used by the dictionary holding halos prior to output.
+
+        :return:
+        """
+        # Remove attributes that are no longer needed
+        del self.pos
+        del self.vel
+        del self.masses

@@ -1,5 +1,3 @@
-import time
-
 import numpy as np
 import yaml
 import h5py
@@ -24,11 +22,35 @@ def read_param(paramfile):
 
 
 class Metadata:
+    """
+    Attributes:
+
+    """
 
     def __init__(self, snapshot, cosmology,
                  llcoeff, sub_llcoeff, inputpath, savepath,
                  ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
                  cdim, profile, profile_path, h, softs, dmo):
+        """
+
+        :param snapshot:
+        :param cosmology:
+        :param llcoeff:
+        :param sub_llcoeff:
+        :param inputpath:
+        :param savepath:
+        :param ini_vlcoeff:
+        :param min_vlcoeff:
+        :param decrement:
+        :param verbose:
+        :param findsubs:
+        :param cdim:
+        :param profile:
+        :param profile_path:
+        :param h:
+        :param softs:
+        :param dmo:
+        """
 
         # MPI information (given value if needed)
         self.rank = None
@@ -85,7 +107,7 @@ class Metadata:
 
         # Print parameters
         self.report_width = 60
-        self.table_width = 100
+        self.table_width = 170
 
         # Linking length
         self.llcoeff = llcoeff
@@ -96,9 +118,25 @@ class Metadata:
         self.linkl = self.llcoeff * self.mean_sep
         self.sub_linkl = self.sub_llcoeff * self.mean_sep
 
+        # Halo
+        self.part_thresh = 10
+
         # Domain decomp
         self.cdim = int(cdim)
         self.ncells = self.cdim ** 3
 
         # Tasks
         self.spatial_task_size = 100000
+
+    def check_verbose(self):
+        """
+
+        :return:
+        """
+
+        if self.rank == 0 and self.verbose == 1:
+            self.verbose = 1
+        elif self.verbose == 2:
+            self.verbose = 1
+        else:
+            self.verbose = 0

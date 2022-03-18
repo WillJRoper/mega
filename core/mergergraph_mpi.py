@@ -3,11 +3,11 @@ import h5py
 import mpi4py
 import pickle
 from mpi4py import MPI
-import utilities
-import sys
 import time
 mpi4py.rc.recv_mprobe = False
 from guppy import hpy
+
+import core.utilities as utils
 
 hp = hpy()
 
@@ -19,6 +19,9 @@ status = MPI.Status()  # get MPI status object
 
 # TODO: All mentions of mass need to be converted to Npart and mass arrays
 #  need to be introduced
+# TODO: we can limit memory footprint for the halo ids by doing a handshake
+#  between ranks by first finding all the particles we need the halo_ids for
+#  and communicating with the ranks that have those particles
 
 
 def directProgDescFinder(prog_snap, desc_snap, prog_haloids, desc_haloids, prog_reals,
@@ -146,7 +149,7 @@ def directProgDescWriter(snap, prog_snap, desc_snap, halopath, savepath,
         print("Descendant snapshot:", desc_snap)
 
     # Define MPI message tags
-    tags = utilities.enum('READY', 'DONE', 'EXIT', 'START')
+    tags = utils.enum('READY', 'DONE', 'EXIT', 'START')
 
     if profile:
         profile_dict = {}

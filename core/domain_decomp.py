@@ -1,20 +1,20 @@
 import numpy as np
 
-import utilities
-from timing import timer
-from partition import pick_vector, split_vector, get_parts_in_cell
+import core.utilities as utils 
+from core.partition import pick_vector, split_vector, get_parts_in_cell
+from core.talking_utils import message
+from core.timing import timer
 
 
 def get_cell_rank(cell_ranks, meta, i, j, k):
-
     # Get cell index
-    ind = utilities.get_cellid(meta.cdim, i, j, k)
+    ind = utils.get_cellid(meta.cdim, i, j, k)
 
     return cell_ranks[ind], ind
 
-@timer("Domain-Decomp")
-def cell_domain_decomp(tictoc, meta, comm, part_types=(1, )):
 
+@timer("Domain-Decomp")
+def cell_domain_decomp(tictoc, meta, comm, part_types=(1,)):
     npart = np.sum([meta.npart[i] for i in part_types])
 
     # Split the cells over the ranks
@@ -36,10 +36,10 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1, )):
                 for c in cs:
                     count_parts += len(cs[c])
 
-            assert (count_parts == npart,
-                    "Found an incompatible number of particles "
-                    "in cells (found=%d, npart=%d)" % (count_parts,
-                                                       npart))
+            assert count_parts == npart, \
+                "Found an incompatible number of particles " \
+                "in cells (found=%d, npart=%d)" % (count_parts,
+                                                   npart)
 
     # Sort the cells and particles that I have
     # NOTE: we have to distinguish between particles in adjacent cells
@@ -74,7 +74,7 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1, )):
 
                     # Define ijk tuple
                     c_ijk = (iii, jjj, kkk)
-                    ind = utilities.get_cellid(meta.cdim, iii, jjj, kkk)
+                    ind = utils.get_cellid(meta.cdim, iii, jjj, kkk)
 
                     # Get the particles for the adjacent cells
                     if c_ijk in cells.keys():
@@ -85,17 +85,17 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1, )):
     if meta.debug:
 
         # All cells have been included
-        assert (len(cells_done) == len(set(cells.keys())),
-                "We have missed cells in the domain decompistion! "
-                "(found=%d, total=%d" % (len(cells_done),
-                                         len(set(cells.keys()))))
+        assert len(cells_done) == len(set(cells.keys())), \
+            "We have missed cells in the domain decompistion! " \
+            "(found=%d, total=%d" % (len(cells_done),
+                                     len(set(cells.keys())))
         found_parts_on_rank = set()
         for key in rank_tree_parts:
             found_parts_on_rank.update(rank_tree_parts[key])
-        assert (len(found_parts_on_rank) == npart_on_rank,
-                "Particles missing on rank %d (found=%d, "
-                "npart_on_rank=%d)" % (meta.rank, len(found_parts_on_rank),
-                                       npart_on_rank))
+        assert len(found_parts_on_rank) == npart_on_rank, \
+            "Particles missing on rank %d (found=%d, " \
+            "npart_on_rank=%d)" % (meta.rank, len(found_parts_on_rank),
+                                   npart_on_rank)
 
     # We now need to exchange the particle indices
     for other_rank in range(meta.nranks):
@@ -114,22 +114,22 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1, )):
     for s in rank_tree_parts[meta.rank]:
         my_tree_particles.update(s)
 
-    if meta.verbose:
-        print("Rank %d has %d particles and %d tree particle"
-              % (meta.rank, len(my_particles), len(my_tree_particles)))
+    comm.Barrier()
 
-        comm.Barrier()
+    if meta.verbose:
+        message(meta.rank, "I have %d particles and %d tree particle"
+                % (len(my_particles), len(my_tree_particles)))
 
     if meta.debug:
 
         all_parts = comm.gather(my_particles, root=0)
         if meta.rank == 0:
             found_parts = len({i for s in all_parts for i in s})
-            assert (found_parts == npart,
-                    "There are particles missing on rank %d "
-                    "after exchange! (found=%d, npart=%d)" % (meta.rank,
-                                                              found_parts,
-                                                              npart))
+            assert found_parts == npart, \
+                "There are particles missing on rank %d " \
+                "after exchange! (found=%d, npart=%d)" % (meta.rank,
+                                                          found_parts,
+                                                          npart)
 
     # Convert to lists and sort so the particles can index the hdf5 files
     my_particles = np.sort(list(my_particles))
