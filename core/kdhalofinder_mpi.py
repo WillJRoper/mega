@@ -1,5 +1,5 @@
-from core.domain_decomp import cell_domain_decomp
-from core.spatial import spatial_node_task
+from core.domain_decomp import cell_domain_decomp, halo_decomp
+from core.spatial import spatial_node_task, get_sub_halos
 from core.phase_space import *
 import core.utilities as utils
 import core.serial_io as serial_io
@@ -127,8 +127,6 @@ def hosthalofinder(meta):
     tree_pos = serial_io.read_subset(tictoc, meta, "PartType1/part_pos",
                                      rank_tree_parts)
 
-    comm.Barrier()
-
     if meta.verbose:
         tictoc.report("Reading tree positions")
 
@@ -171,8 +169,6 @@ def hosthalofinder(meta):
                                                     rank_tree_parts,
                                                     pos, tree, linkl)
 
-    comm.Barrier()
-
     if meta.verbose:
         tictoc.report("Spatial search")
 
@@ -185,14 +181,24 @@ def hosthalofinder(meta):
                                                rank_tree_parts, comm,
                                                weights, qtime_dict)
 
-    comm.Barrier()
-
     if meta.verbose:
         tictoc.report("Combining halos across ranks")
+        if meta.rank == 0:
+            message(meta.rank, "Weighting range: [%.2E - %.2E]"
+                    % (np.min(list(weights.values())),
+                       np.max(list(weights.values()))))
+
+    # ================== Decompose and scatter spatial halos ==================
+
+    (my_shifted_tasks, my_tasks, my_halo_parts,
+     offsets, task_offsets) = halo_decomp(tictoc, meta, halo_tasks,
+                                          weights, comm)
+
+    if meta.verbose:
+        tictoc.report("Scattering spatial halos")
 
     # ============ Test Halos in Phase Space and find substructure ============
 
-    # TODO: can use an offsets array to do a full decomp of halos across ranks
     tictoc.get_tic()
 
     # Get input data hdf5 key (DM particle for DMO, concatenated
@@ -211,109 +217,101 @@ def hosthalofinder(meta):
     tictoc.get_toc()
     tictoc.record_time("Housekeeping")
 
-    if rank == 0:
+    # ================ Read in the particles data for my halos ================
 
-        count = 0
+    # Get the halo data on this rank
+    # NOTE: for now it's more efficient to read all particles
+    # and extract the particles we need, throwing away the ones
+    # we don't, could be problematic with large datasets
+    halo_data = serial_io.read_multi_halo_data(tictoc, meta, my_halo_parts,
+                                               hdf_part_key)
+    all_sim_pids, all_pos, all_vel, all_masses, all_part_types = halo_data
 
-        # Master process executes code below
-        num_workers = size - 1
-        closed_workers = 0
-        while closed_workers < num_workers:
+    if meta.verbose:
+        tictoc.report("Reading halo data")
 
-            # If all other tasks are currently working let the master
-            # handle a (fast) low mass halo
-            if comm.Iprobe(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG):
+    # Loop over the tasks we have
+    while len(my_shifted_tasks) > 0:
 
-                count += 1
+        # Get a task to work on
+        taskid, this_task = my_shifted_tasks.popitem()
 
-                data = comm.recv(source=MPI.ANY_SOURCE,
-                                 tag=MPI.ANY_TAG,
-                                 status=status)
-                source = status.Get_source()
-                tag = status.Get_tag()
+        # Create the halo object
+        tictoc.get_tic()
+        sim_inds = my_halo_parts[this_task]
+        halo = Halo(sim_inds, this_task, all_sim_pids[this_task],
+                    all_pos[this_task, :], all_vel[this_task, :],
+                    all_part_types[this_task], all_masses[this_task],
+                    meta.ini_vlcoeff, meta.boxsize, meta.soft, meta.z, meta.G,
+                    meta.cosmo)
+        tictoc.get_toc()
+        tictoc.record_time("Create Halo")
 
-                if tag == tags.READY:
+        # Test the halo in phase space
+        result = get_real_host_halos(tictoc, halo, meta.boxsize, vlinkl_indp,
+                                     meta.linkl, meta.decrement, meta.z,
+                                     meta.G,
+                                     meta.soft, meta.min_vlcoeff,
+                                     meta.cosmo)
 
-                    # Worker is ready, so send it a task
-                    if len(halo_tasks) != 0:
+        # Save the found halos
+        for res in result:
+            results[(meta.rank, haloID)] = res
 
-                        tictoc.get_tic()
+            haloID += 1
 
-                        key, this_task = halo_tasks.popitem()
+        if meta.findsubs:
 
-                        comm.send(this_task, dest=source, tag=tags.START)
+            # Loop over results getting spatial halos
+            for host in result:
 
-                        tictoc.get_toc()
+                # Sort the particle ids to index the hdf5 array
+                thishalo_pids = host.shifted_inds
 
-                        tictoc.record_time("Assigning")
+                # Get the particle positions
+                subhalo_poss = all_pos[thishalo_pids, :]
 
-                    else:
+                # Test the subhalo in phase space
+                sub_result = get_sub_halos(tictoc, thishalo_pids,
+                                           subhalo_poss,
+                                           meta.sub_linkl)
 
-                        # There are no tasks left so terminate this process
-                        comm.send(None, dest=source, tag=tags.EXIT)
+                # Loop over spatial subhalos
+                while len(sub_result) > 0:
 
-                elif tag == tags.EXIT:
+                    # Get a subahlo task to work on
+                    _, this_stask = sub_result.popitem()
 
-                    closed_workers += 1
+                    # Create the subhalo object
+                    tictoc.get_tic()
+                    sim_inds = my_halo_parts[this_stask]
+                    subhalo = Halo(sim_inds, this_stask,
+                                   all_sim_pids[this_stask],
+                                   all_pos[this_stask, :],
+                                   all_vel[this_stask, :],
+                                   all_part_types[this_stask],
+                                   all_masses[this_stask],
+                                   meta.ini_vlcoeff, meta.boxsize,
+                                   meta.soft, meta.z, meta.G,
+                                   meta.cosmo)
+                    tictoc.get_toc()
+                    tictoc.record_time("Create Halo")
 
-            elif len(halo_tasks) > 0 and count > size * 1.5:
+                    # Test the subhalo in phase space
+                    result = get_real_sub_halos(tictoc, subhalo,
+                                                meta.boxsize,
+                                                vlinkl_indp * 8 ** (
+                                                        1 / 6),
+                                                meta.linkl, meta.decrement,
+                                                meta.z, meta.G,
+                                                meta.soft, meta.min_vlcoeff,
+                                                meta.cosmo)
 
-                count = 0
+                    # Save the found subhalos
+                    for res in result:
+                        sub_results[(meta.rank, subhaloID)] = res
 
-                key, this_task = halo_tasks.popitem()
-
-                if len(this_task) > 100:
-
-                    halo_tasks[key] = this_task
-
-                else:
-
-                    # Test the halo we've been given in phase space and find
-                    # subhalos if we are looking for them
-                    res_tup = get_halos(tictoc, this_task, meta, results,
-                                        sub_results, vlinkl_indp, haloID,
-                                        subhaloID, hdf_part_key)
-                    results, sub_results, haloID, subhaloID = res_tup
-
-            elif len(halo_tasks) == 0:
-
-                data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG,
-                                 status=status)
-                source = status.Get_source()
-                tag = status.Get_tag()
-
-                if tag == tags.EXIT:
-
-                    closed_workers += 1
-
-                else:
-
-                    # There are no tasks left so terminate this process
-                    comm.send(None, dest=source, tag=tags.EXIT)
-
-    else:
-
-        # ================ Get from master and complete tasks =================
-
-        while True:
-
-            comm.send(None, dest=0, tag=tags.READY)
-            this_task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-            tag = status.Get_tag()
-
-            if tag == tags.START:
-
-                # Test the halo we've been given in phase space and find
-                # subhalos if we are looking for them
-                res_tup = get_halos(tictoc, this_task, meta, results,
-                                    sub_results, vlinkl_indp, haloID,
-                                    subhaloID, hdf_part_key)
-                results, sub_results, haloID, subhaloID = res_tup
-
-            elif tag == tags.EXIT:
-                break
-
-        comm.send(None, dest=0, tag=tags.EXIT)
+                        subhaloID += 1
 
     # Collect child process results
     tictoc.get_tic()
@@ -335,28 +333,28 @@ def hosthalofinder(meta):
             tictoc.report("Combining results")
             message(meta.rank, "Results total memory footprint: %.2f MB" % (
                     utils.get_size(results_dict) * 10 ** -6))
-
-        # If profiling enable plot the number of halos on each rank
-        if meta.profile:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.bar(np.arange(len(collected_results)),
-                   [len(res) for res in collected_results],
-                   color="b", edgecolor="b")
-            ax.set_xlabel("Rank")
-            ax.set_ylabel("Number of halos computed")
-            fig.savefig(meta.profile_path + "/plots/halos_computed_"
-                        + str(meta.snap) + ".png")
-        if meta.profile and meta.findsubs:
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.bar(np.arange(len(sub_collected_results)),
-                   [len(res) for res in sub_collected_results],
-                   color="r", edgecolor="r")
-            ax.set_xlabel("Rank")
-            ax.set_ylabel("Number of subhalos computed")
-            fig.savefig(meta.profile_path + "/plots/subhalos_computed_"
-                        + str(meta.snap) + ".png")
+        #
+        # # If profiling enable plot the number of halos on each rank
+        # if meta.profile:
+        #     fig = plt.figure()
+        #     ax = fig.add_subplot(111)
+        #     ax.bar(np.arange(len(collected_results)),
+        #            [len(res) for res in collected_results],
+        #            color="b", edgecolor="b")
+        #     ax.set_xlabel("Rank")
+        #     ax.set_ylabel("Number of halos computed")
+        #     fig.savefig(meta.profile_path + "/plots/halos_computed_"
+        #                 + str(meta.snap) + ".png")
+        # if meta.profile and meta.findsubs:
+        #     fig = plt.figure()
+        #     ax = fig.add_subplot(111)
+        #     ax.bar(np.arange(len(sub_collected_results)),
+        #            [len(res) for res in sub_collected_results],
+        #            color="r", edgecolor="r")
+        #     ax.set_xlabel("Rank")
+        #     ax.set_ylabel("Number of subhalos computed")
+        #     fig.savefig(meta.profile_path + "/plots/subhalos_computed_"
+        #                 + str(meta.snap) + ".png")
 
         # ========================== Write out data ==========================
 
@@ -372,10 +370,6 @@ def hosthalofinder(meta):
     if meta.profile:
 
         tictoc.end_report(comm)
-    #     for r in range(meta.nranks):
-    #         if r == meta.rank:
-    #             tictoc.end_report()
-    #         comm.Barrier()
 
         with open(meta.profile_path + "Halo_" + str(rank) + '_'
                   + meta.snap + '.pck', 'wb') as pfile:

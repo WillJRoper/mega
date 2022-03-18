@@ -135,6 +135,12 @@ def decomp_nodes(npart, ranks, cells_per_rank, rank):
 
 @timer("Sorting")
 def set_2_sorted_array(tictoc, s):
+    """
+
+    :param tictoc:
+    :param s:
+    :return:
+    """
 
     # Convert to array and sort
     sarr = np.array(list(s))
@@ -145,7 +151,23 @@ def set_2_sorted_array(tictoc, s):
 
 @timer("Sorting")
 def timed_sort(tictoc, arr):
+    """
+
+    :param tictoc:
+    :param arr:
+    :return:
+    """
     return np.sort(arr)
+
+
+def get_sim_inds(shifted, offset):
+    """
+
+    :param shifted:
+    :param offset:
+    :return:
+    """
+    return shifted - offset
 
 
 def get_linked_halo_data(all_linked_halos, start_ind, nlinked_halos):

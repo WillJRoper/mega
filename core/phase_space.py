@@ -176,6 +176,7 @@ def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
 
         # Instantiate halo object (auto calculates energy)
         new_halo = Halo(halo.pids[this_pids],
+                        halo.shifted_inds[this_pids],
                         halo.sim_pids[this_pids],
                         halo.pos[this_pids, :],
                         halo.vel[this_pids, :],

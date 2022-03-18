@@ -12,15 +12,15 @@ class Halo:
 
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["memory", "pids", "sim_pids", "pos", "vel", "types", "masses",
-                 "part_KE", "part_GE", "vel_with_hubflow",
+    __slots__ = ["memory", "pids", "shifted_inds", "sim_pids", "pos", "vel",
+                 "types", "masses",  "part_KE", "part_GE", "vel_with_hubflow",
                  "npart", "real", "mean_pos", "mean_vel", "mean_vel_hubflow",
                  "mass", "ptype_mass", "KE", "GE",
                  "rms_r", "rms_vr", "veldisp3d", "veldisp1d", "vmax",
                  "hmr", "hmvr", "vlcoeff"]
 
-    def __init__(self, pids, sim_pids, pos, vel, types, masses, vlcoeff,
-                 boxsize, s, z, G, cosmo):
+    def __init__(self, pids, shifted_pids, sim_pids, pos, vel, types, masses,
+                 vlcoeff, boxsize, s, z, G, cosmo):
         """
 
         :param pids:
@@ -42,6 +42,7 @@ class Halo:
 
         # Particle information
         self.pids = np.array(pids, dtype=int)
+        self.shifted_inds = shifted_pids
         self.sim_pids = sim_pids
         self.pos = pos
         self.wrap_pos(boxsize)

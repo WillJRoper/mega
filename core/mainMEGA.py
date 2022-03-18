@@ -11,6 +11,8 @@ import time
 from core.talking_utils import say_hello
 import core.param_utils as p_utils
 
+# TODO: Package mpi information in object similar to meta
+
 
 def main():
 
@@ -159,9 +161,6 @@ def main():
                                        verbose=flags['verbose'],
                                        profile=flags['profile'],
                                        profile_path=inputs["profilingPath"])
-
-        if rank == 0:
-            print('Total: ', time.time() - walltime_start)
 
         if flags["graph"]:
             bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'],

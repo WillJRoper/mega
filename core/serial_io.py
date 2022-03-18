@@ -6,6 +6,11 @@ from core.talking_utils import message
 from core.timing import timer
 
 
+# TODO: If we ever need to split the io (particularly creation and writing
+#  out of part_haloids arrays) we split the array over nranks and have each
+#  rank handshake the particles it has onto the corresponding ranks.
+
+
 def hdf5_write_dataset(grp, key, data, compression="gzip"):
     """
 
@@ -41,6 +46,26 @@ def read_subset(tictoc, meta, key, subset):
     all_arr = hdf[key][...]
 
     hdf.close()
+
+    arr = all_arr[subset]
+
+    return arr
+
+
+def read_subset_fromobj(hdf, key, subset):
+    """
+
+    :param hdf:
+    :param key:
+    :param subset:
+    :return:
+    """
+
+    # Get the positions for searching on this rank
+    # NOTE: for now it"s more efficient to read all particles
+    # and extract the particles we need and throw away the ones
+    # we don"t, could be problematic with large datasets
+    all_arr = hdf[key][...]
 
     arr = all_arr[subset]
 
@@ -85,6 +110,42 @@ def read_halo_data(tictoc, part_inds, inputpath, snapshot, hdf_part_key,
                 redshift, G, cosmo)
 
     return halo
+
+
+@timer("Reading")
+def read_multi_halo_data(tictoc, meta, part_inds, hdf_part_key):
+    """
+
+    :param tictoc:
+    :param part_inds:
+    :param inputpath:
+    :param snapshot:
+    :param hdf_part_key:
+    :param ini_vlcoeff:
+    :param boxsize:
+    :param soft:
+    :param redshift:
+    :param G:
+    :param cosmo:
+    :return:
+    """
+
+    # Open hdf5 file
+    hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
+
+    # Get the position and velocity of
+    # each particle in this rank
+    sim_pids = read_subset_fromobj(hdf, hdf_part_key + "/part_pid", part_inds)
+    pos = read_subset_fromobj(hdf, hdf_part_key + "/part_pos", part_inds)
+    vel = read_subset_fromobj(hdf, hdf_part_key + "/part_vel", part_inds)
+    masses = read_subset_fromobj(hdf, hdf_part_key + "/part_masses",
+                                 part_inds)* 10 ** 10
+    part_types = read_subset_fromobj(hdf, hdf_part_key + "/part_types",
+                                     part_inds)
+
+    hdf.close()
+
+    return sim_pids, pos, vel, masses, part_types
 
 
 @timer("Writing")

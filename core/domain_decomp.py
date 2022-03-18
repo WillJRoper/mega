@@ -136,3 +136,66 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1,)):
     my_tree_particles = np.sort(list(my_tree_particles))
 
     return my_particles, my_tree_particles, cell_ranks
+
+
+@timer("Domain-Decomp")
+def halo_decomp(tictoc, meta, halo_tasks, weights, comm):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param halo_tasks:
+    :param weights:
+    :return:
+    """
+
+    if meta.rank == 0:
+
+        # Initialise tasks for each rank
+        rank_halos = [{}, ] * meta.nranks
+
+        # Initialise counter to track the weight allocated to each rank
+        alloc_weights = [0, ] * meta.nranks
+
+        # Allocate tasks, each task goes to the minimally weighted rank
+        for ihalo in halo_tasks:
+
+            # Get position of minimum current rank weighting
+            r = np.argmin(alloc_weights)
+
+            # Assign this halo and it's weight to r
+            rank_halos[r][ihalo] = halo_tasks[ihalo]
+            alloc_weights[r] += weights[ihalo]
+
+    else:
+        rank_halos = None
+
+    # Give everyone their tasks
+    my_tasks = comm.scatter(rank_halos, root=0)
+
+    # Get my task indices, particle array and offsets for this rank
+    # NOTE: if we stop reading in the entire position array this will
+    # need sorting!
+    my_halo_parts = []
+    offsets = []
+    my_shifted_tasks = {}
+    task_offsets = {}
+    current_ind = 0
+    for ihalo in my_tasks:
+        parts = my_tasks[ihalo]
+        npart = len(parts)
+        shifted_inds = np.arange(current_ind, current_ind + npart,
+                                 dtype=np.int32)
+        my_shifted_tasks[ihalo] = shifted_inds
+        my_halo_parts.extend(parts)
+        current_ind += npart
+    my_halo_parts = np.array(my_halo_parts, copy=False)
+
+    # Define index offsets for my particles
+    my_inds = np.arange(my_halo_parts.size, dtype=np.int32)
+    offsets = my_inds - my_halo_parts
+
+    return my_shifted_tasks, my_tasks, my_halo_parts, offsets, task_offsets
+
+
+
