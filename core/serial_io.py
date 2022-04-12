@@ -178,11 +178,12 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 @timer("Reading")
 def read_prog_data(tictoc, meta, density_rank):
-    
-    if meta.prog_snap is not None:
-        # How many particles are we dealing with in the progenitor snapshot?
-        hdf = h5py.File(meta.halopath + 'halos_'
-                                + meta.prog_snap + '.hdf5', 'r')
+
+    if not meta.isfirst:
+
+        # Open hdf5 file
+        hdf = h5py.File(meta.halopath + 'halos_'  + meta.prog_snap + '.hdf5',
+                        'r')
 
         if density_rank == 0:
             root = hdf
@@ -191,12 +192,9 @@ def read_prog_data(tictoc, meta, density_rank):
     
         # How many particles do we have?
         prog_npart = root["particle_halo_IDs"].size
-
-        # Read particle IDs
-        pids = root["sim_part_ids"][...]
     
-        # Lets get the halo particle ids we have on this rank
-        prog_rankpartbins = np.linspace(0, prog_npart,
+        # Lets get our particle ID slice
+        prog_rank_partbins = np.linspace(0, prog_npart,
                                          meta.nranks + 1,
                                          dtype=int)
 
@@ -204,11 +202,8 @@ def read_prog_data(tictoc, meta, density_rank):
         myslice = (prog_rank_partbins[meta.rank],
                    prog_rank_partbins[meta.rank + 1])
 
-        # Extract our particles
-        okinds = np.where(np.logical_and(pids >= myslice[0],
-                                         pids < myslice[1]))
-        rank_part_progids = root["particle_halo_IDs"][okinds]
-        prog_rank_partids = pids[okinds]
+        # Extract our particle's halo ids
+        rank_part_progids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
 
         # Lets get the progenitor halo data
         # (this is nhalo in length so give every rank a copy)
@@ -221,11 +216,10 @@ def read_prog_data(tictoc, meta, density_rank):
         prog_rank_partbins = None
         rank_part_progids = None
         proghalo_nparts = None
-        prog_rank_partids = None
         prog_reals = None
 
     return (prog_npart, proghalo_nparts, prog_rank_partbins,
-            rank_part_progids, prog_reals, prog_rank_partids)
+            rank_part_progids, prog_reals)
 
 
 @timer("Reading")
@@ -248,12 +242,25 @@ def read_current_data(tictoc, meta, density_rank):
                                 meta.nranks + 1,
                                 dtype=int)
 
-    # Get the real flags
+    # Lets get our slice
+    myslice = (rank_partbins[meta.rank],
+               rank_partbins[meta.rank + 1])
+
+    # Extract our particle indices
+    sinds = hdf["sort_inds"][myslice[0]: myslice[1]]
+
+    # Extract our particle's halo ids
+    # TODO: This should not read the whole array first!
+    rank_part_haloids = root["particle_halo_IDs"][...][sinds]
+
+    # Lets get thehalo data
+    # (this is nhalo in length so give every rank a copy)
+    halo_nparts = root["nparts"][...]
     reals = root["real_flag"][...]
 
     hdf.close()
 
-    return nhalo, rank_partbins, reals
+    return nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts
 
 
 @timer("Reading")
@@ -270,13 +277,10 @@ def read_desc_data(tictoc, meta, density_rank):
         else:
             root = hdf["Subhalos"]
 
-        # Read particle IDs
-        pids = root["part_ids"][...]
-
         # How many particles do we have?
         desc_npart = root["particle_halo_IDs"].size
-    
-        # Lets get the halo particle ids we have on this rank
+
+        # Lets get our particle ID slice
         desc_rank_partbins = np.linspace(0, desc_npart,
                                          meta.nranks + 1,
                                          dtype=int)
@@ -285,11 +289,8 @@ def read_desc_data(tictoc, meta, density_rank):
         myslice = (desc_rank_partbins[meta.rank],
                    desc_rank_partbins[meta.rank + 1])
 
-        # Extract our particles
-        okinds = np.where(np.logical_and(pids >= myslice[0],
-                                         pids < myslice[1]))
-        rank_part_descids = root["particle_halo_IDs"][okinds]
-        desc_rank_partids = pids[okinds]
+        # Extract our particle's halo ids
+        rank_part_descids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
 
         # Lets get the descendant halo data
         # (this is nhalo in length so give every rank a copy)
@@ -301,10 +302,8 @@ def read_desc_data(tictoc, meta, density_rank):
         desc_rank_partbins = None
         rank_part_descids = None
         deschalo_nparts = None
-        desc_rank_partids = None
 
-    return (desc_npart, deschalo_nparts, desc_rank_partbins,
-            rank_part_descids, desc_rank_partids)
+    return desc_npart, deschalo_nparts, desc_rank_partbins, rank_part_descids
 
 
 @timer("Writing")
@@ -479,10 +478,25 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     hdf5_write_dataset(snap, "half_mass_velocity_radius", hmvrs)
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
+    # Read particle IDs to produce sorted indices array
+    sim_pids = read_pids(tictoc, meta.inputpath, meta.snap, "PartType1")
+
+    # Get the sorted indices
+    sinds = np.argsort(sim_pids)
+    
+    # Write out the sorting indices
+    hdf5_write_dataset(snap, "sort_inds", sinds)
+
     # Now we can set the correct halo_ids
+    sort_part_ids = []
     for (halo_id, b), l in zip(enumerate(begin), stride):
-        parts = all_halo_pids[b: b + l]
+        parts = sinds[all_halo_pids[b: b + l]]
         phase_part_haloids[parts] = halo_id
+        sort_part_ids.extend(parts)
+
+    # Write out the sorting indices
+    sort_part_ids = np.array(sort_part_ids, dtype=int)
+    hdf5_write_dataset(snap, "sorted_part_ids", sort_part_ids)
 
     count_and_report_halos(phase_part_haloids, meta,
                            halo_type="Phase Space Host Halos")

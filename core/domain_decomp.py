@@ -326,7 +326,8 @@ def halo_decomp(tictoc, meta, halo_tasks, weights, comm):
 
 
 @timer("Domain-Decomp")
-def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_partbins):
+def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_partbins,
+                      rank_part_haloids, halo_nparts):
     """
 
     :param tictoc:
@@ -357,14 +358,14 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_partbins):
             # Let's get this halos particles
             begin = root["start_index"][ihalo]
             end = begin + root["stride"][ihalo]
-            parts = root["part_ids"][begin: end]
+            parts = root["sorted_part_ids"][begin: end]
 
-            # Which rank holds the majority of this halos particles?
+            # Which rank holds the majority of this halo's particles?
             rs, counts = np.unique(
                 np.digitize(parts, rank_partbins),
                                    return_counts=True)
 
-            # Bining returns the index of the right hand bin edge
+            # Binning returns the index of the right hand bin edge
             r = rs[np.argmax(counts)] - 1
 
             # Give that rank this halo

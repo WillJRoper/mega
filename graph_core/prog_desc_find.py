@@ -32,10 +32,10 @@ def get_direct_prog(tictoc, meta, prog_haloids, prog_reals, prog_nparts):
     # Get the reality flag
     preals = prog_reals[uniprog_haloids]
 
-    # Get only real halos
-    uniprog_haloids = uniprog_haloids[preals]
-    uniprog_counts = uniprog_counts[preals]
-    preals = preals[preals]
+    # # Get only real halos
+    # uniprog_haloids = uniprog_haloids[preals]
+    # uniprog_counts = uniprog_counts[preals]
+    # preals = preals[preals]
 
     # Find the number of progenitor halos from the size of the unique array
     nprog = uniprog_haloids.size
@@ -104,8 +104,8 @@ def get_direct_desc(tictoc, meta, desc_haloids, desc_nparts):
 @timer("Local-Linking")
 def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
                        part_descids, prog_reals, desc_nparts,
-                       prog_rank_partbins, desc_rank_partbins, 
-                       prog_rank_partids, desc_rank_partids):
+                       prog_rank_partbins, desc_rank_partbins):
+
     # Initialise dictionary for results
     results = {}
 
@@ -145,7 +145,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
             prog_parts = np.array(prog_parts, dtype=int)
 
             # Link progenitors on this rank
-            progids = part_progids[np.in1d(prog_rank_partids, prog_parts)]
+            progids = part_progids[prog_parts - prog_offset]
             print(ihalo, "prog", np.unique(progids, return_counts=True))
             (nprog, prog_haloids, prog_npart,
              prog_npart_cont, preals) = get_direct_prog(tictoc, meta,
@@ -177,7 +177,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
             desc_parts = np.array(desc_parts, dtype=int)
 
             # Link descendants on this rank
-            descids = part_descids[np.in1d(desc_rank_partids, desc_parts)]
+            descids = part_descids[desc_parts - desc_offset]
             print(ihalo, "desc", np.unique(descids, return_counts=True))
             (ndesc, desc_haloids, desc_npart,
              desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
@@ -203,8 +203,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
 def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                          other_rank_desc_parts, part_progids, prog_nparts,
                          part_descids, prog_reals, desc_nparts,
-                         prog_rank_partbins, desc_rank_partbins,
-                         prog_rank_partids, desc_rank_partids):
+                         prog_rank_partbins, desc_rank_partbins):
     # Define offsets
     prog_offset = 0
     desc_offset = 0
@@ -235,7 +234,7 @@ def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 prog_parts = halo_dict[ihalo]
 
                 # Link progenitors on this rank
-                progids = part_progids[np.in1d(prog_rank_partids, prog_parts)]
+                progids = part_progids[prog_parts - prog_offset]
                 (nprog, prog_haloids, prog_npart,
                  prog_npart_cont, preals) = get_direct_prog(tictoc,
                                                             meta,
@@ -266,7 +265,7 @@ def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 desc_parts = halo_dict[ihalo]
 
                 # Link descendants on this rank
-                descids = part_descids[np.in1d(desc_rank_partids, desc_parts)]
+                descids = part_descids[desc_parts - desc_offset]
                 (ndesc, desc_haloids, desc_npart,
                  desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
                                                     desc_nparts)
