@@ -8,25 +8,14 @@ def timer(process=None):
     def decorator(func):
         def wrapper(*args, **kwargs):
 
-            if process is not None and process not in args[0].task_time:
-                args[0].task_time[process] = {"Start": [], "End": []}
-
-            # Get tic
-            args[0].get_tic()
-
-            # If we are timing a task lets write the start
-            if process is not None:
-                args[0].task_time[process]["Start"].append(args[0].tic)
+            # Lets time this process
+            args[0].start_func_time(process)
 
             # Do the stuff
             data = func(*args, **kwargs)
 
-            # Get toc
-            args[0].get_toc()
-
-            # If we are timing a task lets write the end
-            if process is not None:
-                args[0].task_time[process]["End"].append(args[0].toc)
+            # Lets stop timing this process
+            args[0].stop_func_time()
 
             return data
         return wrapper
@@ -43,11 +32,23 @@ class TicToc:
         # Basic times
         self.tic = 0
         self.toc = 0
+        self.runtime = 0
 
         # Process timing dictionary
-        self.task_time = {}
+        self.processes = ("Housekeeping", "Domain-Decomp", "Reading",
+                          "Tree-Building", "Host-Spatial", "Stitching",
+                          "Kinetic-Energy", "Grav-Energy", "Create Halo",
+                          "Create Subhalo", "Compute-Props", "Host-Phase",
+                          "Sub-Spatial", "Hydro-Spatial",  "Sub-Phase",
+                          "Collecting", "Writing", "Local-Linking",
+                          "Foreign-Linking", "Progenitor-Linking",
+                          "Descendant-Linking", "Cleaning")
+        self.task_time = {k: {"Start": [], "End": []} for k in self.processes}
         self.task_time["START"] = None
         self.task_time["END"] = None
+        
+        # Variables to handle nested tasks
+        self.current_tasks = []
 
     def get_tic(self):
         self.tic = time.time()
@@ -72,10 +73,42 @@ class TicToc:
             if k in ["START", "END"]:
                 continue
             self.task_time[k]["Start"] = np.array(self.task_time[k]["Start"])
-            self.task_time[k]["End"] = np.array( self.task_time[k]["End"])
+            self.task_time[k]["End"] = np.array(self.task_time[k]["End"])
 
     def get_runtime(self):
         self.runtime = self.task_time["END"] - self.task_time["START"]
+
+    def start_func_time(self, process):
+
+        # Start timing
+        self.get_tic()
+
+        # If so temporarily end timing it
+        self.current_tasks.append(process)
+        if len(self.current_tasks) > 1:
+            self.task_time[self.current_tasks[-2]]["End"].append(self.tic)
+
+            # Start timing
+            self.get_tic()
+
+        # Start timing this task
+        self.task_time[self.current_tasks[-1]]["Start"].append(self.tic)
+
+    def stop_func_time(self):
+
+        # Stop timing
+        self.get_toc()
+
+        finished = self.current_tasks.pop(-1)
+        self.task_time[finished]["End"].append(self.toc)
+
+        # Check if we are inside another process
+        if len(self.current_tasks) > 0:
+
+            # Stop timing
+            self.get_toc()
+
+            self.task_time[self.current_tasks[-1]]["Start"].append(self.toc)
 
     def record_time(self, process):
 
@@ -88,43 +121,24 @@ class TicToc:
         # How long did we take?
         how_long = self.how_long()
 
-        # Print in milliseconds for short periods, seconds otherwise
-        if how_long < 0.01:
+        # Print in us/milliseconds for short periods, seconds otherwise
+        if how_long < 1 * 10**-4:
+            message(self.meta.rank, "%s took: %.2f us" % (process,
+                                                          how_long * 10**6))
+        elif how_long < 1 * 10**-2:
             message(self.meta.rank, "%s took: %.2f ms" % (process,
-                                                          how_long * 10**-3))
+                                                          how_long * 10**3))
         else:
             message(self.meta.rank, "%s took: %.2f secs" % (process, how_long))
 
     def end_report(self, comm):
 
-        # # Get the total runtime
-        # total = self.runtime()
-        #
-        # # Print table heading
-        # heading = get_heading(self.meta.table_width, "Task Timings")
-        # message(self.meta.rank, heading)
-        #
-        # # Convert lists to arrays
-        # for k in self.task_time:
-        #     if k in ["START", "END"]:
-        #         continue
-        #     self.task_time[k]["Start"] = np.array(self.task_time[k]["Start"])
-        #     self.task_time[k]["End"] = np.array( self.task_time[k]["End"])
-        #
-        # # Lets calculate how long we spent doing things
-        # for k in self.task_time:
-        #     if k in ["START", "END"]:
-        #         continue
-        #     duration = np.sum(self.task_time[k]["End"]
-        #                       - self.task_time[k]["Start"])
-        #     message(self.meta.rank, pad_print_middle(key, "%.2f s / %.2f " % (duration,
-        #                                                  duration
-        #                                                  / total * 100) + "%",
-        #                            length=self.meta.table_width))
-        #
-        # message(self.meta.rank, "=" * self.meta.table_width)
+        # Delete unused entries
+        for k in self.processes:
+            if len(self.task_time[k]["Start"]) == 0:
+                del self.task_time[k]
 
-        # Lets collect everyones timings
+        # Lets collect everyone's timings
         all_timings = comm.gather((self.meta.rank, self.task_time), root=0)
 
         # we only want to print the table from the master
@@ -202,8 +216,12 @@ class TicToc:
                         else:
                             spent = 0.0
                             pcent = 0.0
-                        s = "%.2f s / %.2f" % (spent, pcent) + " %"
-                        rank_row.append("".ljust(col_width - len(s) - 1) + s)
+                        if spent < 1:
+                            s = "%.2f ms / %.2f" % (spent * 10**3, pcent) + " %"
+                            rank_row.append("".ljust(col_width - len(s) - 1) + s)
+                        else:
+                            s = "%.2f s / %.2f" % (spent, pcent) + " %"
+                            rank_row.append("".ljust(col_width - len(s) - 1) + s)
 
                     message(self.meta.rank, "|".join(rank_row))
 

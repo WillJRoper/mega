@@ -3,6 +3,8 @@ import numpy as np
 from core.timing import timer
 from core.talking_utils import message, count_and_report_halos
 
+# TODO: WHATS GOING ON WITH NHALO AND NSUBHALO!?!?!?!?
+
 
 @timer("Collecting")
 def collect_halos(tictoc, meta, collected_results, sub_collected_results):
@@ -58,11 +60,11 @@ def collect_halos(tictoc, meta, collected_results, sub_collected_results):
             % (memory_use * 10 ** -6))
 
     count_and_report_halos(phase_part_haloids[:, 0], meta,
-                           halo_type="Phase Space Host Halos")
+                           halo_type="Phase Space Host Halos Before Sort")
 
     if meta.findsubs:
         count_and_report_halos(phase_part_haloids[:, 1], meta,
-                               halo_type="Phase Space Subhalos")
+                               halo_type="Phase Space Subhalos Before Sort")
 
     return (newPhaseID, newPhaseSubID, results_dict, haloID_dict,
             sub_results_dict, subhaloID_dict, phase_part_haloids)

@@ -2,6 +2,7 @@ import numpy as np
 
 from core.halo_energy import kinetic, grav
 import core.halo_properties as hprop
+from core.timing import timer
 
 
 class Halo:
@@ -10,17 +11,16 @@ class Halo:
 
     """
 
-
     # Predefine possible attributes to avoid overhead
     __slots__ = ["memory", "pids", "shifted_inds", "sim_pids", "pos", "vel",
                  "types", "masses",  "part_KE", "part_GE", "vel_with_hubflow",
-                 "npart", "real", "mean_pos", "mean_vel", "mean_vel_hubflow",
-                 "mass", "ptype_mass", "KE", "GE",
+                 "npart", "npart_types", "real", "mean_pos", "mean_vel",
+                 "mean_vel_hubflow", "mass", "ptype_mass", "KE", "GE",
                  "rms_r", "rms_vr", "veldisp3d", "veldisp1d", "vmax",
                  "hmr", "hmvr", "vlcoeff"]
 
-    def __init__(self, pids, shifted_pids, sim_pids, pos, vel, types, masses,
-                 vlcoeff, boxsize, s, z, G, cosmo):
+    def __init__(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
+                 masses, vlcoeff, meta):
         """
 
         :param pids:
@@ -45,7 +45,7 @@ class Halo:
         self.shifted_inds = shifted_pids
         self.sim_pids = sim_pids
         self.pos = pos
-        self.wrap_pos(boxsize)
+        self.wrap_pos(meta.boxsize)
         self.vel = vel
         self.types = types
         self.masses = masses
@@ -53,6 +53,8 @@ class Halo:
         # Halo properties
         # (some only populated when a halo exits phase space iteration)
         self.npart = len(self.pids)
+        self.npart_types = [len(self.pids[types == i])
+                      for i in range(len(meta.npart))]
         self.mass = np.sum(self.masses)
         self.ptype_mass = None
         self.rms_r = None
@@ -68,22 +70,22 @@ class Halo:
         self.mean_pos = np.average(self.pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.vel, weights=self.masses, axis=0)
 
-        # Add the hubble flow to the velocities
-        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
-        hubflow = cosmo.H(z).value * (self.pos - self.mean_pos)
-        self.vel_with_hubflow = self.vel + hubflow
-        self.mean_vel_hubflow = np.average(self.vel_with_hubflow,
-                                           weights=self.masses, axis=0)
-
         # Centre position and velocity
         self.pos -= self.mean_pos
         self.vel -= self.mean_vel
-        self.vel_with_hubflow -= self.mean_vel_hubflow
+
+        # Add the hubble flow to the velocities
+        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
+        hubflow = meta.cosmo.H(meta.z).value * self.pos
+        self.vel_with_hubflow = self.vel + hubflow
+        self.mean_vel_hubflow = np.average(self.vel,
+                                           weights=self.masses, axis=0)
 
         # Energy properties
-        self.part_KE = kinetic(self.vel, self.masses)
+        self.part_KE = kinetic(tictoc, self.vel_with_hubflow, self.masses)
         self.KE = np.sum(self.part_KE)
-        self.part_GE = grav(self.pos, self.npart, s, self.masses, z, G)
+        self.part_GE = grav(tictoc, self.pos, self.npart, meta.soft,
+                            self.masses, meta.z, meta.G)
         self.GE = np.sum(self.part_GE)
         self.real = (self.KE / self.GE) <= 1
 
@@ -118,9 +120,9 @@ class Halo:
         :param decrement:
         :return:
         """
-        self.vlcoeff -= decrement
+        self.vlcoeff -= self.vlcoeff * decrement
 
-    def wrap_pos(self, boxsize):
+    def wrap_pos(self, l):
         """
 
         :param boxsize:
@@ -142,7 +144,8 @@ class Halo:
         # separated by at least 50% of the boxsize)
         # *** Note: fails if halo's extent is greater than 50%
         # of the boxsize in any dimension ***
-        self.pos[np.where(sep > 0.5 * boxsize)] += boxsize
+        for ixyz in range(l.size):
+            self.pos[ixyz][np.where(sep[ixyz] > 0.5 * l[ixyz])] += l[ixyz]
 
     def clean_halo(self):
         """ A helper method to clean memory hogging attributes to limit the

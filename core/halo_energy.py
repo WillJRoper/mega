@@ -1,4 +1,7 @@
 import numpy as np
+from scipy.spatial.distance import cdist
+
+from core.timing import timer
 
 
 def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, masses, redshift,
@@ -22,14 +25,8 @@ def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, masses, redshift,
     return halo_energy
 
 
-def upper_tri_masking(A):
-    m = A.shape[0]
-    r = np.arange(m)
-    mask = r[:, None] <= r
-    return A[mask]
-
-
-def kinetic(v, masses):
+@timer("Kinetic-Energy")
+def kinetic(tictoc, v, masses):
 
     # Compute kinetic energy of the halo
     v2 = v ** 2
@@ -39,16 +36,18 @@ def kinetic(v, masses):
     return KE_part
 
 
-def grav(halo_poss, halo_npart, soft, masses, redshift, G):
+@timer("Grav-Energy")
+def grav(tictoc, halo_poss, halo_npart, soft, masses, redshift, G):
 
-    # Explict loop over each particle
     GE_part = np.zeros(halo_poss.shape[0])
-    for i in range(1, halo_npart):
-        sep = (halo_poss[:i, :] - halo_poss[i, :])
-        rij2 = np.sum(sep * sep, axis=-1)
-        invsqu_dist = np.sum((masses[:i] * masses[i]) / np.sqrt(rij2 + soft ** 2))
 
-        GE_part[i] = invsqu_dist
+    # Compute distances
+    dists = cdist(halo_poss, halo_poss, metric="sqeuclidean")
+
+    # Compute gravitational potential energy
+    for i in range(1, halo_npart):
+        GE_part[i] = np.sum(masses[i] * masses[:i]
+                            / np.sqrt(dists[i, :i] + soft ** 2))
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
     GE_part = G * np.float64(GE_part) * (1 + redshift) * 1 / 3.086e+19

@@ -1,6 +1,7 @@
-from core.domain_decomp import cell_domain_decomp, halo_decomp
+import core.domain_decomp as dd
 from core.spatial import spatial_node_task, get_sub_halos
 from core.phase_space import *
+from core.hydro import find_hydro_haloids
 import core.utilities as utils
 import core.serial_io as serial_io
 from core.partition import *
@@ -36,6 +37,7 @@ def hosthalofinder(meta):
     # Instantiate timer
     tictoc = TicToc(meta)
     tictoc.start()
+    meta.tictoc = tictoc
 
     # Define MPI message tags
     tags = utils.enum('READY', 'DONE', 'EXIT', 'START')
@@ -53,22 +55,7 @@ def hosthalofinder(meta):
 
     # ============= Compute parameters for candidate halo testing =============
 
-    tictoc.get_tic()
-
-    # Compute the linking length for host halos
-    linkl = meta.llcoeff * meta.mean_sep
-
-    # Get the softening length
-    # NOTE: softening is comoving and converted to physical where necessary
-    soft = meta.soft
-
-    # Compute the linking length for subhalos
-    sub_linkl = meta.sub_llcoeff * meta.mean_sep
-
-    # Define the velocity space linking length
-    vlinkl_indp = (np.sqrt(meta.G / 2)
-                   * (4 * np.pi * 200
-                      * meta.mean_den / 3) ** (1 / 6)).value
+    tictoc.start_func_time("Housekeeping")
 
     if meta.verbose:
         message(meta.rank, "=" * meta.table_width)
@@ -78,8 +65,8 @@ def hosthalofinder(meta):
                                  length=meta.table_width))
         message(meta.rank, pad_print_middle("Npart:", list(meta.npart),
                                             length=meta.table_width))
-        message(meta.rank, pad_print_middle("Boxsize:", "%.2f cMpc"
-                                            % meta.boxsize,
+        message(meta.rank, pad_print_middle("Boxsize:", "[%.2f %.2f %.2f] cMpc"
+                                            % (*meta.boxsize, ),
                                             length=meta.table_width))
         message(meta.rank, pad_print_middle("Comoving Softening Length:",
                                             "%.4f cMpc" % meta.soft,
@@ -88,34 +75,33 @@ def hosthalofinder(meta):
                                             "%.4f pMpc" % (meta.soft * meta.a),
                                             length=meta.table_width))
         message(meta.rank, pad_print_middle("Spatial Host Linking Length:",
-                                            "%.4f cMpc" % linkl,
+                                            "%.4f cMpc" % meta.linkl,
                                             length=meta.table_width))
         message(meta.rank, pad_print_middle("Spatial Subhalo Linking Length:",
-                                            "%.4f cMpc" % sub_linkl,
+                                            "%.4f cMpc" % meta.sub_linkl,
                                             length=meta.table_width))
         message(meta.rank, pad_print_middle("Initial Phase Space Host Linking "
                                             "Length (for 10**10 M_sun halo):",
-                                         str(meta.ini_vlcoeff * vlinkl_indp *
+                                         str(meta.ini_vlcoeff * meta.vlinkl_indp *
                                              10 ** 10 ** (1 / 3)) + " km / s",
                                             length=meta.table_width))
         message(meta.rank, pad_print_middle("Initial Phase Space Subhalo "
                                             "Linking Length (for 10**10 M_sun "
                                             "subhalo):",
-                                         str(meta.ini_vlcoeff * vlinkl_indp *
+                                         str(meta.ini_vlcoeff * meta.vlinkl_indp *
                                              10 ** 10 ** (1 / 3) * 8
                                              ** (1 / 6)) + " km / s",
                                             length=meta.table_width))
         message(meta.rank, "=" * meta.table_width)
 
-    tictoc.get_toc()
-    tictoc.record_time("Housekeeping")
+    tictoc.stop_func_time()
     
-    # =============== Domain Decomposition ===============
+    # ========================= Domain Decomposition =========================
 
     # Get the particles and tree particles on this rank
-    rank_parts, rank_tree_parts, cell_ranks = cell_domain_decomp(tictoc,
-                                                                 meta,
-                                                                 comm)
+    rank_parts, rank_tree_parts, cell_ranks = dd.cell_domain_decomp(tictoc,
+                                                                    meta,
+                                                                    comm, 1)
 
     if meta.verbose:
         tictoc.report("Cell Domain Decomposition")
@@ -124,39 +110,36 @@ def hosthalofinder(meta):
     # NOTE: for now it's more efficient to read all particles
     # and extract the particles we need, throwing away the ones
     # we don't, could be problematic with large datasets
-    tree_pos = serial_io.read_subset(tictoc, meta, "PartType1/part_pos",
+    tree_pos = serial_io.read_subset(tictoc, meta, "PartType1/Coordinates",
                                      rank_tree_parts)
 
     if meta.verbose:
         tictoc.report("Reading tree positions")
-
-    tictoc.get_tic()
 
     # Build the kd tree with the boxsize argument providing 'wrapping'
     # due to periodic boundaries *** Note: Contrary to cKDTree
     # documentation compact_nodes=False and balanced_tree=False results in
     # faster queries (documentation recommends compact_nodes=True
     # and balanced_tree=True)***
+    tictoc.start_func_time("Tree-Building")
     tree = cKDTree(tree_pos,
                    leafsize=16,
                    compact_nodes=False,
                    balanced_tree=False,
-                   boxsize=[meta.boxsize, meta.boxsize, meta.boxsize])
-
-    tictoc.get_toc()
+                   boxsize=[*meta.boxsize, ])
+    tictoc.stop_func_time()
 
     if meta.verbose:
         tictoc.report("Tree building")
         message(meta.rank, "Tree memory footprint: %d bytes"
                 % utils.get_size(tree))
 
-    tictoc.record_time("Tree-Building")
-
     # Get the positions for searching on this rank
     # NOTE: for now it's more efficient to read all particles
     # and extract the particles we need and throw away the ones
     # we don't, could be problematic with large datasets
-    pos = serial_io.read_subset(tictoc, meta, "PartType1/part_pos", rank_parts)
+    pos = serial_io.read_subset(tictoc, meta, "PartType1/Coordinates",
+                                rank_parts)
 
     if meta.verbose:
         tictoc.report("Reading positions")
@@ -164,49 +147,94 @@ def hosthalofinder(meta):
     # =========================== Find spatial halos ==========================
 
     # Extract the spatial halos for this tasks particles
-    result, weights, qtime_dict = spatial_node_task(tictoc, meta,
-                                                    rank_parts,
-                                                    rank_tree_parts,
-                                                    pos, tree, linkl)
+    (halo_pids, weights, qtime_dict,
+     rank_part_haloids) = spatial_node_task(tictoc, meta, rank_parts,
+                                            rank_tree_parts, pos, tree)
 
     if meta.verbose:
         tictoc.report("Spatial search")
 
-    # TODO: Find hydro particle halo ids here
+    # ====================== Hydro Domain Decomposition ======================
+
+    # Nest the dark matter halo data inside dictionaries for each
+    # particle type
+    all_halo_pids = {1: halo_pids}
+    rank_tree_parts = {1: rank_tree_parts}
+    tree_pos = {1: tree_pos}
+
+    if not meta.dmo:
+
+        # Loop over the present particle types
+        for part_type in meta.part_types:
+
+            if part_type == 1:
+                continue
+
+            # Get the particles and tree particles on this rank
+            rank_hydro_parts = dd.hydro_cell_domain_decomp(tictoc, meta, comm,
+                                                           cell_ranks,
+                                                           part_type)
+
+            if meta.verbose:
+                tictoc.report("Particle Type %d Domain Decomposition"
+                              % part_type)
+
+            # Get positions for this particle type
+            # NOTE: for now it's more efficient to read all particles
+            # and extract the particles we need, throwing away the ones
+            # we don't, could be problematic with large datasets
+            hydro_pos = serial_io.read_subset(tictoc, meta,
+                                              "PartType%d/Coordinates"
+                                              % part_type,
+                                              rank_hydro_parts, part_type)
+
+            # ============== Associate hydro particles to a halo ==============
+
+            # Update halo particle ids dictionary with hydro particles
+            all_halo_pids[part_type] = find_hydro_haloids(tictoc,
+                                                          rank_hydro_parts,
+                                                          all_halo_pids[1].keys(),
+                                                          rank_part_haloids,
+                                                          tree, hydro_pos,
+                                                          meta)
+
+            if meta.verbose:
+                tictoc.report("Particle Type %d spatial search" % part_type)
+
+            # Combine particle index arrays and positions
+            rank_tree_parts[part_type] = rank_hydro_parts
+            tree_pos[part_type] = hydro_pos
 
     # ================= Combine spatial results across ranks ==================
 
-    halo_tasks, weights = combine_across_ranks(tictoc, meta, cell_ranks,
-                                               tree_pos, result,
+    halo_tasks, weights = combine_across_ranks(tictoc, meta, all_halo_pids,
                                                rank_tree_parts, comm,
                                                weights, qtime_dict)
 
     if meta.verbose:
         tictoc.report("Combining halos across ranks")
         if meta.rank == 0:
-            message(meta.rank, "Weighting range: [%.2E - %.2E]"
-                    % (np.min(list(weights.values())),
-                       np.max(list(weights.values()))))
+            if len(weights) > 0:
+                message(meta.rank, "Weighting range: [%.2E - %.2E]"
+                        % (np.min(list(weights.values())),
+                           np.max(list(weights.values()))))
+            else:
+                message(meta.rank, "Weighting range: [%.2E - %.2E]"
+                        % (0.0, 0.0))
 
     # ================== Decompose and scatter spatial halos ==================
 
-    (my_shifted_tasks, my_tasks, my_halo_parts,
-     offsets, task_offsets) = halo_decomp(tictoc, meta, halo_tasks,
-                                          weights, comm)
+    # Decomp halos across ranks
+    (my_halo_parts, start_index, stride) = dd.halo_decomp(tictoc, meta, 
+                                                          halo_tasks,
+                                                          weights, comm)
 
     if meta.verbose:
         tictoc.report("Scattering spatial halos")
 
     # ============ Test Halos in Phase Space and find substructure ============
 
-    tictoc.get_tic()
-
-    # Get input data hdf5 key (DM particle for DMO, concatenated
-    # array of all species otherwise)
-    if meta.dmo:
-        hdf_part_key = "PartType1"
-    else:
-        hdf_part_key = "All"
+    tictoc.start_func_time("Housekeeping")
 
     # Define halo dictionaries and ID counters
     results = {}
@@ -214,8 +242,7 @@ def hosthalofinder(meta):
     haloID = 0
     subhaloID = 0
 
-    tictoc.get_toc()
-    tictoc.record_time("Housekeeping")
+    tictoc.stop_func_time()
 
     # ================ Read in the particles data for my halos ================
 
@@ -223,36 +250,32 @@ def hosthalofinder(meta):
     # NOTE: for now it's more efficient to read all particles
     # and extract the particles we need, throwing away the ones
     # we don't, could be problematic with large datasets
-    halo_data = serial_io.read_multi_halo_data(tictoc, meta, my_halo_parts,
-                                               hdf_part_key)
+    halo_data = serial_io.read_multi_halo_data(tictoc, meta, my_halo_parts)
     all_sim_pids, all_pos, all_vel, all_masses, all_part_types = halo_data
 
     if meta.verbose:
         tictoc.report("Reading halo data")
 
     # Loop over the tasks we have
-    while len(my_shifted_tasks) > 0:
+    for (itask, begin), length in zip(enumerate(start_index), stride):
 
         # Get a task to work on
-        taskid, this_task = my_shifted_tasks.popitem()
+        this_task_inds = my_halo_parts[begin: begin + length]
+        this_task_rankinds = np.arange(begin, begin + length, dtype=int)
 
         # Create the halo object
-        tictoc.get_tic()
-        sim_inds = my_halo_parts[this_task]
-        halo = Halo(sim_inds, this_task, all_sim_pids[this_task],
-                    all_pos[this_task, :], all_vel[this_task, :],
-                    all_part_types[this_task], all_masses[this_task],
-                    meta.ini_vlcoeff, meta.boxsize, meta.soft, meta.z, meta.G,
-                    meta.cosmo)
-        tictoc.get_toc()
-        tictoc.record_time("Create Halo")
+        tictoc.start_func_time("Create Halo")
+        halo = Halo(tictoc, this_task_inds, this_task_rankinds,
+                    all_sim_pids[this_task_rankinds],
+                    all_pos[this_task_rankinds, :],
+                    all_vel[this_task_rankinds, :],
+                    all_part_types[this_task_rankinds],
+                    all_masses[this_task_rankinds],
+                    meta.ini_vlcoeff, meta)
+        tictoc.stop_func_time()
 
         # Test the halo in phase space
-        result = get_real_host_halos(tictoc, halo, meta.boxsize, vlinkl_indp,
-                                     meta.linkl, meta.decrement, meta.z,
-                                     meta.G,
-                                     meta.soft, meta.min_vlcoeff,
-                                     meta.cosmo)
+        result = get_real_host_halos(tictoc, halo, meta)
 
         # Save the found halos
         for res in result:
@@ -265,7 +288,7 @@ def hosthalofinder(meta):
             # Loop over results getting spatial halos
             for host in result:
 
-                # Sort the particle ids to index the hdf5 array
+                # Get host halo particle indices to get postion
                 thishalo_pids = host.shifted_inds
 
                 # Get the particle positions
@@ -274,7 +297,7 @@ def hosthalofinder(meta):
                 # Test the subhalo in phase space
                 sub_result = get_sub_halos(tictoc, thishalo_pids,
                                            subhalo_poss,
-                                           meta.sub_linkl)
+                                           meta)
 
                 # Loop over spatial subhalos
                 while len(sub_result) > 0:
@@ -283,29 +306,19 @@ def hosthalofinder(meta):
                     _, this_stask = sub_result.popitem()
 
                     # Create the subhalo object
-                    tictoc.get_tic()
+                    tictoc.start_func_time("Create Subhalo")
                     sim_inds = my_halo_parts[this_stask]
-                    subhalo = Halo(sim_inds, this_stask,
+                    subhalo = Halo(tictoc, sim_inds, this_stask,
                                    all_sim_pids[this_stask],
                                    all_pos[this_stask, :],
                                    all_vel[this_stask, :],
                                    all_part_types[this_stask],
                                    all_masses[this_stask],
-                                   meta.ini_vlcoeff, meta.boxsize,
-                                   meta.soft, meta.z, meta.G,
-                                   meta.cosmo)
-                    tictoc.get_toc()
-                    tictoc.record_time("Create Halo")
+                                   meta.ini_vlcoeff, meta)
+                    tictoc.stop_func_time()
 
                     # Test the subhalo in phase space
-                    result = get_real_sub_halos(tictoc, subhalo,
-                                                meta.boxsize,
-                                                vlinkl_indp * 8 ** (
-                                                        1 / 6),
-                                                meta.linkl, meta.decrement,
-                                                meta.z, meta.G,
-                                                meta.soft, meta.min_vlcoeff,
-                                                meta.cosmo)
+                    result = get_real_sub_halos(tictoc, subhalo, meta)
 
                     # Save the found subhalos
                     for res in result:
@@ -313,13 +326,14 @@ def hosthalofinder(meta):
 
                         subhaloID += 1
 
+    # Wait for everyone to finish so we get accurate timings
+    comm.Barrier()
+
     # Collect child process results
-    tictoc.get_tic()
+    tictoc.start_func_time("Collecting")
     collected_results = comm.gather(results, root=0)
     sub_collected_results = comm.gather(sub_results, root=0)
-    tictoc.get_toc()
-
-    tictoc.record_time("Collecting")
+    tictoc.stop_func_time()
 
     if rank == 0:
 

@@ -2,7 +2,8 @@ import h5py
 import numpy as np
 
 from core.halo import Halo
-from core.talking_utils import message
+from core.talking_utils import message, count_and_report_halos
+from core.talking_utils import count_and_report_progs, count_and_report_descs
 from core.timing import timer
 
 
@@ -26,7 +27,7 @@ def hdf5_write_dataset(grp, key, data, compression="gzip"):
 
 
 @timer("Reading")
-def read_subset(tictoc, meta, key, subset):
+def read_subset(tictoc, meta, key, subset, part_type=1):
     """
 
     :param tictoc:
@@ -52,7 +53,8 @@ def read_subset(tictoc, meta, key, subset):
     return arr
 
 
-def read_subset_fromobj(hdf, key, subset):
+@timer("Reading")
+def read_subset_fromobj(tictoc, meta, hdf, key, subset, part_type=1):
     """
 
     :param hdf:
@@ -73,8 +75,7 @@ def read_subset_fromobj(hdf, key, subset):
 
 
 @timer("Reading")
-def read_halo_data(tictoc, part_inds, inputpath, snapshot, hdf_part_key,
-                   ini_vlcoeff, boxsize, soft, redshift, G, cosmo):
+def read_pids(tictoc, inputpath, snapshot, hdf_part_key):
     """
 
     :param tictoc:
@@ -96,24 +97,15 @@ def read_halo_data(tictoc, part_inds, inputpath, snapshot, hdf_part_key,
 
     # Get the position and velocity of
     # each particle in this rank
-    sim_pids = hdf[hdf_part_key]["part_pid"][part_inds]
-    pos = hdf[hdf_part_key]["part_pos"][part_inds, :]
-    vel = hdf[hdf_part_key]["part_vel"][part_inds, :]
-    masses = hdf[hdf_part_key]["part_masses"][part_inds] * 10 ** 10
-    part_types = hdf[hdf_part_key]["part_types"][part_inds]
+    sim_pids = hdf[hdf_part_key]["ParticleIDs"][...]
 
     hdf.close()
 
-    # Instantiate halo object
-    halo = Halo(part_inds, sim_pids, pos, vel, part_types,
-                masses, ini_vlcoeff, boxsize, soft,
-                redshift, G, cosmo)
-
-    return halo
+    return sim_pids
 
 
 @timer("Reading")
-def read_multi_halo_data(tictoc, meta, part_inds, hdf_part_key):
+def read_multi_halo_data(tictoc, meta, part_inds):
     """
 
     :param tictoc:
@@ -133,24 +125,191 @@ def read_multi_halo_data(tictoc, meta, part_inds, hdf_part_key):
     # Open hdf5 file
     hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
 
-    # Get the position and velocity of
-    # each particle in this rank
-    sim_pids = read_subset_fromobj(hdf, hdf_part_key + "/part_pid", part_inds)
-    pos = read_subset_fromobj(hdf, hdf_part_key + "/part_pos", part_inds)
-    vel = read_subset_fromobj(hdf, hdf_part_key + "/part_vel", part_inds)
-    masses = read_subset_fromobj(hdf, hdf_part_key + "/part_masses",
-                                 part_inds)* 10 ** 10
-    part_types = read_subset_fromobj(hdf, hdf_part_key + "/part_types",
-                                     part_inds)
+    # Initialise particle data lists
+    sim_pids = []
+    pos = []
+    vel = []
+    masses = []
+    part_types = []
+
+    # Loop over particle types
+    for part_type in [1] + [i for i in meta.part_types if i != 1]:
+
+        inds = part_inds - meta.part_type_offset[part_type]
+        inds = inds[np.where(np.logical_and(inds >= 0,
+                                            inds < meta.npart[part_type]))]
+
+        # Get the particle data for this halo
+        sim_pids.extend(
+            read_subset_fromobj(tictoc, meta, hdf,
+                                "PartType%d/ParticleIDs" % part_type,
+                                inds)
+        )
+        pos.extend(
+            read_subset_fromobj(tictoc, meta, hdf,
+                                "PartType%d/Coordinates" % part_type,
+                                inds)
+        )
+        vel.extend(
+            read_subset_fromobj(tictoc, meta, hdf,
+                                "PartType%d/Velocities" % part_type,
+                                inds)
+        )
+        masses.extend(
+            read_subset_fromobj(tictoc, meta, hdf,
+                                "PartType%d/Masses" % part_type,
+                                inds) * 10 ** 10
+        )
+        part_types.extend(
+            np.full(len(inds), part_type, dtype=int)
+        )
 
     hdf.close()
+
+    # Convert to arrays
+    sim_pids = np.array(sim_pids)
+    pos = np.array(pos)
+    vel = np.array(vel)
+    masses = np.array(masses)
+    part_types = np.array(part_types)
 
     return sim_pids, pos, vel, masses, part_types
 
 
+@timer("Reading")
+def read_prog_data(tictoc, meta, density_rank):
+    
+    if meta.prog_snap is not None:
+        # How many particles are we dealing with in the progenitor snapshot?
+        hdf = h5py.File(meta.halopath + 'halos_'
+                                + meta.prog_snap + '.hdf5', 'r')
+
+        if density_rank == 0:
+            root = hdf
+        else:
+            root = hdf["Subhalos"]
+    
+        # How many particles do we have?
+        prog_npart = root["particle_halo_IDs"].size
+
+        # Read particle IDs
+        pids = root["sim_part_ids"][...]
+    
+        # Lets get the halo particle ids we have on this rank
+        prog_rankpartbins = np.linspace(0, prog_npart,
+                                         meta.nranks + 1,
+                                         dtype=int)
+
+        # Lets get our slice
+        myslice = (prog_rank_partbins[meta.rank],
+                   prog_rank_partbins[meta.rank + 1])
+
+        # Extract our particles
+        okinds = np.where(np.logical_and(pids >= myslice[0],
+                                         pids < myslice[1]))
+        rank_part_progids = root["particle_halo_IDs"][okinds]
+        prog_rank_partids = pids[okinds]
+
+        # Lets get the progenitor halo data
+        # (this is nhalo in length so give every rank a copy)
+        proghalo_nparts = root["nparts"][...]
+        prog_reals = root["real_flag"][...]
+
+        hdf.close()  # close the root group
+    else:
+        prog_npart = None
+        prog_rank_partbins = None
+        rank_part_progids = None
+        proghalo_nparts = None
+        prog_rank_partids = None
+        prog_reals = None
+
+    return (prog_npart, proghalo_nparts, prog_rank_partbins,
+            rank_part_progids, prog_reals, prog_rank_partids)
+
+
+@timer("Reading")
+def read_current_data(tictoc, meta, density_rank):
+    
+    # How many halos and particles are we dealing with in the current snapshot?
+    hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
+    if density_rank == 0:
+        root = hdf
+        nhalo = hdf.attrs['nHalo']
+    else:
+        root = hdf["Subhalos"]
+        nhalo = hdf.attrs['nSubhalo']
+
+    # How many particles do we have?
+    npart = root["particle_halo_IDs"].size
+
+    # Lets get the halo particle ids we have on this rank
+    rank_partbins = np.linspace(0, npart,
+                                meta.nranks + 1,
+                                dtype=int)
+
+    # Get the real flags
+    reals = root["real_flag"][...]
+
+    hdf.close()
+
+    return nhalo, rank_partbins, reals
+
+
+@timer("Reading")
+def read_desc_data(tictoc, meta, density_rank):
+
+    if meta.desc_snap is not None:
+        
+        # How many particles are we dealing with in the descendent snapshot?
+        hdf = h5py.File(meta.halopath + 'halos_'
+                                + meta.desc_snap + '.hdf5', 'r')
+
+        if density_rank == 0:
+            root = hdf
+        else:
+            root = hdf["Subhalos"]
+
+        # Read particle IDs
+        pids = root["part_ids"][...]
+
+        # How many particles do we have?
+        desc_npart = root["particle_halo_IDs"].size
+    
+        # Lets get the halo particle ids we have on this rank
+        desc_rank_partbins = np.linspace(0, desc_npart,
+                                         meta.nranks + 1,
+                                         dtype=int)
+
+        # Lets get our slice
+        myslice = (desc_rank_partbins[meta.rank],
+                   desc_rank_partbins[meta.rank + 1])
+
+        # Extract our particles
+        okinds = np.where(np.logical_and(pids >= myslice[0],
+                                         pids < myslice[1]))
+        rank_part_descids = root["particle_halo_IDs"][okinds]
+        desc_rank_partids = pids[okinds]
+
+        # Lets get the descendant halo data
+        # (this is nhalo in length so give every rank a copy)
+        deschalo_nparts = root["nparts"][...]
+    
+        hdf.close()
+    else:
+        desc_npart = None
+        desc_rank_partbins = None
+        rank_part_descids = None
+        deschalo_nparts = None
+        desc_rank_partids = None
+
+    return (desc_npart, deschalo_nparts, desc_rank_partbins,
+            rank_part_descids, desc_rank_partids)
+
+
 @timer("Writing")
 def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
-               sub_results_dict, subhaloID_dict, phase_part_haloids):
+               sub_results_dict, subhaloID_dict, pre_sort_part_haloids):
     """
 
     :param tictoc:
@@ -165,10 +324,16 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     :return:
     """
 
+    # Initialise particle halo id arrays
+    phase_part_haloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
+    phase_part_subhaloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
+
     # Set up arrays to store halo results
+    all_halo_simpids = []
     all_halo_pids = []
-    begin = np.full(nhalo, -1, dtype=int)
-    halo_nparts = np.full(nhalo, -1, dtype=int)
+    begin = np.zeros(nhalo, dtype=int)
+    stride = np.zeros(nhalo, dtype=int)
+    halo_nparts = np.zeros((nhalo, len(meta.npart)), dtype=int)
     halo_masses = np.full(nhalo, -1, dtype=float)
     halo_type_masses = np.full((nhalo, 6), -1, dtype=float)
     mean_poss = np.full((nhalo, 3), -1, dtype=float)
@@ -189,9 +354,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     if meta.findsubs:
 
         # Set up arrays to store subhalo results
+        all_subhalo_simpids = []
         all_subhalo_pids = []
-        sub_begin = np.full(nhalo, -1, dtype=int)
-        subhalo_nparts = np.full(nsubhalo, -1, dtype=int)
+        sub_begin = np.zeros(nsubhalo, dtype=int)
+        sub_stride = np.zeros(nsubhalo, dtype=int)
+        subhalo_nparts = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
         subhalo_masses = np.full(nsubhalo, -1, dtype=float)
         subhalo_type_masses = np.full((nsubhalo, 6), -1, dtype=float)
         sub_mean_poss = np.full((nsubhalo, 3), -1, dtype=float)
@@ -212,8 +379,10 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     else:
 
         # Set up dummy subhalo results
+        all_subhalo_simpids = None
         all_subhalo_pids = None
         sub_begin = None
+        sub_stride = None
         subhalo_nparts = None
         subhalo_masses = None
         subhalo_type_masses = None
@@ -232,8 +401,8 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
         sub_hmvrs = None
         sub_exit_vlcoeff = None
 
-    # TODO: nPart should also be split by particle type
-    # TODO: sim part ids need including
+    # TODO: need to sort the particle outputs because nothing
+    #  is sorted at this point, sort the haloIDs arrays too
 
     # Create the root group
     snap = h5py.File(meta.savepath + "halos_" + str(meta.snap) + ".hdf5", "w")
@@ -247,37 +416,51 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     # Assign snapshot attributes
     snap.attrs["linking_length"] = meta.linkl  # host halo linking length
     snap.attrs["redshift"] = meta.z
+    snap.attrs["nHalo"] = nhalo
+    snap.attrs["nSubhalo"] = nsubhalo
 
+    # Create halo id array
     halo_ids = np.arange(nhalo, dtype=int)
 
+    # Loop over results
+    ihalo = 0
     for res in list(results_dict.keys()):
         halo = results_dict.pop(res)
-        halo_id = haloID_dict[res]
-        halo_pids = halo.pids
 
         # Extract halo properties and store them in the output arrays
-        begin[halo_id] = len(all_halo_pids)
-        all_halo_pids.extend(halo_pids)
-        mean_poss[halo_id, :] = halo.mean_pos
-        mean_vels[halo_id, :] = halo.mean_vel
-        halo_nparts[halo_id] = halo.npart
-        halo_masses[halo_id] = halo.mass
-        halo_type_masses[halo_id, :] = halo.ptype_mass
-        reals[halo_id] = halo.real
-        KEs[halo_id] = halo.KE
-        GEs[halo_id] = halo.GE
-        rms_rs[halo_id] = halo.rms_r
-        rms_vrs[halo_id] = halo.rms_vr
-        veldisp1ds[halo_id, :] = halo.veldisp1d
-        veldisp3ds[halo_id] = halo.veldisp3d
-        vmaxs[halo_id] = halo.vmax
-        hmrs[halo_id] = halo.hmr
-        hmvrs[halo_id] = halo.hmvr
-        exit_vlcoeff[halo_id] = halo.vlcoeff
+        begin[ihalo] = len(all_halo_simpids)
+        stride[ihalo] = len(halo.pids)
+        all_halo_simpids.extend(halo.sim_pids)
+        all_halo_pids.extend(halo.pids)
+        mean_poss[ihalo, :] = halo.mean_pos
+        mean_vels[ihalo, :] = halo.mean_vel
+        halo_nparts[ihalo, :] = halo.npart_types
+        halo_masses[ihalo] = halo.mass
+        halo_type_masses[ihalo, :] = halo.ptype_mass
+        reals[ihalo] = halo.real
+        KEs[ihalo] = halo.KE
+        GEs[ihalo] = halo.GE
+        rms_rs[ihalo] = halo.rms_r
+        rms_vrs[ihalo] = halo.rms_vr
+        veldisp1ds[ihalo, :] = halo.veldisp1d
+        veldisp3ds[ihalo] = halo.veldisp3d
+        vmaxs[ihalo] = halo.vmax
+        hmrs[ihalo] = halo.hmr
+        hmvrs[ihalo] = halo.hmvr
+        exit_vlcoeff[ihalo] = halo.vlcoeff
+        
+        # Increment halo counter
+        ihalo += 1
+
+    # Convert lists to arrays
+    all_halo_simpids = np.array(all_halo_simpids)
+    all_halo_pids = np.array(all_halo_pids)
 
     # Save halo property arrays
     hdf5_write_dataset(snap, "start_index", begin)
-    hdf5_write_dataset(snap, "part_ids", np.array(all_halo_pids))
+    hdf5_write_dataset(snap, "stride", stride)
+    hdf5_write_dataset(snap, "sim_part_ids", all_halo_simpids)
+    hdf5_write_dataset(snap, "part_ids", all_halo_pids)
     hdf5_write_dataset(snap, "halo_IDs", halo_ids)
     hdf5_write_dataset(snap, "mean_positions", mean_poss)
     hdf5_write_dataset(snap, "mean_velocities", mean_vels)
@@ -296,6 +479,14 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     hdf5_write_dataset(snap, "half_mass_velocity_radius", hmvrs)
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
+    # Now we can set the correct halo_ids
+    for (halo_id, b), l in zip(enumerate(begin), stride):
+        parts = all_halo_pids[b: b + l]
+        phase_part_haloids[parts] = halo_id
+
+    count_and_report_halos(phase_part_haloids, meta,
+                           halo_type="Phase Space Host Halos")
+
     # Assign the full halo IDs array to the snapshot group
     hdf5_write_dataset(snap, "particle_halo_IDs", phase_part_haloids)
 
@@ -306,6 +497,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
 
     if meta.findsubs:
 
+        # Create array of subhalo IDs
         subhalo_ids = np.arange(nsubhalo, dtype=int)
 
         # Create subhalo group
@@ -313,41 +505,49 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
 
         # Subhalo attributes
         sub_root.attrs["linking_length"] = meta.sub_linkl
-
+        
+        # Loop over subhalo results
+        isubhalo = 0
         for res in list(sub_results_dict.keys()):
             subhalo = sub_results_dict.pop(res)
-            subhalo_id = subhaloID_dict[res]
-            subhalo_pids = subhalo.pids
-            host = np.unique(phase_part_haloids[subhalo_pids, 0])
+            host = np.unique(pre_sort_part_haloids[subhalo.pids, 0])
 
             assert len(host) == 1, \
                 "subhalo is contained in multiple hosts, " \
                 "this should not be possible"
 
-            sub_begin[subhalo_id] = len(all_subhalo_pids)
-            all_subhalo_pids.extend(subhalo_pids)
-            sub_mean_poss[subhalo_id, :] = subhalo.mean_pos
-            sub_mean_vels[subhalo_id, :] = subhalo.mean_vel
-            subhalo_nparts[subhalo_id] = subhalo.npart
-            subhalo_masses[subhalo_id] = subhalo.mass
-            subhalo_type_masses[subhalo_id, :] = subhalo.ptype_mass
-            sub_reals[subhalo_id] = subhalo.real
-            sub_KEs[subhalo_id] = subhalo.KE
-            sub_GEs[subhalo_id] = subhalo.GE
-            host_ids[subhalo_id] = host
+            sub_begin[isubhalo] = len(all_subhalo_simpids)
+            sub_stride[isubhalo] = len(subhalo.pids)
+            all_subhalo_simpids.extend(subhalo.sim_pids)
+            all_subhalo_pids.extend(subhalo.pids)
+            sub_mean_poss[isubhalo, :] = subhalo.mean_pos
+            sub_mean_vels[isubhalo, :] = subhalo.mean_vel
+            subhalo_nparts[isubhalo, :] = subhalo.npart_types
+            subhalo_masses[isubhalo] = subhalo.mass
+            subhalo_type_masses[isubhalo, :] = subhalo.ptype_mass
+            sub_reals[isubhalo] = subhalo.real
+            sub_KEs[isubhalo] = subhalo.KE
+            sub_GEs[isubhalo] = subhalo.GE
+            host_ids[isubhalo] = host
             nsubhalos[host] += 1
-            sub_rms_rs[subhalo_id] = subhalo.rms_r
-            sub_rms_vrs[subhalo_id] = subhalo.rms_vr
-            sub_veldisp1ds[subhalo_id, :] = subhalo.veldisp1d
-            sub_veldisp3ds[subhalo_id] = subhalo.veldisp3d
-            sub_vmaxs[subhalo_id] = subhalo.vmax
-            sub_hmrs[subhalo_id] = subhalo.hmr
-            sub_hmvrs[subhalo_id] = subhalo.hmvr
-            sub_exit_vlcoeff[subhalo_id] = subhalo.vlcoeff
+            sub_rms_rs[isubhalo] = subhalo.rms_r
+            sub_rms_vrs[isubhalo] = subhalo.rms_vr
+            sub_veldisp1ds[isubhalo, :] = subhalo.veldisp1d
+            sub_veldisp3ds[isubhalo] = subhalo.veldisp3d
+            sub_vmaxs[isubhalo] = subhalo.vmax
+            sub_hmrs[isubhalo] = subhalo.hmr
+            sub_hmvrs[isubhalo] = subhalo.hmvr
+            sub_exit_vlcoeff[isubhalo] = subhalo.vlcoeff
+
+        # Convert lists to arrays
+        all_subhalo_simpids = np.array(all_subhalo_simpids)
+        all_subhalo_pids = np.array(all_subhalo_pids)
 
         # Save subhalo property arrays
         hdf5_write_dataset(sub_root, "start_index", sub_begin)
-        hdf5_write_dataset(sub_root, "part_ids", np.array(all_subhalo_pids))
+        hdf5_write_dataset(sub_root, "stride", sub_stride)
+        hdf5_write_dataset(sub_root, "sim_part_ids", all_subhalo_simpids)
+        hdf5_write_dataset(sub_root, "part_ids", all_subhalo_pids)
         hdf5_write_dataset(sub_root, "subhalo_IDs", subhalo_ids)
         hdf5_write_dataset(sub_root, "host_IDs", host_ids)
         hdf5_write_dataset(sub_root, "mean_positions", sub_mean_poss)
@@ -367,8 +567,216 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
         hdf5_write_dataset(sub_root, "half_mass_velocity_radius", sub_hmvrs)
         hdf5_write_dataset(sub_root, "exit_vlcoeff", sub_exit_vlcoeff)
 
-    # Write out the occupancy at the root level
-    if meta.findsubs:
+        # Now we can set the correct halo_ids
+        for (subhalo_id, b), l in zip(enumerate(sub_begin), sub_stride):
+            parts = all_subhalo_pids[b: b + l]
+            phase_part_subhaloids[parts] = subhalo_id
+
+        count_and_report_halos(phase_part_subhaloids, meta,
+                               halo_type="Phase Space Subhalos")
+
+        # Assign the full halo IDs array to the snapshot group
+        hdf5_write_dataset(sub_root, "particle_halo_IDs",
+                           phase_part_subhaloids)
+
+        # Write out the occupancy at the root level
         hdf5_write_dataset(snap, "occupancy", nsubhalos)
 
     snap.close()
+
+
+@timer("Writing")
+def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
+
+    # Lets combine the list of results from everyone into a single dictionary
+    results = {}
+    for d in all_results:
+        results.update(d)
+
+    # Initialise counter for halos removed due to not being temporally real
+    notreals = 0
+
+    # Initialise counter for transient halos (halos with no progs or descs)
+    transients = 0
+
+    # Set up arrays to store host results
+    nhalo = len(results)
+    index_haloids = np.array(list(results.keys()))
+    halo_nparts = np.full(nhalo, -2, dtype=int)
+    nprogs = np.zeros(nhalo, dtype=int)
+    ndescs = np.zeros(nhalo, dtype=int)
+    prog_start_index = np.full(nhalo, -2, dtype=int)
+    desc_start_index = np.full(nhalo, -2, dtype=int)
+
+    progs = []
+    descs = []
+    prog_mass_conts = []
+    desc_mass_conts = []
+    prog_nparts = []
+    desc_nparts = []
+
+    if meta.desc_snap is not None:
+
+        # Load the descendant snapshot
+        hdf = h5py.File(meta.halopath + 'halos_'
+                             + meta.desc_snap + '.hdf5', 'r')
+
+        # Get the reality flag array
+        if density_rank == 0:
+            desc_reals = hdf['real_flag'][...]
+        else:
+            desc_reals = hdf['Subhalos']['real_flag'][...]
+
+        hdf.close()
+    else:
+        desc_reals = np.array([False])
+
+    if meta.prog_snap is not None:
+
+        # Load the progenitor snapshot
+        hdf = h5py.File(meta.halopath + 'halos_'
+                             + meta.prog_snap + '.hdf5', 'r')
+
+        # Get progenitor snapshot data
+        if density_rank == 0:
+            prog_reals = hdf['real_flag'][...]
+        else:
+            prog_reals = hdf['Subhalos']['real_flag'][...]
+
+        hdf.close()
+
+    else:
+        prog_reals = np.array([False])
+
+    while len(results) > 0:
+
+        # Extract a halo to store
+        ihalo, halo = results.popitem()
+
+        # Extract this halo's data
+        nprog = halo.nprog
+        prog_haloids = halo.prog_haloids
+        prog_npart = halo.prog_npart
+        prog_npart_cont = halo.prog_npart_cont
+        ndesc = halo.ndesc
+        desc_haloids = halo.desc_haloids
+        desc_npart = halo.desc_npart
+        desc_npart_cont = halo.desc_npart_cont
+        preals = halo.prog_reals
+        npart = halo.npart
+
+        # If this halo has no real progenitors and is less than 20 particle
+        # it is by definition not a halo
+        if nprog == 0 and npart < 20:
+            reals[ihalo] = False
+            notreals += 1
+            continue
+
+        # If the halo has neither descendants or progenitors we do not
+        # need to store it
+        elif nprog < 1 and ndesc < 1:
+            reals[ihalo] = False
+            transients += 1
+            continue
+
+        # If any progenitor is real then this halo is real
+        if True in preals:
+            reals[ihalo] = True
+
+        if reals[ihalo]:
+
+            # If this halo is real then it's descendants are real
+            if meta.desc_snap is not None:
+                desc_reals[desc_haloids] = True
+
+            # Write out the data produced
+            nprogs[ihalo] = nprog  # number of progenitors
+            ndescs[ihalo] = ndesc  # number of descendants
+            halo_nparts[ihalo] = npart  # mass of the halo
+
+            # If we have progenitors store them and the pointers
+            if nprog > 0:
+                prog_start_index[ihalo] = len(progs)
+                progs.extend(prog_haloids)
+                prog_mass_conts.extend(prog_npart_cont)
+                prog_nparts.extend(prog_npart)
+            else:  # else put null pointer
+                prog_start_index[ihalo] = 2 ** 30
+
+            # If we have descendants store them and the pointers
+            if ndesc > 0:
+                desc_start_index[ihalo] = len(descs)
+                descs.extend(desc_haloids)
+                desc_mass_conts.extend(desc_npart_cont)
+                desc_nparts.extend(desc_npart)
+            else:  # else put null pointer
+                desc_start_index[ihalo] = 2 ** 30
+
+    progs = np.array(progs)
+    descs = np.array(descs)
+    prog_mass_conts = np.array(prog_mass_conts)
+    desc_mass_conts = np.array(desc_mass_conts)
+    prog_nparts = np.array(prog_nparts)
+    desc_nparts = np.array(desc_nparts)
+
+    # Create file to store this snapshots graph results
+    if density_rank == 0:
+        hdf = h5py.File(meta.dgraphpath + 'Mgraph_' + meta.snap + '.hdf5', 'w')
+    else:
+        hdf = h5py.File(meta.dgraphpath + 'SubMgraph_' + meta.snap + '.hdf5', 'w')
+
+    hdf5_write_dataset(hdf, 'halo_IDs', index_haloids)
+    hdf5_write_dataset(hdf, 'nProgs', nprogs)
+    hdf5_write_dataset(hdf, 'nDescs', ndescs)
+    hdf5_write_dataset(hdf, 'nparts', halo_nparts)
+    hdf5_write_dataset(hdf, 'prog_start_index', prog_start_index)
+    hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
+    hdf5_write_dataset(hdf, 'Prog_haloIDs', progs)
+    hdf5_write_dataset(hdf, 'Desc_haloIDs', descs)
+    hdf5_write_dataset(hdf, 'Prog_nPart_Contribution', prog_mass_conts)
+    hdf5_write_dataset(hdf, 'Desc_nPart_Contribution', desc_mass_conts)
+    hdf5_write_dataset(hdf, 'Prog_nPart', prog_nparts)
+    hdf5_write_dataset(hdf, 'Desc_nPart', desc_nparts)
+    hdf5_write_dataset(hdf, 'prog_real_flag', prog_reals)
+    hdf5_write_dataset(hdf, 'real_flag', reals)
+    hdf5_write_dataset(hdf, 'desc_real_flag', desc_reals)
+
+    hdf.close()
+
+    message(meta.rank, "Found %d halos to not be real out of %d" % (notreals,
+                                                                    nhalo))
+    message(meta.rank, "Found %d transient halos out of %d" % (transients,
+                                                               nhalo))
+
+    if density_rank == 0:
+        count_and_report_progs(nprogs, meta, halo_type="Host")
+        count_and_report_descs(ndescs, meta, halo_type="Host")
+    else:
+        count_and_report_progs(nprogs, meta, halo_type="Subhalo")
+        count_and_report_descs(ndescs, meta, halo_type="Subhalo")
+
+    return reals, desc_reals
+
+
+@timer("Writing")
+def clean_real_flags(tictoc, meta, density_rank, reals, snap):
+
+    # Load the descendant snapshot
+    hdf = h5py.File(meta.halopath + 'halos_' + snap + '.hdf5', 'r+')
+
+    # Set the reality flag in the halo catalog
+    if density_rank == 0:
+        message(meta.rank, "Overwriting host real flags: %s" % snap)
+        del hdf['real_flag']
+        hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool,
+                                   data=reals,
+                                   compression='gzip')
+    else:
+        message(meta.rank, "Overwriting subhalo real flags: %s" % snap)
+        sub_current = hdf['Subhalos']
+        del sub_current['real_flag']
+        sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool,
+                                   data=reals,
+                                   compression='gzip')
+
+    hdf.close()

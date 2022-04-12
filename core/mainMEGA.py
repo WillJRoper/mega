@@ -1,13 +1,10 @@
 import core.build_graph_mpi as bgmpi
-# import core.kdhalofinder as kd
 import core.kdhalofinder_mpi as kdmpi
-# import core.mergergraph as mg
-import core.mergergraph_mpi as mgmpi
+import graph_core.mergergraph as mgmpi
 import numpy as np
 import sys
 # import mergertrees as mt
 # import lumberjack as ld
-import time
 from core.talking_utils import say_hello
 import core.param_utils as p_utils
 
@@ -16,21 +13,19 @@ import core.param_utils as p_utils
 
 def main():
 
-    # Assign start time
-    walltime_start = time.time()
-
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params, cosmology, simulation = p_utils.read_param(paramfile)
+    (inputs, flags, params, cosmology,
+     simulation) = p_utils.read_param(paramfile)
 
     snap_ind = int(sys.argv[2])
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
 
-    # Set up object containing housekeeping information
-    meta = p_utils.Metadata(snaplist[snap_ind], cosmology,
-                            params['llcoeff'], params['sub_llcoeff'],
+    # Set up object containing housekeeping metadata
+    meta = p_utils.Metadata(snaplist, snap_ind, cosmology,
+                            params['llcoeff'], params['sub_llcoeff'], inputs,
                             inputs['data'] + inputs["basename"],
                             inputs['haloSavePath'], params['ini_alpha_v'],
                             params['min_alpha_v'], params['decrement'],
@@ -40,9 +35,6 @@ def main():
                             (simulation["comoving_DM_softening"],
                              simulation["max_physical_DM_softening"]),
                             flags["DMO"])
-
-    # Extract the cosmology object
-    cosmo = meta.cosmo
 
     if flags['useserial']:
 
@@ -115,52 +107,16 @@ def main():
         if flags['halo']:
             kdmpi.hosthalofinder(meta)
 
-        # ===================== Find Direct Progenitors and Descendents =====================
+        # ============== Find Direct Progenitors and Descendents ==============
         if flags['graphdirect']:
 
-            snap = snaplist[snap_ind]
-
-            if snap_ind - 1 < 0:
-                prog_snap = None
-            else:
-                prog_snap = snaplist[snap_ind - 1]
-
-            if snap_ind + 1 >= len(snaplist):
-                desc_snap = None
-            else:
-                desc_snap = snaplist[snap_ind + 1]
-
-            mgmpi.directProgDescWriter(snap, prog_snap, desc_snap,
-                                       halopath=inputs['haloSavePath'],
-                                       savepath=inputs['directgraphSavePath'],
-                                       density_rank=0,
-                                       verbose=flags['verbose'],
-                                       profile=flags['profile'],
-                                       profile_path=inputs["profilingPath"])
+            mgmpi.graph_main(0, meta)
 
         comm.barrier()
 
         if flags['subgraphdirect']:
 
-            snap = snaplist[snap_ind]
-
-            if snap_ind - 1 < 0:
-                prog_snap = None
-            else:
-                prog_snap = snaplist[snap_ind - 1]
-
-            if snap_ind + 1 >= len(snaplist):
-                desc_snap = None
-            else:
-                desc_snap = snaplist[snap_ind + 1]
-
-            mgmpi.directProgDescWriter(snap, prog_snap, desc_snap,
-                                       halopath=inputs['haloSavePath'],
-                                       savepath=inputs['directgraphSavePath'],
-                                       density_rank=1,
-                                       verbose=flags['verbose'],
-                                       profile=flags['profile'],
-                                       profile_path=inputs["profilingPath"])
+            mgmpi.graph_main(1, meta)
 
         if flags["graph"]:
             bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'],

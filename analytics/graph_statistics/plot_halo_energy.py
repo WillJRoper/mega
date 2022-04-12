@@ -1,9 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-sys.path.insert(1, "core/")
-sys.path.insert(1, "../mega_global_phase/core/")
-import utilities
+from core.param_utils import read_param
 from matplotlib.colors import LogNorm
 import h5py
 import seaborn as sns
@@ -20,10 +18,7 @@ def energyplot():
     :return: None
     """
 
-    # Initialise the arrays to store the number of progenitors and descendants
-    # *** NOTE: These arrays are initialised with considerably more entries than necessary (namely enough
-    # entries for every particle to have a logarithmic mass growth), unused entries are removed after all values
-    # have been computed.
+    # Initialise the arrays to store the energies
     total_KE = []
     total_GE = []
     mass = []
@@ -31,7 +26,7 @@ def energyplot():
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params, cosmology, simulation = utilities.read_param(paramfile)
+    inputs, flags, params, cosmology, simulation = read_param(paramfile)
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs["snapList"], dtype=str))
@@ -55,9 +50,10 @@ def energyplot():
             # Get the number of progenitors and descendants
             KE = hdf["halo_kinetic_energies"][...]
             GE = hdf["halo_gravitational_energies"][...]
-            m = hdf["total_masses"][...]
-            n = hdf["nparts"][...]
+            m = hdf["masses"][...]
+            n = hdf["nparts"][:, 1]
             reals = hdf["real_flag"][...]
+            reals = np.ones(len(n), dtype=bool)
             total_KE.extend(KE[reals])
             total_GE.extend(GE[reals])
             mass.extend(m[reals])
@@ -68,13 +64,13 @@ def energyplot():
             # Get the number of progenitors and descendants
             KE = hdf["Subhalos"]["halo_kinetic_energies"][...]
             GE = hdf["Subhalos"]["halo_gravitational_energies"][...]
-            m = hdf["Subhalos"]["total_masses"][...]
+            m = hdf["Subhalos"]["masses"][...]
             n = hdf["Subhalos"]["nparts"][...]
             reals = hdf["Subhalos"]["real_flag"][...]
             total_KE.extend(KE[reals])
             total_GE.extend(GE[reals])
             mass.extend(m[reals])
-            npart.extend(n[reals])
+            npart.extend(n[reals, 1])
 
         hdf.close()
 
@@ -122,7 +118,8 @@ def energyplot():
 
             plt.close(fig)
 
-        except ValueError:
+        except ValueError as e:
+            print(e)
             continue
 
     total_KE = np.array(total_KE)

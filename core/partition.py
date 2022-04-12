@@ -1,6 +1,8 @@
 import numpy as np
 import h5py
 
+from core.serial_io import read_pids
+
 
 def initial_partition(npart, nranks, rank):
 
@@ -10,23 +12,21 @@ def initial_partition(npart, nranks, rank):
     return rank_bins[rank], rank_bins[rank + 1]
 
 
-def get_parts_in_cell(npart, meta):
+def get_parts_in_cell(npart, meta, part_type):
 
     # Get the initial domain decomp
     low_lim, high_lim = initial_partition(npart, meta.nranks, meta.rank)
 
     # Define cell width
-    cell_width = meta.boxsize / meta.cdim
+    l = np.max(meta.boxsize)
+    cell_width = l / meta.cdim
 
     # Initialise cell dictionary
     cells = {}
 
     # Get the particles on this rank in the initial domain decomp
     hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
-    if npart == meta.npart[1]:
-        pos = hdf["PartType1"]["part_pos"][low_lim: high_lim, :]
-    else:
-        pos = hdf["All"]["part_pos"][low_lim: high_lim, :]
+    pos = hdf["PartType%d/Coordinates" % part_type][...][low_lim: high_lim, :]
     hdf.close()
 
     # Loop over particles and place them in their cell

@@ -2,9 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 sys.path.insert(1, 'core/')
-import utilities
 import h5py
 import seaborn as sns
+
+from core.param_utils import read_param
 
 
 sns.set_style("whitegrid")
@@ -18,16 +19,14 @@ def directprogdeschist(threshold=10):
     :return: None
     """
 
-    # Initialise the arrays to store the number of progenitors and descendants
-    # *** NOTE: These arrays are initialised with considerably more entries than necessary (namely enough
-    # entries for every particle to have a logarithmic mass growth), unused entries are removed after all values
-    # have been computed.
+    # Initialise the lists to store the number of progenitors and descendants
     total_nprogs = []
     total_ndescs = []
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params, _ = utilities.read_param(paramfile)
+    (inputs, flags, params, cosmology,
+     simulation) = read_param(paramfile)
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))

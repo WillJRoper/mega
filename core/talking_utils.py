@@ -112,3 +112,70 @@ def count_and_report_halos(part_haloids, meta, halo_type="Spatial Host"):
         count *= 10
 
     message(meta.rank, "=" * len(report_string))
+
+
+def count_and_report_progs(nprogs, meta, halo_type="Host"):
+    """
+
+    :param nprogs:
+    :param meta:
+    :param halo_type:
+    :return:
+    """
+
+    # Get the unique halo ids
+    unique, counts = np.unique(nprogs, return_counts=True)
+
+    # Print the number of halos found by the halo finder in npart bins
+    report_string = get_heading(meta.report_width, halo_type + " Progenitors")
+    message(meta.rank, report_string)
+    message(meta.rank, pad_print_middle("N_{prog}",
+                           "N_{%s}" % "_".join(halo_type.lower().split()),
+                           length=meta.report_width))
+
+    if len(nprogs) == 0:
+        message(meta.rank, pad_print_middle("N/A",
+                                            "N/A",
+                                            length=meta.report_width))
+
+    # First loop over some small values
+    for u, c in zip(unique, counts):
+        if u < 10:
+            message(meta.rank, pad_print_middle("%d" % u,
+                                   str(c),
+                                   length=meta.report_width))
+
+    message(meta.rank, "=" * len(report_string))
+
+
+def count_and_report_descs(ndescs, meta, halo_type="Host"):
+    """
+
+    :param ndescs:
+    :param meta:
+    :param halo_type:
+    :return:
+    """
+
+    # Get the unique halo ids
+    unique, counts = np.unique(ndescs, return_counts=True)
+
+    # Print the number of halos found by the halo finder in npart bins
+    report_string = get_heading(meta.report_width, halo_type + " Descendants")
+    message(meta.rank, report_string)
+    message(meta.rank, pad_print_middle("N_{desc}",
+                           "N_{%s}" % "_".join(halo_type.lower().split()),
+                           length=meta.report_width))
+
+    if len(ndescs) == 0:
+        message(meta.rank, pad_print_middle("N/A",
+                                            "N/A",
+                                            length=meta.report_width))
+
+    # First loop over some standard counts
+    for u, c in zip(unique, counts):
+        message(meta.rank, pad_print_middle("%d" % u,
+                               str(c),
+                               length=meta.report_width))
+
+    message(meta.rank, "=" * len(report_string))

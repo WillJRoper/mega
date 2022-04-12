@@ -56,11 +56,6 @@ def find_halos(tree, pos, linkl, npart):
         # Convert the particle index list to an array for ease of use
         query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
 
-        # Assert that the query particle is returned by the tree query.
-        # Otherwise the program fails
-        assert query_part_inds.size != 0, \
-            'Must always return particle that you are sitting on'
-
         # Find only the particles not already in a halo
         new_parts = query_part_inds[
             np.where(part_haloids[query_part_inds] == -1)]
@@ -200,9 +195,6 @@ def find_subhalos(halo_pos, sub_linkl):
         # Convert the particle index list to an array for ease of use.
         query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
 
-        # Assert that the query particle is returned by the tree query. Otherwise the program fails
-        assert query_part_inds.size != 0, 'Must always return particle that you are sitting on'
-
         # Find only the particles not already in a halo
         new_parts = query_part_inds[
             np.where(part_subhaloids[query_part_inds] == -1)]
@@ -296,7 +288,7 @@ def find_subhalos(halo_pos, sub_linkl):
 
 @timer("Host-Spatial")
 def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
-                      pos, tree, linkl):
+                      pos, tree):
     """
 
     :param tictoc:
@@ -325,15 +317,15 @@ def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
     combined_weights = {}  # dictionary storing the weighting information
     for ind in range(part_bins.size - 1):
 
-        # Get the edges of this patial search bin
+        # Get the edges of this spatial search bin
         low, high = part_bins[ind], part_bins[ind + 1]
 
         # Run the host halo finder to get the spatial catalog
-        res_tup = find_halos(tree, pos[low: high, :], linkl,
+        res_tup = find_halos(tree, pos[low: high, :], meta.linkl,
                              rank_tree_parts.shape[0])
         task_part_haloids, task_assigned_parts, task_weights, q_time = res_tup
 
-        # Get the positions
+        # Combine all the intial halos and store each particles halo id
         while len(task_assigned_parts) > 0:
             item = task_assigned_parts.popitem()
             halo, part_inds = item
@@ -352,11 +344,11 @@ def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
                                halo_type="Rank %d Spatial Host Halos"
                                          % meta.rank)
 
-    return halo_pids, combined_weights, qtime_dict
+    return halo_pids, combined_weights, qtime_dict, rank_part_haloids
 
 
 @timer("Sub-Spatial")
-def get_sub_halos(tictoc, halo_pids, halo_pos, sub_linkl):
+def get_sub_halos(tictoc, halo_pids, halo_pos, meta):
     """
 
     :param tictoc:
@@ -367,11 +359,18 @@ def get_sub_halos(tictoc, halo_pids, halo_pos, sub_linkl):
     """
 
     # Do a spatial search for subhalos
-    part_subhaloids, assignedsub_parts = find_subhalos(halo_pos, sub_linkl)
+    part_subhaloids, assignedsub_parts = find_subhalos(halo_pos,
+                                                       meta.sub_linkl)
 
-    # Get the positions
+    # Get the true indices for these particles
     subhalo_pids = {}
     for halo in assignedsub_parts:
+
+        # If this subhalo falls below the npart threshold we can throw it away
+        if len(assignedsub_parts[halo]) < meta.part_thresh:
+            continue
+
+        # Get the true indices
         subhalo_pids[halo] = halo_pids[list(assignedsub_parts[halo])]
 
     return subhalo_pids

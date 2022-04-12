@@ -133,8 +133,7 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
-                   redshift, G, soft, min_vlcoeff, cosmo):
+def get_real_halos_recurse(tictoc, halo, vlinkl_halo_indp, linkl, meta):
     """
 
     :param halo:
@@ -157,7 +156,9 @@ def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
     vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
     # Define the phase space vectors for this halo
-    halo_phases = np.concatenate((halo.pos / linkl, halo.vel / vlinkl), axis=1)
+    halo_phases = np.concatenate((halo.pos / linkl,
+                                  halo.vel_with_hubflow / vlinkl),
+                                 axis=1)
 
     # Query these particles in phase space to find distinct bound halos
     part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
@@ -175,20 +176,19 @@ def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
         this_pids = list(val)
 
         # Instantiate halo object (auto calculates energy)
-        new_halo = Halo(halo.pids[this_pids],
+        new_halo = Halo(tictoc, halo.pids[this_pids],
                         halo.shifted_inds[this_pids],
                         halo.sim_pids[this_pids],
                         halo.pos[this_pids, :],
                         halo.vel[this_pids, :],
                         halo.types[this_pids],
                         halo.masses[this_pids],
-                        halo.vlcoeff,
-                        boxsize, soft, redshift, G, cosmo)
+                        halo.vlcoeff, meta)
 
-        if new_halo.real or new_halo.vlcoeff <= min_vlcoeff:
+        if new_halo.real or new_halo.vlcoeff <= meta.min_vlcoeff:
 
             # Compute the halo properties
-            new_halo.compute_props(G)
+            new_halo.compute_props(meta.G)
 
             # Get and store the memory footprint of this halo
             new_halo.memory = utils.get_size(new_halo)
@@ -202,13 +202,11 @@ def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
         else:
 
             # Decrement the velocity space linking length coefficient
-            new_halo.decrement(decrement)
+            new_halo.decrement(meta.decrement)
 
             # We need to run this halo again
-            temp_res = get_real_halos(new_halo, boxsize,
-                                      vlinkl_halo_indp,
-                                      linkl, decrement, redshift, G,
-                                      soft, min_vlcoeff, cosmo)
+            temp_res = get_real_halos(tictoc, new_halo, vlinkl_halo_indp,
+                                      linkl, meta)
 
             # Include these results
             for h in temp_res:
@@ -217,8 +215,7 @@ def get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
     return results
 
 
-def get_real_halos_iterate(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
-                           redshift, G, soft, min_vlcoeff, cosmo):
+def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
     """
 
     :param halo:
@@ -237,19 +234,21 @@ def get_real_halos_iterate(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
     # Initialise list to store finished halos
     results = []
 
-    # Create set to hold halos during iteration
-    halos = {halo, }
+    # Intialise set to hold halos
+    test_halos = {halo, }
 
-    while len(halos) > 0:
+    # Loop until we have no halos to test
+    while len(test_halos) > 0:
 
-        # Get a halo to test
-        halo = halos.pop()
+        # Get a halo to work on
+        halo = test_halos.pop()
 
         # Define the phase space linking length
         vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
         # Define the phase space vectors for this halo
-        halo_phases = np.concatenate((halo.pos / linkl, halo.vel / vlinkl),
+        halo_phases = np.concatenate((halo.pos / linkl,
+                                      halo.vel_with_hubflow / vlinkl),
                                      axis=1)
 
         # Query these particles in phase space to find distinct bound halos
@@ -268,57 +267,42 @@ def get_real_halos_iterate(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
             this_pids = list(val)
 
             # Instantiate halo object (auto calculates energy)
-            new_halo = Halo(halo.pids[this_pids],
+            new_halo = Halo(tictoc, halo.pids[this_pids],
+                            halo.shifted_inds[this_pids],
                             halo.sim_pids[this_pids],
                             halo.pos[this_pids, :],
                             halo.vel[this_pids, :],
                             halo.types[this_pids],
                             halo.masses[this_pids],
-                            halo.vlcoeff,
-                            boxsize, soft, redshift, G, cosmo)
+                            halo.vlcoeff, meta)
 
-            if new_halo.real or new_halo.vlcoeff <= min_vlcoeff:
+            if new_halo.real or new_halo.vlcoeff < meta.min_vlcoeff:
 
                 # Compute the halo properties
-                new_halo.compute_props(G)
+                new_halo.compute_props(meta.G)
 
-                # # Store the resulting halo
-                # results.append(new_halo)
+                # Get the memory footprint of this halo
+                new_halo.memory = utils.get_size(new_halo)
 
+                # Limit memory footprint of stored halo
+                new_halo.clean_halo()
 
-                results.append({'pids': new_halo.pids,
-                                         'sim_pids': new_halo.sim_pids,
-                                         'npart': new_halo.npart,
-                                         'real': new_halo.real,
-                                         'mean_halo_pos': new_halo.mean_pos,
-                                         'mean_halo_vel': new_halo.mean_vel,
-                                         'halo_mass': new_halo.mass,
-                                         'halo_ptype_mass': new_halo.ptype_mass,
-                                         'halo_energy': new_halo.KE - new_halo.GE,
-                                         'KE': new_halo.KE, 'GE': new_halo.GE,
-                                         "rms_r": new_halo.rms_r,
-                                         "rms_vr": new_halo.rms_vr,
-                                         "veldisp3d": new_halo.veldisp3d,
-                                         "veldisp1d": new_halo.veldisp1d,
-                                         "vmax": new_halo.vmax,
-                                         "hmr": new_halo.hmr,
-                                         "hmvr": new_halo.hmvr,
-                                         "vlcoeff": new_halo.vlcoeff,
-                                "memory": utils.get_size(new_halo)})
+                # Store the resulting halo
+                results.append(new_halo)
 
             else:
 
                 # Decrement the velocity space linking length coefficient
-                new_halo.decrement(decrement)
+                new_halo.decrement(meta.decrement)
 
-                halos.update({new_halo, })
+                # Add this halo to test_halos to be tested later
+                test_halos.update({new_halo, })
 
     return results
 
 
 @timer("Host-Phase")
-def get_real_host_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
-                        decrement, redshift, G, soft, min_vlcoeff, cosmo):
+def get_real_host_halos(tictoc, halo, meta):
     """
 
     :param tictoc:
@@ -335,13 +319,11 @@ def get_real_host_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
     :return:
     """
 
-    return get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
-                          redshift, G, soft, min_vlcoeff, cosmo)
+    return get_real_halos(tictoc, halo, meta.vlinkl_indp, meta.linkl, meta)
 
 
 @timer("Sub-Phase")
-def get_real_sub_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
-                       decrement, redshift, G, soft, min_vlcoeff, cosmo):
+def get_real_sub_halos(tictoc, halo, meta):
     """
 
     :param tictoc:
@@ -357,6 +339,6 @@ def get_real_sub_halos(tictoc, halo, boxsize, vlinkl_halo_indp, linkl,
     :param cosmo:
     :return:
     """
-    return get_real_halos(halo, boxsize, vlinkl_halo_indp, linkl, decrement,
-                          redshift, G, soft, min_vlcoeff, cosmo)
+    return get_real_halos(tictoc, halo, meta.sub_vlinkl_indp,
+                          meta.sub_linkl, meta)
 

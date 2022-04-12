@@ -1,4 +1,5 @@
 import numpy as np
+import h5py
 
 import core.utilities as utils 
 from core.partition import pick_vector, split_vector, get_parts_in_cell
@@ -7,6 +8,15 @@ from core.timing import timer
 
 
 def get_cell_rank(cell_ranks, meta, i, j, k):
+    """
+
+    :param cell_ranks:
+    :param meta:
+    :param i:
+    :param j:
+    :param k:
+    :return:
+    """
     # Get cell index
     ind = utils.get_cellid(meta.cdim, i, j, k)
 
@@ -14,15 +24,23 @@ def get_cell_rank(cell_ranks, meta, i, j, k):
 
 
 @timer("Domain-Decomp")
-def cell_domain_decomp(tictoc, meta, comm, part_types=(1,)):
-    npart = np.sum([meta.npart[i] for i in part_types])
+def cell_domain_decomp(tictoc, meta, comm, part_type):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param comm:
+    :return:
+    """
+
+    npart = meta.npart[part_type]
 
     # Split the cells over the ranks
     samplecells = pick_vector(meta.nranks, meta.cdim)
     cell_ranks, cell_rank_dict = split_vector(meta.cdim, samplecells)
 
     # Find the cell each particle belongs to
-    cells, npart_on_rank = get_parts_in_cell(npart, meta)
+    cells, npart_on_rank = get_parts_in_cell(npart, meta, part_type)
 
     # Ensure we haven't lost any particles
     if meta.debug:
@@ -139,6 +157,98 @@ def cell_domain_decomp(tictoc, meta, comm, part_types=(1,)):
 
 
 @timer("Domain-Decomp")
+def hydro_cell_domain_decomp(tictoc, meta, comm, cell_ranks, part_type):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param comm:
+    :return:
+    """
+
+    # Get the number of particles
+    npart = meta.npart[part_type]
+
+    # Find the cell each particle belongs to
+    cells, npart_on_rank = get_parts_in_cell(npart, meta, part_type)
+
+    # Ensure we haven't lost any particles
+    if meta.debug:
+
+        collected_cells = comm.gather(cells, root=0)
+
+        if meta.rank == 0:
+
+            count_parts = 0
+            for cs in collected_cells:
+                for c in cs:
+                    count_parts += len(cs[c])
+
+            assert count_parts == npart, \
+                "Found an incompatible number of particles " \
+                "in cells (found=%d, npart=%d)" % (count_parts,
+                                                   npart)
+
+    # Sort the cells and particles that I have
+    rank_parts = {r: set() for r in range(meta.nranks)}
+    cells_done = set()
+    my_cells = list(cells.keys())
+    for c_ijk in my_cells:
+
+        # Get ijk coordinates
+        i, j, k = c_ijk
+
+        # Get the rank for this cell
+        other_rank, ind = get_cell_rank(cell_ranks, meta, i, j, k)
+
+        # Get the particles and store them in the corresponding place
+        cells_done.update({ind})
+        rank_parts[other_rank].update(set(cells[c_ijk]))
+
+    # Ensure we have got all particles allocated and we have done all cells
+    if meta.debug:
+
+        # All cells have been included
+        assert len(cells_done) == len(set(cells.keys())), \
+            "We have missed cells in the domain decompistion! " \
+            "(found=%d, total=%d" % (len(cells_done),
+                                     len(set(cells.keys())))
+
+    # We now need to exchange the particle indices
+    for other_rank in range(meta.nranks):
+        rank_parts[other_rank] = comm.gather(rank_parts[other_rank],
+                                             root=other_rank)
+        if rank_parts[other_rank] is None:
+            rank_parts[other_rank] = set()
+
+    my_particles = set()
+    for s in rank_parts[meta.rank]:
+        my_particles.update(s)
+
+    comm.Barrier()
+
+    if meta.verbose:
+        message(meta.rank, "I have %d particles with types:"
+                % len(my_particles), meta.part_types)
+
+    if meta.debug:
+
+        all_parts = comm.gather(my_particles, root=0)
+        if meta.rank == 0:
+            found_parts = len({i for s in all_parts for i in s})
+            assert found_parts == npart, \
+                "There are particles missing on rank %d " \
+                "after exchange! (found=%d, npart=%d)" % (meta.rank,
+                                                          found_parts,
+                                                          npart)
+
+    # Convert to lists and sort so the particles can index the hdf5 files
+    my_particles = np.sort(list(my_particles))
+
+    return my_particles
+
+
+@timer("Domain-Decomp")
 def halo_decomp(tictoc, meta, halo_tasks, weights, comm):
     """
 
@@ -151,51 +261,132 @@ def halo_decomp(tictoc, meta, halo_tasks, weights, comm):
 
     if meta.rank == 0:
 
+        # Lets sort our halos by decreasing cost
+        sinds = np.argsort(list(weights.values()))[::-1]
+        haloids = np.array(list(weights.keys()), dtype=int)
+        sorted_halos = haloids[sinds]
+
         # Initialise tasks for each rank
-        rank_halos = [{}, ] * meta.nranks
+        rank_halos_dict = {r: {} for r in range(meta.nranks)}
 
         # Initialise counter to track the weight allocated to each rank
         alloc_weights = [0, ] * meta.nranks
 
         # Allocate tasks, each task goes to the minimally weighted rank
-        for ihalo in halo_tasks:
+        for ihalo in sorted_halos:
 
             # Get position of minimum current rank weighting
             r = np.argmin(alloc_weights)
 
             # Assign this halo and it's weight to r
-            rank_halos[r][ihalo] = halo_tasks[ihalo]
-            alloc_weights[r] += weights[ihalo]
+            rank_halos_dict[r][ihalo] = halo_tasks[ihalo]
+            alloc_weights[r] += weights[ihalo] ** 2
 
     else:
-        rank_halos = None
+        rank_halos_dict = {r: None for r in range(meta.nranks)}
+
+    # Convert dict to list for scattering
+    rank_halos = [rank_halos_dict[r] for r in range(meta.nranks)]
+
+    if meta.verbose:
+        for r in range(meta.nranks):
+            message(meta.rank, "Rank %d has %d halos" % (r,
+                                                         len(rank_halos[r])))
 
     # Give everyone their tasks
     my_tasks = comm.scatter(rank_halos, root=0)
 
-    # Get my task indices, particle array and offsets for this rank
-    # NOTE: if we stop reading in the entire position array this will
-    # need sorting!
+    # Get my task indices and particle index array
     my_halo_parts = []
-    offsets = []
-    my_shifted_tasks = {}
-    task_offsets = {}
+    start_index = np.zeros(len(my_tasks), dtype=int)
+    stride = np.zeros(len(my_tasks), dtype=int)
     current_ind = 0
+    itask = 0
     for ihalo in my_tasks:
+
+        # Extract this spatial halos particles
         parts = my_tasks[ihalo]
         npart = len(parts)
-        shifted_inds = np.arange(current_ind, current_ind + npart,
-                                 dtype=np.int32)
-        my_shifted_tasks[ihalo] = shifted_inds
-        my_halo_parts.extend(parts)
+
+        # Store the index pointer and stride for these particles
+        start_index[itask] = current_ind
+        stride[itask] = npart
+
+        # Increment counters
         current_ind += npart
-    my_halo_parts = np.array(my_halo_parts, copy=False)
+        itask += 1
 
-    # Define index offsets for my particles
-    my_inds = np.arange(my_halo_parts.size, dtype=np.int32)
-    offsets = my_inds - my_halo_parts
+        # Store these particles indices
+        my_halo_parts.extend(parts)
 
-    return my_shifted_tasks, my_tasks, my_halo_parts, offsets, task_offsets
+    # Convert particle index list to an array
+    my_halo_parts = np.array(my_halo_parts, copy=False, dtype=int)
+
+    return my_halo_parts, start_index, stride
+
+
+@timer("Domain-Decomp")
+def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_partbins):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param halo_tasks:
+    :param weights:
+    :return:
+    """
+
+    if meta.rank == 0:
+
+        # Open the current snapshot
+        hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
+
+        # Are we dealing with hosts or subhalos
+        if density_rank == 0:
+            root = hdf
+        else:
+            root = hdf["Subhalos"]
+
+        # Initialise tasks for each rank
+        rank_halos_dict = {r: {} for r in range(meta.nranks)}
+
+        # Allocate tasks, each halo goes to the rank containing most
+        # of it's particles
+        for ihalo in range(nhalo):
+
+            # Let's get this halos particles
+            begin = root["start_index"][ihalo]
+            end = begin + root["stride"][ihalo]
+            parts = root["part_ids"][begin: end]
+
+            # Which rank holds the majority of this halos particles?
+            rs, counts = np.unique(
+                np.digitize(parts, rank_partbins),
+                                   return_counts=True)
+
+            # Bining returns the index of the right hand bin edge
+            r = rs[np.argmax(counts)] - 1
+
+            # Give that rank this halo
+            rank_halos_dict[r][ihalo] = parts
+
+        hdf.close()
+
+    else:
+        rank_halos_dict = {r: None for r in range(meta.nranks)}
+
+    # Convert dict to list for scattering
+    rank_halos = [rank_halos_dict[r] for r in range(meta.nranks)]
+
+    if meta.verbose:
+        for r in range(meta.nranks):
+            message(meta.rank, "Rank %d has %d halos" % (r,
+                                                         len(rank_halos[r])))
+
+    # Give everyone their tasks
+    my_tasks = comm.scatter(rank_halos, root=0)
+
+    return my_tasks
 
 
 

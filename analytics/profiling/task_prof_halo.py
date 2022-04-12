@@ -1,12 +1,15 @@
-import numpy as np
 import sys
-sys.path.insert(1, "/Users/willroper/Documents/University/Merger_Trees_to_Merger_Graphs/mega/core")
-import utilities
+
+import numpy as np
+
 import pickle
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator
 import seaborn as sns
+
+import core.param_utils as p_utils
 
 
 sns.set_style("whitegrid")
@@ -18,7 +21,7 @@ def my_autopct(pct):
 
 # Read the parameter file
 paramfile = sys.argv[1]
-inputs, flags, params = utilities.read_param(paramfile)
+inputs, flags, params, cosmology, simulation = p_utils.read_param(paramfile)
 
 snap_ind = int(sys.argv[2])
 
@@ -34,14 +37,20 @@ portion_of_time = {}
 rank_time = {}
 master_time = 0
 
+# Get task list and the matplotlib color cycle
+tasks = ("Housekeeping", "Domain-Decomp", "Reading",
+         "Tree-Building", "Host-Spatial", "Stitching",
+         "Kinetic-Energy", "Grav-Energy", "Create Halo",
+         "Compute-Props", "Host-Phase", "Sub-Spatial",
+         "Sub-Phase", "Collecting", "Writing", "Master Idle",
+         "Worker Idle")
+plt_colors = mcolors.CSS4_COLORS.values()
+
 # Color dict 
-cols = {"Writing": "red", "Collecting": "gold", "Domain-Decomp": "yellowgreen", "Reading": "darkorchid",
-        "Assigning": "darkgreen", "Worker Idle": 'lightskyblue', "Master Idle": 'violet', "Housekeeping": "aquamarine",
-        "Task-Munging": "darkgoldenrod", "Host-Spatial": "firebrick", "Host-Phase": "lime", "Sub-Spatial": "cyan",
-        "Sub-Phase": "darkmagenta", "Communication": "lightseagreen"}
+cols = {k: v for k, v in zip(tasks, plt_colors)}
 
 # Set up figure
-fig = plt.figure()
+fig = plt.figure(figsize=(14, 5))
 ax = fig.add_subplot(111)
 
 start_time = None
@@ -50,7 +59,8 @@ master_total = None
 
 for rank in range(nranks):
 
-    with open(inputs["profilingPath"] + "Halo_" + str(rank) + '_' + snap + '.pck', 'rb') as pfile:
+    with open(inputs["profilingPath"] + "Halo_" + str(
+            rank) + '_' + snap + '.pck', 'rb') as pfile:
         prof_dict = pickle.load(pfile)
 
     if rank == 0:
@@ -80,34 +90,40 @@ for rank in range(nranks):
             master_time = np.sum(elapsed)
 
         ax.broken_barh(plt_times, (rank - 0.5, 1),
-                       facecolor=cols[task_type], edgecolor='none', label=task_type)
+                       facecolor=cols[task_type], edgecolor='none',
+                       label=task_type)
 
 # Ensure tick labels are integers
 ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
 # Plot lines to denote each task
 for rank in range(nranks + 1):
-    ax.plot((0, master_total), (rank - 0.5, rank - 0.5), color='k', linewidth=0.1)
+    ax.plot((0, master_total), (rank - 0.5, rank - 0.5), color='k',
+            linewidth=0.1)
 
 for spine in ax.spines.values():
-        spine.set_edgecolor('k')
-        spine.set_linewidth(1)
+    spine.set_edgecolor('k')
+    spine.set_linewidth(1)
 
 legend_elements = []
 for key in portion_of_time:
-    legend_elements.append(Patch(facecolor=cols[key], edgecolor=cols[key], label=key))
+    legend_elements.append(
+        Patch(facecolor=cols[key], edgecolor=cols[key], label=key))
 
 ax.set_xlabel("Time (Seconds)")
 ax.set_ylabel("Ranks")
 
 # Get and draw legend
-ax.legend(handles=legend_elements, loc="upper center", bbox_to_anchor=(0.5, -0.1),
-          fancybox=True, ncol=4)
+ax.legend(handles=legend_elements, loc="upper center",
+          bbox_to_anchor=(0.5, -0.1),
+          fancybox=True, ncol=6)
 
 ax.set_xlim(0, master_total)
 ax.set_ylim(-0.51, nranks - 0.49)
 
-fig.savefig(inputs["analyticPlotPath"] + "halo_task_time_series_" + str(snap) + ".png", bbox_inches="tight", dpi=300)
+fig.savefig(
+    inputs["analyticPlotPath"] + "halo_task_time_series_" + str(snap) + ".png",
+    bbox_inches="tight", dpi=300)
 
 plt.close(fig)
 
@@ -128,7 +144,8 @@ for key in portion_of_time:
 
 # Append down time
 labels.append("Worker Idle")
-pcent.append((total_time - working_time - (master_total - master_time)) / total_time * 100)
+pcent.append((total_time - working_time - (
+            master_total - master_time)) / total_time * 100)
 explode.append(0.0)
 labels.append("Master Idle")
 pcent.append((master_total - master_time) / total_time * 100)
@@ -142,22 +159,27 @@ pcent = np.array(pcent)[sinds]
 
 print("=============== Runtime Breakdown ===============")
 for pc, lab in zip(pcent, labels):
-    print("{:<15}".format(lab), "{:<7}".format("= %.2f" % pc),  "%")
+    print("{:<15}".format(lab), "{:<7}".format("= %.2f" % pc), "%")
 
-# Set up figure
-fig = plt.figure()
-ax = fig.add_subplot(111)
-
-wedges, texts, autotexts = ax.pie(pcent, explode=explode, colors=[cols[lab] for lab in labels], shadow=True,
-                                  startangle=90, autopct=my_autopct)
-ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-ax.legend(wedges, [lab + " (%.2f" % pc + "%)" for pc, lab in zip(pcent, labels)],
-          title="Tasks", loc="center left", bbox_to_anchor=(0.9, 0, 0.5, 1))
-
-fig.savefig(inputs["analyticPlotPath"] + "halo_task_pie_chart_" + str(snap) + ".png", bbox_inches="tight")
-
-plt.close(fig)
+# # Set up figure
+# fig = plt.figure()
+# ax = fig.add_subplot(111)
+#
+# wedges, texts, autotexts = ax.pie(pcent, explode=explode,
+#                                   colors=[cols[lab] for lab in labels],
+#                                   shadow=True,
+#                                   startangle=90, autopct=my_autopct)
+# ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+#
+# ax.legend(wedges,
+#           [lab + " (%.2f" % pc + "%)" for pc, lab in zip(pcent, labels)],
+#           title="Tasks", loc="center left", bbox_to_anchor=(0.9, 0, 0.5, 1))
+#
+# fig.savefig(
+#     inputs["analyticPlotPath"] + "halo_task_pie_chart_" + str(snap) + ".png",
+#     bbox_inches="tight")
+#
+# plt.close(fig)
 
 # Set up figure
 fig = plt.figure()
@@ -172,4 +194,6 @@ ax.set_yscale("log")
 for tick in ax.get_xticklabels():
     tick.set_rotation(90)
 
-fig.savefig(inputs["analyticPlotPath"] + "halo_task_bar_chart_" + str(snap) + ".png", bbox_inches="tight")
+fig.savefig(
+    inputs["analyticPlotPath"] + "halo_task_bar_chart_" + str(snap) + ".png",
+    bbox_inches="tight")
