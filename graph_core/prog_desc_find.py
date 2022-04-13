@@ -1,6 +1,7 @@
 import numpy as np
 from core.timing import timer
 from graph_core.graph_halo import Halo
+from core.talking_utils import message
 
 
 @timer("Progenitor-Linking")
@@ -101,11 +102,8 @@ def get_direct_desc(tictoc, meta, desc_haloids, desc_nparts):
     return ndesc, desc_haloids, desc_npart, desc_npart_cont
 
 
-@timer("Local-Linking")
-def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
-                       part_descids, prog_reals, desc_nparts,
-                       prog_rank_pidbins, desc_rank_pidbins,
-                       prog_pids, desc_pids):
+@timer("PartID-Decomp")
+def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
     # Initialise dictionary for results
     results = {}
@@ -124,74 +122,46 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
         # If the progenitor snapshot exists
         if not meta.isfirst:
 
-            # Get the ranks for each particle, returned values are
-            # the index of right bin edge
-            prog_ranks = np.digitize(parts, prog_rank_pidbins) - 1
+            # Assign the particles on this rank to this rank
+            okinds = np.in1d(parts, prog_pids)
+            other_rank_prog_parts[meta.rank][ihalo] = parts[okinds]
 
-            # Store progenitor particles on other ranks
-            prog_parts = []
-            for r, part in zip(prog_ranks, parts):
-                if r == meta.rank:
-                    prog_parts.append(part)
-                else:
-                    other_rank_prog_parts[r].setdefault(ihalo, []).append(part)
-            prog_parts = np.array(prog_parts, dtype=int)
+            # Get particles not on this rank
+            foreign_parts = parts[~okinds]
 
-            # Link progenitors on this rank
-            progids = part_progids[np.in1d(prog_pids, prog_parts)]
-            (nprog, prog_haloids, prog_npart,
-             prog_npart_cont, preals) = get_direct_prog(tictoc, meta,
-                                                        progids,
-                                                        prog_reals,
-                                                        prog_nparts)
-
-        else:  # there is no progenitor snapshot
-            nprog = 0
-            prog_npart = np.array([], copy=False, dtype=int)
-            prog_haloids = np.array([], copy=False, dtype=int)
-            prog_npart_cont = np.array([], copy=False, dtype=int)
-            preals = np.array([], copy=False, dtype=bool)
+            # Give the other ranks the particles not on this rank
+            for r in range(meta.nranks):
+                if r != meta.rank:
+                    other_rank_prog_parts[r][ihalo] = foreign_parts
 
         # If descendant snapshot exists
         if not meta.isfinal:
+            
+            # Assign the particles on this rank to this rank
+            okinds = np.in1d(parts, desc_pids)
+            other_rank_desc_parts[meta.rank][ihalo] = parts[okinds]
 
-            # Get the ranks for each particle, returned values are
-            # the index of right bin edge
-            desc_ranks = np.digitize(parts, desc_rank_pidbins) - 1
+            # Get particles not on this rank
+            foreign_parts = parts[~okinds]
 
-            # Store descendant particles on other ranks
-            desc_parts = []
-            for r, part in zip(desc_ranks, parts):
-                if r == meta.rank:
-                    desc_parts.append(part)
-                else:
-                    other_rank_desc_parts[r].setdefault(ihalo, []).append(part)
-            desc_parts = np.array(desc_parts, dtype=int)
-
-            # Link descendants on this rank
-            descids = part_descids[np.in1d(desc_pids, desc_parts)]
-            (ndesc, desc_haloids, desc_npart,
-             desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
-                                                desc_nparts)
-
-        else:  # there is no descendant snapshot
-            ndesc = 0
-            desc_npart = np.array([], copy=False, dtype=int)
-            desc_haloids = np.array([], copy=False, dtype=int)
-            desc_npart_cont = np.array([], copy=False, dtype=int)
+            # Give the other ranks the particles not on this rank
+            for r in range(meta.nranks):
+                if r != meta.rank:
+                    other_rank_desc_parts[r][ihalo] = foreign_parts
 
         # Populate halo object with results
-        results[ihalo] = Halo(parts, npart, nprog, prog_haloids, prog_npart,
-                              prog_npart_cont, None, None, preals,
-                              ndesc, desc_haloids, desc_npart,
-                              desc_npart_cont,
+        null_entry = np.array([], dtype=int)
+        results[ihalo] = Halo(parts, npart, 0, null_entry, null_entry,
+                              null_entry, None, None, null_entry,
+                              0, null_entry, null_entry,
+                              null_entry,
                               None, None)
 
     return results, other_rank_prog_parts, other_rank_desc_parts
 
 
-@timer("Foreign-Linking")
-def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
+@timer("Linking")
+def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                          other_rank_desc_parts, part_progids, prog_nparts,
                          part_descids, prog_reals, desc_nparts,
                          prog_pids, desc_pids):
@@ -280,6 +250,7 @@ def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
 @timer("Stitching")
 def update_halos(tictoc, meta, results,
                  other_rank_prog_parts, other_rank_desc_parts):
+
     # Loop over progenitor results from other ranks
     for halo_dict in other_rank_prog_parts[meta.rank]:
 
@@ -291,6 +262,7 @@ def update_halos(tictoc, meta, results,
 
             # Loop over foreign progenitor results
             for ihalo in halos:
+
                 # Update our version of this halo
                 results[ihalo].update_progs(halo_dict.pop(ihalo))
 
@@ -305,6 +277,7 @@ def update_halos(tictoc, meta, results,
 
             # Loop over foreign descendant results
             for ihalo in halos:
+
                 # Update our version of this halo
                 results[ihalo].update_descs(halo_dict.pop(ihalo))
 

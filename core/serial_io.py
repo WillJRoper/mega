@@ -199,9 +199,13 @@ def read_prog_data(tictoc, meta, density_rank, comm):
                                          meta.nranks + 1,
                                          dtype=int)
 
+        # Lets get our slice
+        myslice = (prog_rank_partbins[meta.rank],
+                   prog_rank_partbins[meta.rank + 1])
+
         # Get minimum and maximum pid in my slice
-        rank_pids = root["all_sim_part_ids"][prog_rank_partbins[meta.rank]:
-                                             prog_rank_partbins[meta.rank + 1]]
+        rank_pids = root["all_sim_part_ids"][myslice[0]: myslice[1]]
+
         min_pid = np.zeros((1))
         max_pid = np.zeros((1))
         min_pid[0] = np.min(rank_pids)
@@ -215,10 +219,6 @@ def read_prog_data(tictoc, meta, density_rank, comm):
         prog_rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
                                         meta.nranks + 1,
                                         dtype=int)
-
-        # Lets get our slice
-        myslice = (prog_rank_partbins[meta.rank],
-                   prog_rank_partbins[meta.rank + 1])
 
         # Extract our particle's halo ids
         rank_part_progids = root["particle_halo_IDs"][myslice[0]: myslice[1]]

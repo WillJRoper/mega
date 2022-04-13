@@ -55,7 +55,7 @@ def graph_main(density_rank, meta):
 
     tictoc.start_func_time("Housekeeping")
 
-    if meta.verbose:
+    if meta.verbose and meta.rank == 0:
         message(meta.rank, "=" * meta.table_width)
         message(meta.rank,
                 pad_print_middle("Redshift/Scale Factor:",
@@ -82,38 +82,28 @@ def graph_main(density_rank, meta):
 
     # Find the progenitors and descendants of particles on this rank
     (results, other_rank_prog_parts,
-     other_rank_desc_parts) = pdfind.local_linking_loop(tictoc, meta, my_halos,
-                                                        rank_part_progids,
-                                                        proghalo_nparts,
-                                                        rank_part_descids,
-                                                        prog_reals,
-                                                        deschalo_nparts,
-                                                        prog_rank_pidbins,
-                                                        desc_rank_pidbins,
-                                                        rank_prog_pids,
-                                                        rank_desc_pids)
+     other_rank_desc_parts) = pdfind.sort_prog_desc(tictoc, meta, my_halos,
+                                                    rank_prog_pids,
+                                                    rank_desc_pids)
 
     if meta.verbose:
-        tictoc.report("Linking local halos")
+        tictoc.report("Sorting local halos")
 
     comm.Barrier()
 
     # Now we need to send all of our requests to other ranks to get the
     # particles they have that I need
-    forn_prog_parts, forn_desc_parts = pdfind.foreign_linking_loop(tictoc,
-                                                                   meta, comm,
-                                                                   other_rank_prog_parts,
-                                                                   other_rank_desc_parts,
-                                                                   rank_part_progids,
-                                                                   proghalo_nparts,
-                                                                   rank_part_descids,
-                                                                   prog_reals,
-                                                                   deschalo_nparts,
-                                                                   rank_prog_pids,
-                                                                   rank_desc_pids)
-
-    if meta.verbose:
-        tictoc.report("Getting foreign links")
+    forn_prog_parts, forn_desc_parts = pdfind.linking_loop(tictoc,
+                                                           meta, comm,
+                                                           other_rank_prog_parts,
+                                                           other_rank_desc_parts,
+                                                           rank_part_progids,
+                                                           proghalo_nparts,
+                                                           rank_part_descids,
+                                                           prog_reals,
+                                                           deschalo_nparts,
+                                                           rank_prog_pids,
+                                                           rank_desc_pids)
 
     # Combine the results from other ranks with our own
     results = pdfind.update_halos(tictoc, meta, results, forn_prog_parts,
