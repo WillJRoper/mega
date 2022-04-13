@@ -1,14 +1,12 @@
 import sys
 import inspect
 import logging
-import networkx
 import numpy as np
 
 from core.halo import Halo
 from core.serial_io import hdf5_write_dataset
 from core.timing import timer
 from core.talking_utils import message, pad_print_middle
-from networkx.algorithms.components.connected import connected_components
 
 
 logger = logging.getLogger(__name__)

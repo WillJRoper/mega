@@ -36,15 +36,17 @@ def graph_main(density_rank, meta):
 
     # Lets read the initial data we need to hand off the work
     (prog_npart, proghalo_nparts, prog_rank_partbins, rank_part_progids,
-     prog_reals) = io.read_prog_data(tictoc, meta, density_rank)
+     prog_reals, rank_prog_pids,
+     prog_rank_pidbins) = io.read_prog_data(tictoc, meta, density_rank, comm)
     if meta.verbose:
         tictoc.report("Reading progenitor data")
-    (nhalo, rank_partbins, reals, rank_part_haloids,
-     halo_nparts) = io.read_current_data(tictoc, meta, density_rank)
+    (nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts,
+     rank_pidbins) = io.read_current_data(tictoc, meta, density_rank, comm)
     if meta.verbose:
         tictoc.report("Reading halo data")
     (desc_npart, deschalo_nparts, desc_rank_partbins,
-     rank_part_descids) = io.read_desc_data(tictoc, meta, density_rank)
+     rank_part_descids, rank_desc_pids,
+     desc_rank_pidbins) = io.read_desc_data(tictoc, meta, density_rank, comm)
 
     if meta.verbose:
         tictoc.report("Reading descendant data")
@@ -73,8 +75,7 @@ def graph_main(density_rank, meta):
 
     # Get the halos we have to work on
     my_halos = graph_halo_decomp(tictoc, nhalo, meta, comm,
-                                 density_rank, rank_partbins,
-                                 rank_part_haloids, halo_nparts)
+                                 density_rank, rank_pidbins)
 
     if meta.verbose:
         tictoc.report("Splitting halos across ranks")
@@ -87,8 +88,10 @@ def graph_main(density_rank, meta):
                                                         rank_part_descids,
                                                         prog_reals,
                                                         deschalo_nparts,
-                                                        prog_rank_partbins,
-                                                        desc_rank_partbins)
+                                                        prog_rank_pidbins,
+                                                        desc_rank_pidbins,
+                                                        rank_prog_pids,
+                                                        rank_desc_pids)
 
     if meta.verbose:
         tictoc.report("Linking local halos")
@@ -106,8 +109,8 @@ def graph_main(density_rank, meta):
                                                                    rank_part_descids,
                                                                    prog_reals,
                                                                    deschalo_nparts,
-                                                                   prog_rank_partbins,
-                                                                   desc_rank_partbins)
+                                                                   rank_prog_pids,
+                                                                   rank_desc_pids)
 
     if meta.verbose:
         tictoc.report("Getting foreign links")

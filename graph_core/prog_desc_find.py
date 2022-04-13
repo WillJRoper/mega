@@ -32,10 +32,10 @@ def get_direct_prog(tictoc, meta, prog_haloids, prog_reals, prog_nparts):
     # Get the reality flag
     preals = prog_reals[uniprog_haloids]
 
-    # # Get only real halos
-    # uniprog_haloids = uniprog_haloids[preals]
-    # uniprog_counts = uniprog_counts[preals]
-    # preals = preals[preals]
+    # Get only real halos
+    uniprog_haloids = uniprog_haloids[preals]
+    uniprog_counts = uniprog_counts[preals]
+    preals = preals[preals]
 
     # Find the number of progenitor halos from the size of the unique array
     nprog = uniprog_haloids.size
@@ -104,7 +104,8 @@ def get_direct_desc(tictoc, meta, desc_haloids, desc_nparts):
 @timer("Local-Linking")
 def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
                        part_descids, prog_reals, desc_nparts,
-                       prog_rank_partbins, desc_rank_partbins):
+                       prog_rank_pidbins, desc_rank_pidbins,
+                       prog_pids, desc_pids):
 
     # Initialise dictionary for results
     results = {}
@@ -112,14 +113,6 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
     # Set up a dictionary to store particles on other ranks
     other_rank_prog_parts = {r: {} for r in range(meta.nranks)}
     other_rank_desc_parts = {r: {} for r in range(meta.nranks)}
-
-    # Define offsets
-    prog_offset = 0
-    desc_offset = 0
-    if not meta.isfirst:
-        prog_offset += prog_rank_partbins[meta.rank]
-    if not meta.isfinal:
-        desc_offset += desc_rank_partbins[meta.rank]
 
     # Loop over the halo tasks on this rank
     for ihalo in halo_tasks:
@@ -133,7 +126,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
 
             # Get the ranks for each particle, returned values are
             # the index of right bin edge
-            prog_ranks = np.digitize(parts, prog_rank_partbins) - 1
+            prog_ranks = np.digitize(parts, prog_rank_pidbins) - 1
 
             # Store progenitor particles on other ranks
             prog_parts = []
@@ -145,8 +138,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
             prog_parts = np.array(prog_parts, dtype=int)
 
             # Link progenitors on this rank
-            progids = part_progids[prog_parts - prog_offset]
-            print(ihalo, "prog", np.unique(progids, return_counts=True))
+            progids = part_progids[np.in1d(prog_pids, prog_parts)]
             (nprog, prog_haloids, prog_npart,
              prog_npart_cont, preals) = get_direct_prog(tictoc, meta,
                                                         progids,
@@ -165,7 +157,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
 
             # Get the ranks for each particle, returned values are
             # the index of right bin edge
-            desc_ranks = np.digitize(parts, desc_rank_partbins) - 1
+            desc_ranks = np.digitize(parts, desc_rank_pidbins) - 1
 
             # Store descendant particles on other ranks
             desc_parts = []
@@ -177,8 +169,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
             desc_parts = np.array(desc_parts, dtype=int)
 
             # Link descendants on this rank
-            descids = part_descids[desc_parts - desc_offset]
-            print(ihalo, "desc", np.unique(descids, return_counts=True))
+            descids = part_descids[np.in1d(desc_pids, desc_parts)]
             (ndesc, desc_haloids, desc_npart,
              desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
                                                 desc_nparts)
@@ -203,14 +194,7 @@ def local_linking_loop(tictoc, meta, halo_tasks, part_progids, prog_nparts,
 def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                          other_rank_desc_parts, part_progids, prog_nparts,
                          part_descids, prog_reals, desc_nparts,
-                         prog_rank_partbins, desc_rank_partbins):
-    # Define offsets
-    prog_offset = 0
-    desc_offset = 0
-    if not meta.isfirst:
-        prog_offset += prog_rank_partbins[meta.rank]
-    if not meta.isfinal:
-        desc_offset += desc_rank_partbins[meta.rank]
+                         prog_pids, desc_pids):
 
     # Lets share the halos with progenitors and descendants
     for other_rank in range(meta.nranks):
@@ -234,7 +218,7 @@ def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 prog_parts = halo_dict[ihalo]
 
                 # Link progenitors on this rank
-                progids = part_progids[prog_parts - prog_offset]
+                progids = part_progids[np.in1d(prog_pids, prog_parts)]
                 (nprog, prog_haloids, prog_npart,
                  prog_npart_cont, preals) = get_direct_prog(tictoc,
                                                             meta,
@@ -265,7 +249,7 @@ def foreign_linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 desc_parts = halo_dict[ihalo]
 
                 # Link descendants on this rank
-                descids = part_descids[desc_parts - desc_offset]
+                descids = part_descids[np.in1d(desc_pids, desc_parts)]
                 (ndesc, desc_haloids, desc_npart,
                  desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
                                                     desc_nparts)

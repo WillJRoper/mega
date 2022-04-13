@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+from mpi4py import MPI
 
 from core.halo import Halo
 from core.talking_utils import message, count_and_report_halos
@@ -177,7 +178,7 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 
 @timer("Reading")
-def read_prog_data(tictoc, meta, density_rank):
+def read_prog_data(tictoc, meta, density_rank, comm):
 
     if not meta.isfirst:
 
@@ -193,10 +194,27 @@ def read_prog_data(tictoc, meta, density_rank):
         # How many particles do we have?
         prog_npart = root["particle_halo_IDs"].size
     
-        # Lets get our particle ID slice
+        # Get the initial rank particle bins
         prog_rank_partbins = np.linspace(0, prog_npart,
                                          meta.nranks + 1,
                                          dtype=int)
+
+        # Get minimum and maximum pid in my slice
+        rank_pids = root["all_sim_part_ids"][prog_rank_partbins[meta.rank]:
+                                             prog_rank_partbins[meta.rank + 1]]
+        min_pid = np.zeros((1))
+        max_pid = np.zeros((1))
+        min_pid[0] = np.min(rank_pids)
+        max_pid[0] = np.max(rank_pids)
+
+        # Lets get the global minimum and maximum
+        comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
+        comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
+
+        # Get particle rank bins
+        prog_rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
+                                        meta.nranks + 1,
+                                        dtype=int)
 
         # Lets get our slice
         myslice = (prog_rank_partbins[meta.rank],
@@ -217,13 +235,15 @@ def read_prog_data(tictoc, meta, density_rank):
         rank_part_progids = None
         proghalo_nparts = None
         prog_reals = None
+        rank_pids = None
+        prog_rank_pidbins = None
 
     return (prog_npart, proghalo_nparts, prog_rank_partbins,
-            rank_part_progids, prog_reals)
+            rank_part_progids, prog_reals, rank_pids, prog_rank_pidbins)
 
 
 @timer("Reading")
-def read_current_data(tictoc, meta, density_rank):
+def read_current_data(tictoc, meta, density_rank, comm):
     
     # How many halos and particles are we dealing with in the current snapshot?
     hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
@@ -242,29 +262,42 @@ def read_current_data(tictoc, meta, density_rank):
                                 meta.nranks + 1,
                                 dtype=int)
 
+    # Get minimum and maximum pid in my slice
+    rank_pids = root["all_sim_part_ids"][rank_partbins[meta.rank]:
+                                         rank_partbins[meta.rank + 1]]
+    min_pid = np.zeros((1))
+    max_pid = np.zeros((1))
+    min_pid[0] = np.min(rank_pids)
+    max_pid[0] = np.max(rank_pids)
+
+    # Lets get the global minimum and maximum
+    comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
+    comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
+
+    # Get particle rank bins
+    rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
+                               meta.nranks + 1,
+                               dtype=int)
+
     # Lets get our slice
     myslice = (rank_partbins[meta.rank],
                rank_partbins[meta.rank + 1])
 
-    # Extract our particle indices
-    sinds = hdf["sort_inds"][myslice[0]: myslice[1]]
-
     # Extract our particle's halo ids
-    # TODO: This should not read the whole array first!
-    rank_part_haloids = root["particle_halo_IDs"][...][sinds]
+    rank_part_haloids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
 
-    # Lets get thehalo data
+    # Lets get the halo data
     # (this is nhalo in length so give every rank a copy)
     halo_nparts = root["nparts"][...]
     reals = root["real_flag"][...]
 
     hdf.close()
 
-    return nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts
+    return nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts, rank_pidbins
 
 
 @timer("Reading")
-def read_desc_data(tictoc, meta, density_rank):
+def read_desc_data(tictoc, meta, density_rank, comm):
 
     if meta.desc_snap is not None:
         
@@ -280,10 +313,27 @@ def read_desc_data(tictoc, meta, density_rank):
         # How many particles do we have?
         desc_npart = root["particle_halo_IDs"].size
 
-        # Lets get our particle ID slice
+        # Get the initial rank particle bins
         desc_rank_partbins = np.linspace(0, desc_npart,
                                          meta.nranks + 1,
                                          dtype=int)
+
+        # Get minimum and maximum pid in my slice
+        rank_pids = root["all_sim_part_ids"][desc_rank_partbins[meta.rank]:
+                                             desc_rank_partbins[meta.rank + 1]]
+        min_pid = np.zeros((1))
+        max_pid = np.zeros((1))
+        min_pid[0] = np.min(rank_pids)
+        max_pid[0] = np.max(rank_pids)
+
+        # Lets get the global minimum and maximum
+        comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
+        comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
+
+        # Get particle rank bins
+        desc_rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
+                                        meta.nranks + 1,
+                                        dtype=int)
 
         # Lets get our slice
         myslice = (desc_rank_partbins[meta.rank],
@@ -302,8 +352,11 @@ def read_desc_data(tictoc, meta, density_rank):
         desc_rank_partbins = None
         rank_part_descids = None
         deschalo_nparts = None
+        rank_pids = None
+        desc_rank_pidbins = None
 
-    return desc_npart, deschalo_nparts, desc_rank_partbins, rank_part_descids
+    return (desc_npart, deschalo_nparts, desc_rank_partbins, rank_part_descids,
+            rank_pids, desc_rank_pidbins)
 
 
 @timer("Writing")
@@ -480,17 +533,15 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
 
     # Read particle IDs to produce sorted indices array
     sim_pids = read_pids(tictoc, meta.inputpath, meta.snap, "PartType1")
-
-    # Get the sorted indices
-    sinds = np.argsort(sim_pids)
     
     # Write out the sorting indices
-    hdf5_write_dataset(snap, "sort_inds", sinds)
+    hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)
 
     # Now we can set the correct halo_ids
     sort_part_ids = []
     for (halo_id, b), l in zip(enumerate(begin), stride):
-        parts = sinds[all_halo_pids[b: b + l]]
+        # parts = sinds[all_halo_pids[b: b + l]]
+        parts = all_halo_pids[b: b + l]
         phase_part_haloids[parts] = halo_id
         sort_part_ids.extend(parts)
 
@@ -666,6 +717,11 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
         # Extract a halo to store
         ihalo, halo = results.popitem()
+
+        assert (len(set(halo.prog_haloids)) == len(halo.prog_haloids)), \
+            "Not all progenitors are unique"
+        assert (len(set(halo.desc_haloids)) == len(halo.desc_haloids)), \
+            "Not all progenitors are unique"
 
         # Extract this halo's data
         nprog = halo.nprog
