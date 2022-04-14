@@ -41,13 +41,12 @@ def grav(tictoc, halo_poss, halo_npart, soft, masses, redshift, G):
 
     GE_part = np.zeros(halo_poss.shape[0])
 
-    # Compute distances
-    dists = cdist(halo_poss, halo_poss, metric="sqeuclidean")
-
     # Compute gravitational potential energy
     for i in range(1, halo_npart):
+        pos_i = np.array([halo_poss[i, :], ])
+        dists = cdist(pos_i, halo_poss[:i, :], metric="sqeuclidean")
         GE_part[i] = np.sum(masses[i] * masses[:i]
-                            / np.sqrt(dists[i, :i] + soft ** 2))
+                            / np.sqrt(dists + soft ** 2))
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
     GE_part = G * np.float64(GE_part) * (1 + redshift) * 1 / 3.086e+19
@@ -66,27 +65,6 @@ def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, masses, redshift,
     # Compute halo's energy
     # KE *= 10.**10
     # GE *= 10.**20
-    halo_energy = KE - GE
-
-    return halo_energy, KE, GE
-
-
-def halo_energy_calc_cdist(halo_poss, halo_vels, halo_npart, masses, redshift,
-                           G, h, soft):
-
-    # Compute kinetic energy of the halo
-    KE = kinetic(halo_vels, halo_npart, redshift, masses)
-
-    # Calculate separations
-    rij = cdist(halo_poss, halo_poss, metric='sqeuclidean')
-
-    # Extract only the upper triangle of rij
-    rij_2 = upper_tri_masking(rij)
-
-    # Calculate the gravitational potential
-    GE = grav(rij_2, soft, masses, redshift, G)
-
-    # Compute halo's energy
     halo_energy = KE - GE
 
     return halo_energy, KE, GE
