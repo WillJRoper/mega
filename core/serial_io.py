@@ -551,7 +551,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
     # Report how many halos were found be real
     message(meta.rank,
-            "Halos with unbound energies after phase space iteration:",
+            "Halos with unbound energies in final sample:",
             halo_ids.size - halo_ids[reals].size, "of", halo_ids.size)
 
     if meta.findsubs:
