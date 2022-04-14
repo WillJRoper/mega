@@ -360,8 +360,8 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 
 
 @timer("Writing")
-def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
-               sub_results_dict, subhaloID_dict, pre_sort_part_haloids):
+def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
+               sub_results_dict, pre_sort_part_haloids, sim_pids=None):
     """
 
     :param tictoc:
@@ -457,7 +457,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     #  is sorted at this point, sort the haloIDs arrays too
 
     # Create the root group
-    snap = h5py.File(meta.savepath + "halos_" + str(meta.snap) + ".hdf5", "w")
+    snap = h5py.File(meta.savepath + meta.halo_basename + "_" + str(meta.snap) + ".hdf5", "w")
 
     # Assign simulation attributes to the root of the z=0 snapshot
     snap.attrs[
@@ -532,7 +532,8 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict, haloID_dict,
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
     # Read particle IDs to produce sorted indices array
-    sim_pids = read_pids(tictoc, meta.inputpath, meta.snap, "PartType1")
+    if sim_pids is None:
+        sim_pids = read_pids(tictoc, meta.inputpath, meta.snap, "PartType1")
     
     # Write out the sorting indices
     hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)

@@ -45,7 +45,8 @@ class Halo:
         self.shifted_inds = shifted_pids
         self.sim_pids = sim_pids
         self.pos = pos
-        self.wrap_pos(meta.boxsize)
+        if meta.periodic:
+            self.wrap_pos(meta.boxsize)
         self.vel = vel
         self.types = types
         self.masses = masses

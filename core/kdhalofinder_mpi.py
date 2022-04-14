@@ -373,8 +373,8 @@ def hosthalofinder(meta):
         # ========================== Write out data ==========================
 
         serial_io.write_data(tictoc, meta, newPhaseID, newPhaseSubID,
-                             results_dict, haloID_dict, sub_results_dict,
-                             subhaloID_dict, phase_part_haloids)
+                             results_dict, sub_results_dict,
+                             phase_part_haloids)
 
         if meta.verbose:
             tictoc.report("Writing")

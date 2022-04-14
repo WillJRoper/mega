@@ -45,7 +45,7 @@ def main():
                             inputs["profilingPath"], cosmology["h"],
                             (simulation["comoving_DM_softening"],
                              simulation["max_physical_DM_softening"]),
-                            flags["DMO"])
+                            flags["DMO"], periodic=simulation["periodic"])
 
     # Include MPI information in metadata object
     meta.nranks = size

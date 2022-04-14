@@ -33,7 +33,8 @@ class Metadata:
     def __init__(self, snaplist, snap_ind, cosmology,
                  llcoeff, sub_llcoeff, inputs, inputpath, savepath,
                  ini_vlcoeff, min_vlcoeff, decrement, verbose, findsubs,
-                 cdim, profile, profile_path, h, softs, dmo):
+                 cdim, profile, profile_path, h, softs, dmo, boxsize=None,
+                 npart=None, z=None, tot_mass=None, periodic=True):
         """
 
         :param snaplist:
@@ -63,12 +64,19 @@ class Metadata:
         # Information about the box
         # Open hdf5 file
         self.snap = snaplist[snap_ind]
-        hdf = h5py.File(inputpath + self.snap + ".hdf5", 'r')
-        self.boxsize = hdf["Header"].attrs["BoxSize"]
-        self.npart = hdf["Header"].attrs["NumPart_Total"]
-        self.z = hdf["Header"].attrs["Redshift"]
-        self.tot_mass = np.sum(hdf["PartType1/Masses"]) * 10 ** 10
-        hdf.close()
+        if input is not None:
+            hdf = h5py.File(inputpath + self.snap + ".hdf5", 'r')
+            self.boxsize = hdf["Header"].attrs["BoxSize"]
+            self.npart = hdf["Header"].attrs["NumPart_Total"]
+            self.z = hdf["Header"].attrs["Redshift"]
+            self.tot_mass = np.sum(hdf["PartType1/Masses"]) * 10 ** 10
+            hdf.close()
+        else:
+            self.boxsize = boxsize
+            self.npart = npart
+            self.z = z
+            self.tot_mass = tot_mass
+        self.periodic = periodic
         self.box_vol = self.boxsize[0] * self.boxsize[1] * self.boxsize[2]
         self.mean_sep = (self.box_vol / self.npart[1]) ** (1. / 3.)
         self.comoving_soft = softs[0]
@@ -110,6 +118,7 @@ class Metadata:
         self.inputpath = inputpath
         self.savepath = savepath
         self.halopath = savepath
+        self.halo_basename = inputs["halo_basename"]
         self.dgraphpath = inputs["directgraphSavePath"]
         self.profile_path = profile_path
 

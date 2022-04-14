@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="MEGA",
+    name="mega",
     version="0.8.0",
     description="...",
     author="Will Roper",
