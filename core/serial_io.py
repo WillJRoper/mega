@@ -69,7 +69,6 @@ def read_subset_fromobj(tictoc, meta, hdf, key, subset, part_type=1):
     # and extract the particles we need and throw away the ones
     # we don"t, could be problematic with large datasets
     all_arr = hdf[key][...]
-
     arr = all_arr[subset]
 
     return arr
@@ -361,7 +360,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 
 @timer("Writing")
 def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
-               sub_results_dict, sim_pids=None):
+               sub_results_dict, sim_pids=None, basename_mod=""):
     """
 
     :param tictoc:
@@ -457,7 +456,8 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     #  is sorted at this point, sort the haloIDs arrays too
 
     # Create the root group
-    snap = h5py.File(meta.savepath + meta.halo_basename + "_" + str(meta.snap) + ".hdf5", "w")
+    snap = h5py.File(meta.savepath + meta.halo_basename + basename_mod + "_"
+                     + str(meta.snap) + ".hdf5", "w")
 
     # Assign simulation attributes to the root of the z=0 snapshot
     snap.attrs[
