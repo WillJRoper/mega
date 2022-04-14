@@ -64,7 +64,7 @@ class Metadata:
         # Information about the box
         # Open hdf5 file
         self.snap = snaplist[snap_ind]
-        if input is not None:
+        if inputpath is not None:
             hdf = h5py.File(inputpath + self.snap + ".hdf5", 'r')
             self.boxsize = hdf["Header"].attrs["BoxSize"]
             self.npart = hdf["Header"].attrs["NumPart_Total"]
