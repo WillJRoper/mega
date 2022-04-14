@@ -361,7 +361,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 
 @timer("Writing")
 def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
-               sub_results_dict, pre_sort_part_haloids, sim_pids=None):
+               sub_results_dict, sim_pids=None):
     """
 
     :param tictoc:
@@ -539,16 +539,9 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)
 
     # Now we can set the correct halo_ids
-    sort_part_ids = []
     for (halo_id, b), l in zip(enumerate(begin), stride):
-        # parts = sinds[all_halo_pids[b: b + l]]
         parts = all_halo_pids[b: b + l]
         phase_part_haloids[parts] = halo_id
-        sort_part_ids.extend(parts)
-
-    # Write out the sorting indices
-    sort_part_ids = np.array(sort_part_ids, dtype=int)
-    hdf5_write_dataset(snap, "sorted_part_ids", sort_part_ids)
 
     count_and_report_halos(phase_part_haloids, meta,
                            halo_type="Phase Space Host Halos")
@@ -576,7 +569,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         isubhalo = 0
         for res in list(sub_results_dict.keys()):
             subhalo = sub_results_dict.pop(res)
-            host = np.unique(pre_sort_part_haloids[subhalo.pids, 0])
+            host = np.unique(phase_part_haloids[subhalo.pids, 0])
 
             assert len(host) == 1, \
                 "subhalo is contained in multiple hosts, " \

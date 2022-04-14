@@ -335,46 +335,22 @@ def hosthalofinder(meta):
     sub_collected_results = comm.gather(sub_results, root=0)
     tictoc.stop_func_time()
 
-    if rank == 0:
+    if meta.rank == 0:
 
         # Lets collect all the halos we have collected from the other ranks
         res_tup = collect_halos(tictoc, meta, collected_results,
                                 sub_collected_results)
-        (newPhaseID, newPhaseSubID, results_dict, haloID_dict,
-         sub_results_dict, subhaloID_dict, phase_part_haloids) = res_tup
+        nhalo, nsubhalo, results_dict, sub_results_dict = res_tup
 
         if meta.verbose:
             tictoc.report("Combining results")
             message(meta.rank, "Results total memory footprint: %.2f MB" % (
                     utils.get_size(results_dict) * 10 ** -6))
-        #
-        # # If profiling enable plot the number of halos on each rank
-        # if meta.profile:
-        #     fig = plt.figure()
-        #     ax = fig.add_subplot(111)
-        #     ax.bar(np.arange(len(collected_results)),
-        #            [len(res) for res in collected_results],
-        #            color="b", edgecolor="b")
-        #     ax.set_xlabel("Rank")
-        #     ax.set_ylabel("Number of halos computed")
-        #     fig.savefig(meta.profile_path + "/plots/halos_computed_"
-        #                 + str(meta.snap) + ".png")
-        # if meta.profile and meta.findsubs:
-        #     fig = plt.figure()
-        #     ax = fig.add_subplot(111)
-        #     ax.bar(np.arange(len(sub_collected_results)),
-        #            [len(res) for res in sub_collected_results],
-        #            color="r", edgecolor="r")
-        #     ax.set_xlabel("Rank")
-        #     ax.set_ylabel("Number of subhalos computed")
-        #     fig.savefig(meta.profile_path + "/plots/subhalos_computed_"
-        #                 + str(meta.snap) + ".png")
 
         # ========================== Write out data ==========================
 
-        serial_io.write_data(tictoc, meta, newPhaseID, newPhaseSubID,
-                             results_dict, sub_results_dict,
-                             phase_part_haloids)
+        serial_io.write_data(tictoc, meta, nhalo, nsubhalo,
+                             results_dict, sub_results_dict)
 
         if meta.verbose:
             tictoc.report("Writing")
