@@ -361,7 +361,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 @timer("Writing")
 def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
                sub_results_dict, sim_pids=None, basename_mod="",
-               extra_data={}):
+               extra_data=None):
     """
 
     :param tictoc:
@@ -533,8 +533,9 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
     # Write out any extra data
-    for key, val in extra_data.items():
-        hdf5_write_dataset(snap, key, val)
+    if extra_data is not None:
+        for key, val in extra_data.items():
+            hdf5_write_dataset(snap, key, val)
 
     # Read particle IDs to produce sorted indices array
     if sim_pids is None:
