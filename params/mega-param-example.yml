@@ -1,64 +1,69 @@
-# LABEL: An example MEGA input file
+# LABEL: MEGA paramfile for testing
 
 inputs:
 
-  data:                <filepath>     # The filepath containing particle data
-  snapList:            <filepath>     # The filepath pointing to the snapshot list file
-  haloSavePath:        <filepath>     # The filepath and basename for halo outputs
-  directgraphSavePath: <filepath>     # The filepath and basename for graph direct progenitor and descendant outputs
-  graphSavePath:       <filepath>     # The filepath and basename for graph output
-  treehaloSavePath:    <filepath>     # The filepath and basename for split-halo outputs
-  directtreeSavePath:  <filepath>     # The filepath and basename for tree direct progenitor and descendant outputs
-  treeSavePath:        <filepath>     # The filepath and basename for tree output
+  basename:            <basename>                       # The filename that preceeds the snapshot string in input files
+  data:                input/                           # The filepath containing particle data
+  snapList:            params/example_snaplist.txt      # The filepath pointing to the snapshot list file
+  halo_basename:       halos                            # The basename for halo output files
+  haloSavePath:        data/halos/                      # The filepath and basename for halo outputs
+  directgraphSavePath: data/dgraph/                     # The filepath and basename for graph direct progenitor and descendant outputs
+  graphSavePath:       data/graph/mega_graph            # The filepath and basename for graph output
+  profilingPath:       profiling/                       # The filepath and basename for profiling files
+  profile_plot_path:   analytics/plots/                 # The filepath and basename for profiling files
 
 
 cosmology:
 
-  H0: 70                                 # The value of the hubble constant at z=0
-  Om0: 0.3                               # The Value of the hubble constant at z=0
-  Ob0: 0.05                              # The Value of the hubble constant at z=0
+  H0: 67.7                               # The value of the hubble constant at z=0
+  h: 0.677                               # The value of little h
+  Om0: 0.3                               # The value of omega matter
+  Ob0: 0.05                              # The value of omega baryon
   Tcmb0: 2.725                           # The temperature of the CMB at z=0
 
 
 simulation:
 
-  comoving_DM_softening: 0.011584        # Comoving softening length
-  max_physical_DM_softening: 0.003130    # Max physical softening length
+  # The softening length
+  comoving_DM_softening: 0.015625        # Comoving softening length
+  max_physical_DM_softening: 0.004222    # Max physical softening length
+
+  # Simulation flags
+  periodic: 1                            # Is the simulation periodic? (Should we wrap?)
 
 
 flags:
 
-  # Flags for processes, NOTE: To enable a process all above processes must be enabled
-  halo:                1              # Flag for creating halo catalog
-  subs:                1              # Find substructure within halos (UNUSED CURRENTLY)
-  graphdirect:         1              # Flag for getting graph direct progenitor and descendant data
-  subgraphdirect:      1              # Flag for getting subhalo graph direct progenitor and descendant data
-  graph:               1              # Flag for building complete graphs
-  subgraph:            1              # Flag to include subhalos in complete graphs (UNUSED CURRENTLY)
+  # Flags for type of halos desired
+  DMO:                 1              # Flag for only considering dark matter
 
-  # Subhalos aren't currently included in trees
-  treehalos:           0              # Flag for splitting halos in tree halo catalog
-  treedirect:          0              # Flag for getting tree direct progenitor and descendant data
-  tree:                0              # Flag for building complete trees
+  # Flags for halo finding behaviour
+  find_subs:           0              # Find substructure within host halos
 
-  # Flags for how to run MEGA (only enable 1)
-  useserial:           1              # Run in serial (single cpu)
-  usemultiprocessing:  0              # Use python parallelisation with multiprocessing (single cpu)
-  usempi:              0              # Use mpi (UNUSED CURRENTLY) (multiple cpus)
+  # Flags for linking behaviour
+  clean_real_flags:    0              # Should we clean up the halo catalogues real flags using temporal information?
+  graphdirect:         0              # Flag for getting graph direct progenitor and descendant data
+  subgraphdirect:      0              # Flag for getting subhalo graph direct progenitor and descendant data
+  graph:               0              # Flag for building complete graphs
+  subgraph:            0              # Flag to include subhalos in complete graphs
 
-  # Input type flags (only enable 1)
-  hdf5Input:           1              # Flag for HDF5 inputs, if False binary format is assumed
-  binaryInput:         1              # Flag for HDF5 inputs, if False binary format is assumed
-
-  verbose:             0              # Flag for verbose progress outputs (UNUSED CURRENTLY)
+  # Flags for how to run MEGA
+  debug_mode:          0              # Are we running in debug mode?
+  verbose:             1              # Flag for verbose progress outputs (UNUSED CURRENTLY)
+  profile:             1              # Flag for producing profiling txt files while running
 
 
 parameters:
 
-  batchsize:           2000000        # The number of particles that are tested in the KDTree at once
+  # FUNDAMENTAL PART OF MEGA, CHANGE AT YOUR OWN RISK
+  part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos with real progenitors will be kept below this threshold
   ini_alpha_v:         10             # The initial velocity linking length coefficient for phase-space iteration
+  min_alpha_v:         0.8            # The initial velocity linking length coefficient for phase-space iteration
   llcoeff:             0.2            # Spatial linking length coefficient for host halos
   sub_llcoeff:         0.1            # Spatial linking length coefficient for subhalos
-  decrement:           0.05           # The amount alpha_v is decremented by in each phase-space iteration
-  part_threshold:      10             # Minimum number of particles in a halo, if below 20 only halos
-  # with real progenitors will be kept below this threshold
+  decrement:           0.01           # The amount alpha_v is decremented by in each phase-space iteration
+  N_cells:             16             # The number of cells to split the particles into for spatial search
+  spatial_task_size:   100000         # The number of particles consider at time during the spatial search, can be used to break up cells with a large number of cells into smaller queries
+
+  # Linking parameters
+  link_threshold:      10             # The number of particles required to link a halo to another in adjacent snapshots
