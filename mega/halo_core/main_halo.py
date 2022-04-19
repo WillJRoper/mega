@@ -1,12 +1,11 @@
-import core.build_graph_mpi as bgmpi
-import graph_core.mergergraph as mgmpi
-import numpy as np
 import sys
 
-from core.talking_utils import say_hello
-import core.param_utils as p_utils
+import mega.halo_core.kdhalofinder as kdmpi
+import mega.core.param_utils as p_utils
+from mega.core.talking_utils import say_hello
 
 import mpi4py
+import numpy as np
 from mpi4py import MPI
 
 mpi4py.rc.recv_mprobe = False
@@ -17,11 +16,11 @@ size = comm.size  # total number of processes
 rank = comm.rank  # rank of this process
 status = MPI.Status()  # get MPI status object
 
+
 # TODO: Package mpi information in object similar to meta
 
 
 def main():
-
     # Read the parameter file
     paramfile = sys.argv[1]
     (inputs, flags, params, cosmology,
@@ -56,23 +55,9 @@ def main():
     # Lets check what sort of verbosity we are running with
     meta.check_verbose()
 
-    # ============== Find Direct Progenitors and Descendents ==============
-    if flags['graphdirect']:
+    # ===================== Run The Halo Finder =====================
+    kdmpi.hosthalofinder(meta)
 
-        mgmpi.graph_main(0, meta)
-
-    comm.barrier()
-
-    if flags['subgraphdirect']:
-
-        mgmpi.graph_main(1, meta)
-
-    if flags["graph"]:
-        bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'],
-                                     graphpath=inputs['graphSavePath'],
-                                     snaplist=snaplist,
-                                     verbose=flags['verbose'],
-                                     halopath=inputs['haloSavePath'])
 
 if __name__ == "__main__":
     exit(main())

@@ -1,7 +1,6 @@
 import numpy as np
-from core.timing import timer
-from graph_core.graph_halo import Halo
-from core.talking_utils import message
+from mega.core.timing import timer
+from mega.graph_core.graph_halo import Halo
 
 
 @timer("Progenitor-Linking")

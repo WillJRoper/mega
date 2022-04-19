@@ -1,8 +1,6 @@
 import numpy as np
 import h5py
 
-from core.serial_io import read_pids
-
 
 def initial_partition(npart, nranks, rank):
 

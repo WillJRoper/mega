@@ -1,10 +1,10 @@
 import numpy as np
 import h5py
 
-import core.utilities as utils 
-from core.partition import pick_vector, split_vector, get_parts_in_cell
-from core.talking_utils import message
-from core.timing import timer
+import mega.core.utilities as utils
+from mega.core.partition import pick_vector, split_vector, get_parts_in_cell
+from mega.core.talking_utils import message
+from mega.core.timing import timer
 
 
 def get_cell_rank(cell_ranks, meta, i, j, k):

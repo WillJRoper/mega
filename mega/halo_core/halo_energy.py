@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from core.timing import timer
+from mega.core.timing import timer
 
 
 def halo_energy_calc_approx(halo_poss, halo_vels, halo_npart, masses, redshift,

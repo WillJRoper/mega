@@ -1,18 +1,16 @@
-import core.domain_decomp as dd
-from core.spatial import spatial_node_task, get_sub_halos
-from core.phase_space import *
-from core.hydro import find_hydro_haloids
-import core.utilities as utils
-import core.serial_io as serial_io
-from core.partition import *
-from core.timing import TicToc
-from core.halo_tasking import get_halos
-from core.halo_stitching import combine_across_ranks
-from core.talking_utils import message, pad_print_middle
-from core.collect_result import collect_halos
+import mega.core.domain_decomp as dd
+from mega.halo_core.spatial import spatial_node_task, get_sub_halos
+from mega.halo_core.phase_space import *
+from mega.halo_core.hydro import find_hydro_haloids
+import mega.core.utilities as utils
+import mega.core.serial_io as serial_io
+from mega.core.partition import *
+from mega.core.timing import TicToc
+from mega.halo_core.halo_stitching import combine_across_ranks
+from mega.core.talking_utils import message, pad_print_middle
+from mega.core.collect_result import collect_halos
 
 import pickle
-import matplotlib.pyplot as plt
 import mpi4py
 from mpi4py import MPI
 

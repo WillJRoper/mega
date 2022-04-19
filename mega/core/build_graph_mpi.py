@@ -6,7 +6,7 @@ import numpy as np
 
 # hp = hpy()
 from mpi4py import MPI
-import core.utilities as utils 
+import mega.core.utilities as utils
 
 # Initializations and preliminaries
 comm = MPI.COMM_WORLD  # get MPI communicator object

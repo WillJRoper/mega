@@ -3,9 +3,9 @@ from collections import defaultdict
 from scipy.spatial import cKDTree
 import time
 
-from core.timing import timer
-from core.halo_stitching import add_halo
-from core.talking_utils import count_and_report_halos
+from mega.core.timing import timer
+from mega.halo_core.halo_stitching import add_halo
+from mega.core.talking_utils import count_and_report_halos
 
 
 def find_halos(tree, pos, linkl, npart):

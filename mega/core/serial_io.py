@@ -1,11 +1,10 @@
 import h5py
 import numpy as np
+from mega.core.talking_utils import count_and_report_descs
+from mega.core.talking_utils import count_and_report_progs
+from mega.core.talking_utils import message, count_and_report_halos
+from mega.core.timing import timer
 from mpi4py import MPI
-
-from core.halo import Halo
-from core.talking_utils import message, count_and_report_halos
-from core.talking_utils import count_and_report_progs, count_and_report_descs
-from core.timing import timer
 
 
 # TODO: If we ever need to split the io (particularly creation and writing
@@ -134,7 +133,6 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
     # Loop over particle types
     for part_type in [1] + [i for i in meta.part_types if i != 1]:
-
         inds = part_inds - meta.part_type_offset[part_type]
         inds = inds[np.where(np.logical_and(inds >= 0,
                                             inds < meta.npart[part_type]))]
@@ -178,21 +176,20 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 @timer("Reading")
 def read_prog_data(tictoc, meta, density_rank, comm):
-
     if not meta.isfirst:
 
         # Open hdf5 file
-        hdf = h5py.File(meta.halopath + 'halos_'  + meta.prog_snap + '.hdf5',
+        hdf = h5py.File(meta.halopath + 'halos_' + meta.prog_snap + '.hdf5',
                         'r')
 
         if density_rank == 0:
             root = hdf
         else:
             root = hdf["Subhalos"]
-    
+
         # How many particles do we have?
         prog_npart = root["particle_halo_IDs"].size
-    
+
         # Get the initial rank particle bins
         prog_rank_partbins = np.linspace(0, prog_npart,
                                          meta.nranks + 1,
@@ -243,7 +240,6 @@ def read_prog_data(tictoc, meta, density_rank, comm):
 
 @timer("Reading")
 def read_current_data(tictoc, meta, density_rank, comm):
-    
     # How many halos and particles are we dealing with in the current snapshot?
     hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
     if density_rank == 0:
@@ -297,12 +293,11 @@ def read_current_data(tictoc, meta, density_rank, comm):
 
 @timer("Reading")
 def read_desc_data(tictoc, meta, density_rank, comm):
-
     if meta.desc_snap is not None:
-        
+
         # How many particles are we dealing with in the descendent snapshot?
         hdf = h5py.File(meta.halopath + 'halos_'
-                                + meta.desc_snap + '.hdf5', 'r')
+                        + meta.desc_snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
@@ -344,7 +339,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
         # Lets get the descendant halo data
         # (this is nhalo in length so give every rank a copy)
         deschalo_nparts = root["nparts"][...]
-    
+
         hdf.close()
     else:
         desc_npart = None
@@ -501,7 +496,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         hmrs[ihalo] = halo.hmr
         hmvrs[ihalo] = halo.hmvr
         exit_vlcoeff[ihalo] = halo.vlcoeff
-        
+
         # Increment halo counter
         ihalo += 1
 
@@ -540,7 +535,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     # Read particle IDs to produce sorted indices array
     if sim_pids is None:
         sim_pids = read_pids(tictoc, meta.inputpath, meta.snap, "PartType1")
-    
+
     # Write out the sorting indices
     hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)
 
@@ -570,7 +565,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
         # Subhalo attributes
         sub_root.attrs["linking_length"] = meta.sub_linkl
-        
+
         # Loop over subhalo results
         isubhalo = 0
         for res in list(sub_results_dict.keys()):
@@ -652,7 +647,6 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
 @timer("Writing")
 def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
-
     # Lets combine the list of results from everyone into a single dictionary
     results = {}
     for d in all_results:
@@ -684,7 +678,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
         # Load the descendant snapshot
         hdf = h5py.File(meta.halopath + 'halos_'
-                             + meta.desc_snap + '.hdf5', 'r')
+                        + meta.desc_snap + '.hdf5', 'r')
 
         # Get the reality flag array
         if density_rank == 0:
@@ -700,7 +694,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
         # Load the progenitor snapshot
         hdf = h5py.File(meta.halopath + 'halos_'
-                             + meta.prog_snap + '.hdf5', 'r')
+                        + meta.prog_snap + '.hdf5', 'r')
 
         # Get progenitor snapshot data
         if density_rank == 0:
@@ -793,7 +787,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     if density_rank == 0:
         hdf = h5py.File(meta.dgraphpath + 'Mgraph_' + meta.snap + '.hdf5', 'w')
     else:
-        hdf = h5py.File(meta.dgraphpath + 'SubMgraph_' + meta.snap + '.hdf5', 'w')
+        hdf = h5py.File(meta.dgraphpath + 'SubMgraph_' + meta.snap + '.hdf5',
+                        'w')
 
     hdf5_write_dataset(hdf, 'halo_IDs', index_haloids)
     hdf5_write_dataset(hdf, 'nProgs', nprogs)
@@ -830,7 +825,6 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
 @timer("Writing")
 def clean_real_flags(tictoc, meta, density_rank, reals, snap):
-
     # Load the descendant snapshot
     hdf = h5py.File(meta.halopath + 'halos_' + snap + '.hdf5', 'r+')
 
@@ -839,8 +833,8 @@ def clean_real_flags(tictoc, meta, density_rank, reals, snap):
         message(meta.rank, "Overwriting host real flags: %s" % snap)
         del hdf['real_flag']
         hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool,
-                                   data=reals,
-                                   compression='gzip')
+                           data=reals,
+                           compression='gzip')
     else:
         message(meta.rank, "Overwriting subhalo real flags: %s" % snap)
         sub_current = hdf['Subhalos']

@@ -1,14 +1,12 @@
 import sys
 
-import core.build_graph_mpi as bgmpi
-import core.kdhalofinder_mpi as kdmpi
-import core.param_utils as p_utils
-import graph_core.mergergraph as mgmpi
+import mega.core.build_graph_mpi as bgmpi
+import mega.core.param_utils as p_utils
+import mega.graph_core.mergergraph as mgmpi
+from mega.core.talking_utils import say_hello
+
 import mpi4py
 import numpy as np
-# import mergertrees as mt
-# import lumberjack as ld
-from core.talking_utils import say_hello
 from mpi4py import MPI
 
 mpi4py.rc.recv_mprobe = False
@@ -58,8 +56,21 @@ def main():
     # Lets check what sort of verbosity we are running with
     meta.check_verbose()
 
-    # ===================== Run The Halo Finder =====================
-    kdmpi.hosthalofinder(meta)
+    # ============== Find Direct Progenitors and Descendents ==============
+    if flags['graphdirect']:
+        mgmpi.graph_main(0, meta)
+
+    comm.barrier()
+
+    if flags['subgraphdirect']:
+        mgmpi.graph_main(1, meta)
+
+    if flags["graph"]:
+        bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'],
+                                     graphpath=inputs['graphSavePath'],
+                                     snaplist=snaplist,
+                                     verbose=flags['verbose'],
+                                     halopath=inputs['haloSavePath'])
 
 
 if __name__ == "__main__":

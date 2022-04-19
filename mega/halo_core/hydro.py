@@ -1,6 +1,6 @@
 import numpy as np
 
-from core.timing import timer
+from mega.core.timing import timer
 
 
 @timer("Hydro-Spatial")

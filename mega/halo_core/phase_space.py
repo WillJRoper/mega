@@ -1,10 +1,9 @@
 import numpy as np
 from scipy.spatial import cKDTree
-import sys
 
-import core.utilities as utils
-from core.halo import Halo
-from core.timing import timer
+import mega.core.utilities as utils
+from mega.halo_core.halo import Halo
+from mega.core.timing import timer
 
 
 def find_phase_space_halos(halo_phases):

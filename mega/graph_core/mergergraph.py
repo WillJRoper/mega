@@ -1,11 +1,12 @@
 import pickle
 
-import core.serial_io as io
-import graph_core.prog_desc_find as pdfind
+import mega.core.serial_io as io
+import mega.graph_core.prog_desc_find as pdfind
+from mega.core.domain_decomp import graph_halo_decomp
+from mega.core.talking_utils import message, pad_print_middle
+from mega.core.timing import TicToc
+
 import mpi4py
-from core.domain_decomp import graph_halo_decomp
-from core.talking_utils import message, pad_print_middle
-from core.timing import TicToc
 from mpi4py import MPI
 
 mpi4py.rc.recv_mprobe = False

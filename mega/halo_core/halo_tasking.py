@@ -1,10 +1,10 @@
 import numpy as np
 
 
-from core.phase_space import get_real_host_halos, get_real_sub_halos
-import core.serial_io as serial_io
-import core.utilities as utils
-from core.spatial import get_sub_halos
+from mega.halo_core.phase_space import get_real_host_halos, get_real_sub_halos
+import mega.core.serial_io as serial_io
+import mega.core.utilities as utils
+from mega.halo_core.spatial import get_sub_halos
 
 
 def get_halos(tictoc, this_task, meta, results, sub_results, vlinkl_indp,

@@ -1,8 +1,7 @@
 import numpy as np
 
-from core.halo_energy import kinetic, grav
-import core.halo_properties as hprop
-from core.timing import timer
+from mega.halo_core.halo_energy import kinetic, grav
+import mega.halo_core.halo_properties as hprop
 
 
 class Halo:

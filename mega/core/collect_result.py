@@ -1,5 +1,5 @@
-from core.timing import timer
-from core.talking_utils import message
+from mega.core.timing import timer
+from mega.core.talking_utils import message
 
 
 @timer("Collecting")

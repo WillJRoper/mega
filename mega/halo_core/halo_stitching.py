@@ -1,7 +1,7 @@
 import numpy as np
-from core.domain_decomp import get_cell_rank
-from core.talking_utils import count_and_report_halos
-from core.timing import timer
+
+from mega.core.talking_utils import count_and_report_halos
+from mega.core.timing import timer
 
 
 def add_halo(ihalo, parts, part_haloids, halo_pid_dict, weights, weight,

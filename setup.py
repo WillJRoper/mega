@@ -17,7 +17,7 @@ setup(
     # setup_requires=["pytest-runner", "flake8"],
     # tests_require=["pytest"],
     entry_points={
-        "console_scripts": ["mega_halo=halo_core.main_halo:main",
-                            "mega_graph=graph_core.main_graph:main"]
+        "console_scripts": ["mega_halo=mega.halo_core.main_halo:main",
+                            "mega_graph=mega.graph_core.main_graph:main"]
     },
 )

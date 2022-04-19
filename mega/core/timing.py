@@ -1,7 +1,7 @@
 import numpy as np
 import time
 
-from core.talking_utils import message, get_heading
+from mega.core.talking_utils import message, get_heading
 
 
 def timer(process=None):
