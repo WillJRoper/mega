@@ -32,17 +32,8 @@ def main():
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
 
     # Set up object containing housekeeping metadata
-    meta = p_utils.Metadata(snaplist, snap_ind, cosmology,
-                            params['llcoeff'], params['sub_llcoeff'], inputs,
-                            inputs['data'] + inputs["basename"],
-                            inputs['haloSavePath'], params['ini_alpha_v'],
-                            params['min_alpha_v'], params['decrement'],
-                            flags['verbose'], flags['subs'],
-                            params['N_cells'], flags['profile'],
-                            inputs["profilingPath"], cosmology["h"],
-                            (simulation["comoving_DM_softening"],
-                             simulation["max_physical_DM_softening"]),
-                            flags["DMO"], periodic=simulation["periodic"])
+    meta = p_utils.Metadata(snaplist, snap_ind, cosmology, inputs,
+                            flags, params, simulation)
 
     # Include MPI information in metadata object
     meta.nranks = size
