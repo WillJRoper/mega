@@ -787,6 +787,13 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         # Convert lists to arrays
         all_subhalo_simpids = np.array(all_subhalo_simpids)
         all_subhalo_pids = np.array(all_subhalo_pids)
+        for part_type in meta.part_types:
+            all_subhalo_simpids_type[part_type] = np.array(
+                all_subhalo_simpids_type[part_type]
+            )
+            all_subhalo_pids_type[part_type] = np.array(
+                all_subhalo_pids_type[part_type]
+            )
 
         # Save subhalo property arrays
         hdf5_write_dataset(sub_root, "start_index", sub_start_index)
