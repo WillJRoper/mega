@@ -782,7 +782,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
             # Store baryonic results
             if meta.with_hydro:
-                sub_int_nrg[ihalo] = subhalo.therm_nrg
+                sub_int_nrg[isubhalo] = subhalo.therm_nrg
 
         # Convert lists to arrays
         all_subhalo_simpids = np.array(all_subhalo_simpids)
