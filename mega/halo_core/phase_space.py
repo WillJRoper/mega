@@ -273,6 +273,7 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
                             halo.vel[this_pids, :],
                             halo.types[this_pids],
                             halo.masses[this_pids],
+                            halo.int_nrg[this_pids],
                             halo.vlcoeff, meta)
 
             if new_halo.real or new_halo.vlcoeff < meta.min_vlcoeff:
@@ -304,6 +305,11 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
 def get_real_host_halos(tictoc, halo, meta):
     """
 
+        NOTE: We use the maximum spatial linking length in the eventuality of
+        multiple options since the virialisation and energy considerations
+        are what allow a halo to exit the iteration not the spatial
+        linking length itself.
+
     :param tictoc:
     :param halo:
     :param boxsize:
@@ -318,12 +324,18 @@ def get_real_host_halos(tictoc, halo, meta):
     :return:
     """
 
-    return get_real_halos(tictoc, halo, meta.vlinkl_indp, meta.linkl, meta)
+    return get_real_halos(tictoc, halo, meta.vlinkl_indp, np.max(meta.linkl),
+                          meta)
 
 
 @timer("Sub-Phase")
 def get_real_sub_halos(tictoc, halo, meta):
     """
+
+        NOTE: We use the maximum spatial linking length in the eventuality of
+        multiple options since the virialisation and energy considerations
+        are what allow a halo to exit the iteration not the spatial
+        linking length itself.
 
     :param tictoc:
     :param halo:
@@ -339,5 +351,5 @@ def get_real_sub_halos(tictoc, halo, meta):
     :return:
     """
     return get_real_halos(tictoc, halo, meta.sub_vlinkl_indp,
-                          meta.sub_linkl, meta)
+                          np.max(meta.sub_linkl), meta)
 

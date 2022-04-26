@@ -81,7 +81,8 @@ def graph_main(density_rank, meta):
     if meta.verbose:
         tictoc.report("Splitting halos across ranks")
 
-    # Find the progenitors and descendants of particles on this rank
+    # Sort through halos on this rank and work out where
+    # we need to communicate for links
     (results, other_rank_prog_parts,
      other_rank_desc_parts) = pdfind.sort_prog_desc(tictoc, meta, my_halos,
                                                     rank_prog_pids,
@@ -115,7 +116,7 @@ def graph_main(density_rank, meta):
 
     comm.Barrier()
 
-    # Clean up results
+    # Clean up results removing halos that don't meet the linking criteria
     results = pdfind.clean_halos(tictoc, meta, results)
 
     if meta.verbose:

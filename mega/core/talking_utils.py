@@ -91,7 +91,7 @@ def count_and_report_halos(part_haloids, meta, halo_type="Spatial Host"):
     report_string = get_heading(meta.report_width, halo_type)
     message(meta.rank, report_string)
     message(meta.rank, pad_print_middle("N_{part}",
-                           "N_{%s}" % "_".join(halo_type.lower().split()),
+                           "N_{halos}",
                            length=meta.report_width))
 
     # First loop over some standard counts

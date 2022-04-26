@@ -1,9 +1,10 @@
 import numpy as np
 import yaml
-import h5py
 from astropy.cosmology import FlatLambdaCDM
 import astropy.constants as const
 import astropy.units as u
+
+from mega.core.serial_io import read_metadata
 
 
 # TODO: would be cleaner the future to have separate meta objects for
@@ -63,6 +64,13 @@ class Metadata:
         self.with_hydro = not self.dmo
         self.debug = flags["debug_mode"]
 
+        # Unit information
+        self.U_L = u.Mpc
+        self.U_v = u.km / u.s
+        self.U_M = u.solMass
+        self.U_E = self.U_M * u.km**2 / u.s**2
+        self.U_EperM = self.U_E / self.U_M
+
         # MPI information (given value if needed)
         self.rank = None
         self.nranks = None
@@ -71,12 +79,7 @@ class Metadata:
         # Open hdf5 file
         self.snap = snaplist[snap_ind]
         if boxsize is None:
-            # TODO: Replace this with a function for reading metadata
-            hdf = h5py.File(self.inputpath + self.snap + ".hdf5", "r")
-            self.boxsize = hdf["Header"].attrs["BoxSize"]
-            self.npart = hdf["Header"].attrs["NumPart_Total"]
-            self.z = hdf["Header"].attrs["Redshift"]
-            hdf.close()
+            self.boxsize, self.npart, self.z = read_metadata(self)
         else:
             self.boxsize = boxsize
             self.npart = npart
@@ -91,6 +94,46 @@ class Metadata:
         else:
             self.soft = self.comoving_soft
 
+        # Remove ignored particle species from npart
+        temp_npart = np.zeros(len(self.npart), dtype=int)
+        self.nbary = 0
+        if self.dmo:
+            temp_npart[1] = self.npart[1]
+            self.npart = temp_npart
+        else:
+            # Always ignore boundary particles
+            for part_type in range(len(self.npart)):
+                if part_type in [2, 3] \
+                        or part_type >= simulation["ignored_species_lim"]:
+                    continue
+                temp_npart[part_type] = self.npart[part_type]
+                if part_type != 1:
+                    self.nbary += temp_npart[part_type]
+            self.npart = temp_npart
+
+        # Define the number of dark matter particles we have
+        self.ndm = self.npart[1]
+
+        # Define list of particle types present
+        self.part_types = [i for i in range(len(self.npart))
+                           if self.npart[i] != 0]
+
+        # Define particle index offsets for all types
+        self.part_ind_offset = np.array([0, ] * len(self.npart), dtype=int)
+        offset = 0
+        for i in self.part_types:
+            self.part_ind_offset[i] = offset
+            offset += self.npart[i]
+
+        # Define particle index offsets for only baryonic species
+        self.hydro_ind_offset = np.array([0, ] * len(self.npart), dtype=int)
+        offset = 0
+        for i in self.part_types:
+            if i == 1:
+                continue
+            self.hydro_ind_offset[i] = offset
+            offset += self.npart[i]
+
         # Calculate mean separations
         self.mean_sep = np.zeros(len(self.npart), dtype=np.float64)
         for i in range(len(self.npart)):
@@ -98,10 +141,9 @@ class Metadata:
                 if i == 1:
                     self.mean_sep[i] = (self.box_vol
                                         / self.npart[i]) ** (1. / 3.)
-                else:
+                elif i in self.part_types:
                     self.mean_sep[i] = (self.box_vol
-                                        / (np.sum(self.npart)
-                                           - self.npart[1])) ** (1. / 3.)
+                                        / self.nbary) ** (1. / 3.)
 
         # Let"s get the progenitor and descendent snapshots
         self.prog_snap = None
@@ -118,8 +160,6 @@ class Metadata:
         # Physical constants
         self.G = (const.G.to(u.km ** 3 * u.M_sun ** -1 * u.s ** -2)).value
 
-        # Unit information
-
         # Cosmology
         self.h = cosmology["h"]
         self.cosmo = FlatLambdaCDM(H0=cosmology["H0"],
@@ -130,49 +170,13 @@ class Metadata:
         # Extract the mean density
         self.crit_density = self.cosmo.critical_density(self.z)
         self.omega_m = self.cosmo.Om(self.z)
-        self.mean_den = (self.omega_m * self.crit_density).to(u.M_sun
-                                                              / u.km ** 3)
+        self.mean_den = (self.omega_m
+                         * self.crit_density).to(u.M_sun / u.km ** 3).value
 
         # Debugging gubbins
         if self.debug:  # set all snapshots as the same
             self.prog_snap = snaplist[snap_ind]
             self.desc_snap = snaplist[snap_ind]
-
-        # If were running in DMO mode lets ensure we remove all particles
-        temp_npart = np.zeros(len(self.npart), dtype=int)
-        if self.dmo:
-            temp_npart[1] = self.npart[1]
-            self.npart = temp_npart
-        else:
-            # Always ignore boundary particles
-            for part_type in range(len(self.npart)):
-                if part_type in [2, 3] \
-                        or part_type >= simulation["ignored_species_lim"]:
-                    continue
-                temp_npart[part_type] = self.npart[part_type]
-            self.npart = temp_npart
-
-        # Define list of particle types present
-        self.part_types = [1, ] + [i for i in range(len(self.npart))
-                                   if self.npart[i] != 0 and i != 1]
-
-        # Define particle index offsets
-        self.part_ind_offset = np.array([0, ] * len(self.npart), dtype=int)
-        offset = 0
-        for i in self.part_types:
-            self.part_ind_offset[i] = offset
-            offset += self.npart[i]
-        self.hydro_ind_offset = self.part_ind_offset - self.npart[1]
-        self.hydro_ind_offset[1] = 0
-
-        # Find the index offsets for each particle type
-        offset = self.npart[1]
-        self.part_type_offset = [0] * len(self.npart)
-        for i in self.part_types:
-            if i == 1:
-                continue
-            self.part_type_offset[i] = offset
-            offset += self.npart[i]
 
         # Print parameters
         self.report_width = 60
@@ -189,8 +193,8 @@ class Metadata:
 
         # Define the velocity space linking length
         self.vlinkl_indp = (np.sqrt(self.G / 2)
-                            * (4 * np.pi * 200
-                               * self.mean_den / 3) ** (1 / 6)).value
+                            * (4 * np.pi * 200 * self.mean_den / 3) ** (1 / 6)
+                            * 10 ** (10 / 3))
         self.sub_vlinkl_indp = self.vlinkl_indp \
                                * (self.linkl[1] / self.sub_linkl[1]) ** (1 / 2)
 

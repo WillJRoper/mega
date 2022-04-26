@@ -36,12 +36,12 @@ class TicToc:
 
         # Process timing dictionary
         self.processes = ("Housekeeping", "Domain-Decomp", "Reading",
-                          "Tree-Building", "Host-Spatial", "PartID-Decomp",
-                          "Linking", "Progenitor-Linking",
+                          "Tree-Building", "Host-Spatial", "Hydro-DM-CrossRef",
+                          "PartID-Decomp", "Linking", "Progenitor-Linking",
                           "Descendant-Linking", "Cleaning", "Stitching",
                           "Kinetic-Energy", "Grav-Energy", "Create Halo",
                           "Create Subhalo", "Compute-Props", "Host-Phase",
-                          "Sub-Spatial", "Hydro-Spatial",  "Sub-Phase",
+                          "Sub-Spatial",  "Sub-Phase",
                           "Collecting", "Writing")
         self.task_time = {k: {"Start": [], "End": []} for k in self.processes}
         self.task_time["START"] = None

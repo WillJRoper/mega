@@ -1,5 +1,6 @@
 import numpy as np
-import h5py
+
+from mega.core.serial_io import read_range
 
 
 def initial_partition(npart, nranks, rank):
@@ -23,9 +24,9 @@ def get_parts_in_cell(npart, meta, part_type):
     cells = {}
 
     # Get the particles on this rank in the initial domain decomp
-    hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
-    pos = hdf["PartType%d/Coordinates" % part_type][...][low_lim: high_lim, :]
-    hdf.close()
+    pos = read_range(meta.tictoc, meta,
+                     key="PartType%d/Coordinates" % part_type,
+                     low=low_lim, high=high_lim)
 
     # Loop over particles and place them in their cell
     for pind in range(pos.shape[0]):

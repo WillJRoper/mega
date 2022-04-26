@@ -1,0 +1,4 @@
+[console_scripts]
+mega_graph = mega.graph_core.main_graph:main
+mega_halo = mega.halo_core.main_halo:main
+

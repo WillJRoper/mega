@@ -1,27 +1,25 @@
-import numpy as np
-
-from mega.halo_core.halo_energy import kinetic, grav
 import mega.halo_core.halo_properties as hprop
+import numpy as np
+from mega.core.talking_utils import get_heading, pad_print_middle
+from mega.halo_core.halo_energy import kinetic, grav
 
 
 class Halo:
     """
     Attributes:
-
     """
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["memory", "pids", "shifted_inds", "sim_pids", "pos", "vel",
-                 "types", "masses",  "part_KE", "part_GE", "vel_with_hubflow",
-                 "npart", "npart_types", "real", "mean_pos", "mean_vel",
-                 "mean_vel_hubflow", "mass", "ptype_mass", "KE", "GE",
-                 "rms_r", "rms_vr", "veldisp3d", "veldisp1d", "vmax",
-                 "hmr", "hmvr", "vlcoeff"]
+    __slots__ = ["memory", "print_props", "pids", "shifted_inds", "sim_pids",
+                 "pos", "vel", "types", "masses", "int_nrg",
+                 "vel_with_hubflow", "npart", "npart_types", "real",
+                 "mean_pos", "mean_vel", "mean_vel_hubflow", "mass",
+                 "ptype_mass", "KE", "therm_nrg", "GE", "rms_r", "rms_vr",
+                 "veldisp3d", "veldisp1d", "vmax", "hmr", "hmvr", "vlcoeff"]
 
     def __init__(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
-                 masses, vlcoeff, meta):
+                 masses, int_nrg, vlcoeff, meta):
         """
-
         :param pids:
         :param sim_pids:
         :param pos:
@@ -37,7 +35,19 @@ class Halo:
         """
 
         # Define metadata
+        # self.meta = meta
         self.memory = None
+        self.print_props = ["npart", "npart_types", "KE", "GE", "real",
+                            "mean_pos", "mean_vel", "mass", "ptype_mass"]
+
+        # # We need to remove some variables for meta that won't be need in the
+        # # halo object and cause issues when calculating memory footprint
+        # # TODO: This would be better dealt with by having a light weight meta
+        # #  with the necessary properties used in the print function
+        # self.meta.cosma = None
+        # self.meta.crit_density = None
+        # self.meta.omega_m = None
+        # self.meta.mean_den = None
 
         # Particle information
         self.pids = np.array(pids, dtype=int)
@@ -49,12 +59,13 @@ class Halo:
         self.vel = vel
         self.types = types
         self.masses = masses
+        self.int_nrg = int_nrg
 
         # Halo properties
         # (some only populated when a halo exits phase space iteration)
         self.npart = len(self.pids)
         self.npart_types = [len(self.pids[types == i])
-                      for i in range(len(meta.npart))]
+                            for i in range(len(meta.npart))]
         self.mass = np.sum(self.masses)
         self.ptype_mass = None
         self.rms_r = None
@@ -81,17 +92,34 @@ class Halo:
         self.mean_vel_hubflow = np.average(self.vel,
                                            weights=self.masses, axis=0)
 
-        # Energy properties
-        self.part_KE = kinetic(tictoc, self.vel_with_hubflow, self.masses)
-        self.KE = np.sum(self.part_KE)
-        self.part_GE = grav(tictoc, self.pos, self.npart, meta.soft,
-                            self.masses, meta.z, meta.G)
-        self.GE = np.sum(self.part_GE)
-        self.real = (self.KE / self.GE) <= 1
+        # Energy properties (energies are in per unit mass units)
+        self.KE = kinetic(tictoc, self.vel_with_hubflow, self.masses)
+        self.therm_nrg = np.sum(self.int_nrg)
+        self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
+                       self.masses, meta.z, meta.G)
+        self.real = (np.log10(10 ** self.KE + self.therm_nrg) / self.GE) <= 1
+
+    def __str__(self):
+
+        # Set up string for printing
+        pstr = ""
+
+        # Print a heading for this halo
+        report_string = get_heading(60, "Halo")
+        pstr += "|" + report_string + "|" + "\n" + " " * 9
+
+        # Loop over properties to print
+        for prop in self.print_props:
+            # Get property value
+            pstr += "|" + pad_print_middle(prop, getattr(self, prop),
+                                           length=60) + "|" + "\n" + " " * 9
+
+        pstr += "|" + "=" * len(report_string) + "|"
+
+        return pstr
 
     def compute_props(self, G):
         """
-
         :param G:
         :return:
         """
@@ -116,7 +144,6 @@ class Halo:
 
     def decrement(self, decrement):
         """
-
         :param decrement:
         :return:
         """
@@ -124,7 +151,6 @@ class Halo:
 
     def wrap_pos(self, l):
         """
-
         :param boxsize:
         :return:
         """
@@ -150,7 +176,6 @@ class Halo:
     def clean_halo(self):
         """ A helper method to clean memory hogging attributes to limit the
             memory used by the dictionary holding halos prior to output.
-
         :return:
         """
         # Remove attributes that are no longer needed
