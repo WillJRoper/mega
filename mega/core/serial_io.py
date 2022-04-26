@@ -730,7 +730,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         isubhalo = 0
         for res in list(sub_results_dict.keys()):
             subhalo = sub_results_dict.pop(res)
-            host = np.unique(phase_part_haloids[subhalo.pids, 0])
+            host = np.unique(phase_part_haloids[subhalo.pids])
 
             assert len(host) == 1, \
                 "subhalo is contained in multiple hosts, " \
