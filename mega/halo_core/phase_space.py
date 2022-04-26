@@ -279,7 +279,7 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
             if new_halo.real or new_halo.vlcoeff < meta.min_vlcoeff:
 
                 # Compute the halo properties
-                new_halo.compute_props(meta.G)
+                new_halo.compute_props(meta)
 
                 # Get the memory footprint of this halo
                 new_halo.memory = utils.get_size(new_halo)

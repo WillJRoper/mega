@@ -483,11 +483,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     all_halo_pids_type = {i: [] for i in meta.part_types}
     start_index = np.zeros(nhalo, dtype=int)
     stride = np.zeros(nhalo, dtype=int)
-    start_index_type = np.zeros((nhalo, len(meta.nparts)), dtype=int)
-    stride_type = np.zeros((nhalo, len(meta.nparts)), dtype=int)
+    start_index_type = np.zeros((nhalo, len(meta.npart)), dtype=int)
+    stride_type = np.zeros((nhalo, len(meta.npart)), dtype=int)
     halo_nparts = np.zeros((nhalo, len(meta.npart)), dtype=int)
     halo_masses = np.full(nhalo, -1, dtype=float)
-    halo_type_masses = np.full((nhalo, len(meta.nparts)), -1, dtype=float)
+    halo_type_masses = np.full((nhalo, len(meta.npart)), -1, dtype=float)
     mean_poss = np.full((nhalo, 3), -1, dtype=float)
     mean_vels = np.full((nhalo, 3), -1, dtype=float)
     reals = np.full(nhalo, 0, dtype=bool)
@@ -519,11 +519,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         all_subhalo_pids_type = {i: [] for i in meta.part_types}
         sub_start_index = np.zeros(nsubhalo, dtype=int)
         sub_stride = np.zeros(nsubhalo, dtype=int)
-        sub_start_index_type = np.zeros((nsubhalo, len(meta.nparts)), dtype=int)
-        sub_stride_type = np.zeros((nsubhalo, len(meta.nparts)), dtype=int)
+        sub_start_index_type = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
+        sub_stride_type = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
         subhalo_nparts = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
         subhalo_masses = np.full(nsubhalo, -1, dtype=float)
-        subhalo_type_masses = np.full((nsubhalo, len(meta.nparts)), -1,
+        subhalo_type_masses = np.full((nsubhalo, len(meta.npart)), -1,
                                       dtype=float)
         sub_mean_poss = np.full((nsubhalo, 3), -1, dtype=float)
         sub_mean_vels = np.full((nsubhalo, 3), -1, dtype=float)

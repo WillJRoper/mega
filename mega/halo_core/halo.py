@@ -118,7 +118,7 @@ class Halo:
 
         return pstr
 
-    def compute_props(self, G):
+    def compute_props(self, meta):
         """
         :param G:
         :return:
@@ -132,7 +132,7 @@ class Halo:
         self.veldisp3d, self.veldisp1d = hprop.vel_disp(self.vel_with_hubflow)
 
         # Compute maximal rotational velocity
-        self.vmax = hprop.vmax(self.pos, self.masses, G)
+        self.vmax = hprop.vmax(self.pos, self.masses, meta.G)
 
         # Calculate half mass radius in position and velocity space
         self.hmr = hprop.half_mass_rad(self.pos, self.masses)
@@ -140,7 +140,7 @@ class Halo:
 
         # Define mass in each particle type
         self.ptype_mass = [np.sum(self.masses[self.types == i])
-                           for i in range(6)]
+                           for i in range(len(meta.npart))]
 
     def decrement(self, decrement):
         """
