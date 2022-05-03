@@ -280,8 +280,8 @@ def read_prog_data(tictoc, meta, density_rank, comm):
     if not meta.isfirst:
 
         # Open hdf5 file
-        hdf = h5py.File(meta.halopath + 'halos_' + meta.prog_snap + '.hdf5',
-                        'r')
+        hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+                        + 'halos_' + meta.prog_snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
@@ -341,8 +341,11 @@ def read_prog_data(tictoc, meta, density_rank, comm):
 
 @timer("Reading")
 def read_current_data(tictoc, meta, density_rank, comm):
+
     # How many halos and particles are we dealing with in the current snapshot?
-    hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
+    hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+                    + 'halos_' + meta.snap + '.hdf5', 'r')
+
     if density_rank == 0:
         root = hdf
         nhalo = hdf.attrs['nHalo']
@@ -394,11 +397,12 @@ def read_current_data(tictoc, meta, density_rank, comm):
 
 @timer("Reading")
 def read_desc_data(tictoc, meta, density_rank, comm):
+
     if meta.desc_snap is not None:
 
         # How many particles are we dealing with in the descendent snapshot?
-        hdf = h5py.File(meta.halopath + 'halos_'
-                        + meta.desc_snap + '.hdf5', 'r')
+        hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+                        + 'halos_' + meta.desc_snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
