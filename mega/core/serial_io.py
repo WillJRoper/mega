@@ -281,7 +281,7 @@ def read_prog_data(tictoc, meta, density_rank, comm):
 
         # Open hdf5 file
         hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
-                        + 'halos_' + meta.prog_snap + '.hdf5', 'r')
+                        + meta.prog_snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
@@ -344,7 +344,7 @@ def read_current_data(tictoc, meta, density_rank, comm):
 
     # How many halos and particles are we dealing with in the current snapshot?
     hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
-                    + 'halos_' + meta.snap + '.hdf5', 'r')
+                    + meta.snap + '.hdf5', 'r')
 
     if density_rank == 0:
         root = hdf
@@ -402,7 +402,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 
         # How many particles are we dealing with in the descendent snapshot?
         hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
-                        + 'halos_' + meta.desc_snap + '.hdf5', 'r')
+                        + meta.desc_snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
