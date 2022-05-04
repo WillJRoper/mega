@@ -53,9 +53,16 @@ class Metadata:
         self.savepath = inputs["haloSavePath"]
         self.halopath = self.savepath
         self.halo_basename = inputs["halo_basename"]
+        self.graph_basename = inputs["graph_basename"]
         self.dgraphpath = inputs["directgraphSavePath"]
         self.profile_path = inputs["profile_plot_path"]
 
+        # Add a trailing underscore to basenames if necessary
+        if self.halo_basename[-1] != "_":
+            self.halo_basename += "_"
+        if self.graph_basename[-1] != "_":
+            self.graph_basename += "_"
+        
         # Parameter file flags
         self.verbose = flags["verbose"]
         self.findsubs = flags["find_subs"]

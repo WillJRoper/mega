@@ -280,7 +280,7 @@ def read_prog_data(tictoc, meta, density_rank, comm):
     if not meta.isfirst:
 
         # Open hdf5 file
-        hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+        hdf = h5py.File(meta.halopath + meta.halo_basename
                         + meta.prog_snap + '.hdf5', 'r')
 
         if density_rank == 0:
@@ -343,7 +343,7 @@ def read_prog_data(tictoc, meta, density_rank, comm):
 def read_current_data(tictoc, meta, density_rank, comm):
 
     # How many halos and particles are we dealing with in the current snapshot?
-    hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+    hdf = h5py.File(meta.halopath + meta.halo_basename
                     + meta.snap + '.hdf5', 'r')
 
     if density_rank == 0:
@@ -401,7 +401,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
     if meta.desc_snap is not None:
 
         # How many particles are we dealing with in the descendent snapshot?
-        hdf = h5py.File(meta.halopath + meta.halo_basename + "_"
+        hdf = h5py.File(meta.halopath + meta.halo_basename
                         + meta.desc_snap + '.hdf5', 'r')
 
         if density_rank == 0:
@@ -578,8 +578,12 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         sub_exit_vlcoeff = None
         sub_int_nrg = None
 
+    # Add trailing underscore to basename_mod if used
+    if len(basename_mod) > 0 and basename_mod[-1] != "_":
+        basename_mod += "_"
+    
     # Create the root group
-    snap = h5py.File(meta.savepath + meta.halo_basename + basename_mod + "_"
+    snap = h5py.File(meta.savepath + meta.halo_basename + basename_mod
                      + str(meta.snap) + ".hdf5", "w")
 
     # Assign simulation attributes to the root of the z=0 snapshot
@@ -890,7 +894,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     if meta.desc_snap is not None:
 
         # Load the descendant snapshot
-        hdf = h5py.File(meta.halopath + 'halos_'
+        hdf = h5py.File(meta.halopath + meta.halo_basename
                         + meta.desc_snap + '.hdf5', 'r')
 
         # Get the reality flag array
@@ -906,7 +910,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     if meta.prog_snap is not None:
 
         # Load the progenitor snapshot
-        hdf = h5py.File(meta.halopath + 'halos_'
+        hdf = h5py.File(meta.halopath + meta.halo_basename
                         + meta.prog_snap + '.hdf5', 'r')
 
         # Get progenitor snapshot data
@@ -998,10 +1002,11 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
     # Create file to store this snapshots graph results
     if density_rank == 0:
-        hdf = h5py.File(meta.dgraphpath + 'Mgraph_' + meta.snap + '.hdf5', 'w')
+        hdf = h5py.File(meta.dgraphpath + meta.graph_basename
+                        + meta.snap + '.hdf5', 'w')
     else:
-        hdf = h5py.File(meta.dgraphpath + 'SubMgraph_' + meta.snap + '.hdf5',
-                        'w')
+        hdf = h5py.File(meta.dgraphpath + 'Sub_' + meta.graph_basename
+                        + meta.snap + '.hdf5', 'w')
 
     hdf5_write_dataset(hdf, 'halo_IDs', index_haloids)
     hdf5_write_dataset(hdf, 'nProgs', nprogs)
@@ -1039,7 +1044,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 @timer("Writing")
 def clean_real_flags(tictoc, meta, density_rank, reals, snap):
     # Load the descendant snapshot
-    hdf = h5py.File(meta.halopath + 'halos_' + snap + '.hdf5', 'r+')
+    hdf = h5py.File(meta.halopath + meta.halo_basename
+                    + snap + '.hdf5', 'r+')
 
     # Set the reality flag in the halo catalog
     if density_rank == 0:
