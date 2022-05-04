@@ -300,7 +300,7 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
             begin = root["start_index"][ihalo]
             end = begin + root["stride"][ihalo]
             parts = root["sim_part_ids"][begin: end]
-            message(meta.rank, b, e, np.min(parts), np.min(rank_pidbins), np.max(parts), np.max(rank_pidbins))
+            message(meta.rank, begin, end, np.min(parts), np.min(rank_pidbins), np.max(parts), np.max(rank_pidbins))
             # Which rank holds the majority of this halo's particles?
             rs, counts = np.unique(
                 np.digitize(parts, rank_pidbins),
