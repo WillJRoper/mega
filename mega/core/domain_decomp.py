@@ -265,7 +265,8 @@ def halo_decomp(tictoc, meta, halo_tasks, comm):
 
 
 @timer("Domain-Decomp")
-def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_pidbins):
+def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
+                      rank_pidbins):
     """
 
     :param tictoc:
@@ -278,7 +279,8 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank, rank_pidbins):
     if meta.rank == 0:
 
         # Open the current snapshot
-        hdf = h5py.File(meta.halopath + 'halos_' + meta.snap + '.hdf5', 'r')
+        hdf = h5py.File(meta.halopath + meta.halo_basename
+                        + meta.snap + '.hdf5', 'r')
 
         # Are we dealing with hosts or subhalos
         if density_rank == 0:
