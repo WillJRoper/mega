@@ -219,7 +219,7 @@ def halo_decomp(tictoc, meta, halo_tasks, comm):
 
             # Assign this halo and it's weight to r
             rank_halos_dict[r][ihalo] = halo_tasks[ihalo]
-            alloc_weights[r] += len(halo_tasks[ihalo]) ** 2
+            alloc_weights[r] += len(halo_tasks[ihalo])
 
     else:
         rank_halos_dict = {r: None for r in range(meta.nranks)}
