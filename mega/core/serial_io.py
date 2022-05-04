@@ -836,9 +836,9 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
             for part_type in meta.part_types:
                 part_root = sub_root.create_group("PartType%d" % part_type)
                 hdf5_write_dataset(part_root, "start_index",
-                                   sub_start_index_type[part_type])
+                                   sub_start_index_type[:, part_type])
                 hdf5_write_dataset(part_root, "stride",
-                                   sub_stride_type[part_type])
+                                   sub_stride_type[:, part_type])
                 hdf5_write_dataset(part_root, "sim_part_ids",
                                    all_subhalo_simpids_type[part_type])
                 hdf5_write_dataset(part_root, "part_ids",
