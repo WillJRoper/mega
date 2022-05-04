@@ -301,7 +301,7 @@ def read_prog_data(tictoc, meta, density_rank, comm):
                    prog_rank_partbins[meta.rank + 1])
 
         # Get minimum and maximum pid in my slice
-        rank_pids = root["all_sim_part_ids"][myslice[0]: myslice[1]]
+        rank_pids = hdf["all_sim_part_ids"][myslice[0]: myslice[1]]
 
         min_pid = np.zeros((1))
         max_pid = np.zeros((1))
@@ -362,7 +362,7 @@ def read_current_data(tictoc, meta, density_rank, comm):
                                 dtype=int)
 
     # Get minimum and maximum pid in my slice
-    rank_pids = root["all_sim_part_ids"][rank_partbins[meta.rank]:
+    rank_pids = hdf["all_sim_part_ids"][rank_partbins[meta.rank]:
                                          rank_partbins[meta.rank + 1]]
     min_pid = np.zeros((1))
     max_pid = np.zeros((1))
@@ -418,7 +418,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
                                          dtype=int)
 
         # Get minimum and maximum pid in my slice
-        rank_pids = root["all_sim_part_ids"][desc_rank_partbins[meta.rank]:
+        rank_pids = hdf["all_sim_part_ids"][desc_rank_partbins[meta.rank]:
                                              desc_rank_partbins[meta.rank + 1]]
         min_pid = np.zeros((1))
         max_pid = np.zeros((1))
