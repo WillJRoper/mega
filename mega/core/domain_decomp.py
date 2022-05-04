@@ -152,8 +152,9 @@ def cell_domain_decomp(tictoc, meta, comm, part_type, cell_ranks=None):
                                                           npart)
 
     # Convert to lists and sort so the particles can index the hdf5 files
-    my_particles = np.sort(list(my_particles))
-    my_tree_particles = np.sort(list(my_tree_particles))
+    my_particles = np.sort(np.array(list(my_particles), dtype=int))
+    my_tree_particles = np.sort(np.array(list(my_tree_particles),
+                                         dtype=int))
 
     return my_particles, my_tree_particles, cell_ranks
 
