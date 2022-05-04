@@ -793,6 +793,9 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
             if meta.with_hydro:
                 sub_int_nrg[isubhalo] = subhalo.therm_nrg
 
+            # Increment halo counter
+            isubhalo += 1
+                
         # Convert lists to arrays
         all_subhalo_simpids = np.array(all_subhalo_simpids)
         all_subhalo_pids = np.array(all_subhalo_pids)
