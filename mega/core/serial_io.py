@@ -679,13 +679,14 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     hdf5_write_dataset(snap, "half_mass_velocity_radius", hmvrs)
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
-    # Loop over particle types and write out specific
+    # Loop over particle types and write out part_type specific data
     if meta.with_hydro:
         for part_type in meta.part_types:
             part_root = snap.create_group("PartType%d" % part_type)
             hdf5_write_dataset(part_root, "start_index",
-                               start_index_type[part_type])
-            hdf5_write_dataset(part_root, "stride", stride_type[part_type])
+                               start_index_type[:, part_type])
+            hdf5_write_dataset(part_root, "stride",
+                               stride_type[:, part_type])
             hdf5_write_dataset(part_root, "sim_part_ids",
                                all_halo_simpids_type[part_type])
             hdf5_write_dataset(part_root, "part_ids",
