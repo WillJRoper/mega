@@ -305,7 +305,7 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
             rs, counts = np.unique(
                 np.digitize(parts, rank_pidbins),
                                    return_counts=True)
-
+            message(meta.rank, rs, counts)
             # Binning returns the index of the right hand bin edge
             r = rs[np.argmax(counts)] - 1
 
