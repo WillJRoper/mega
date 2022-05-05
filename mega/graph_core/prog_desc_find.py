@@ -276,7 +276,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         other_rank_desc_parts[other_rank] = comm.gather(
             other_rank_desc_parts[other_rank],
             root=other_rank)
-    comm_tic = tictoc.get_extoc()
+    comm_toc = tictoc.get_extoc()
 
     if meta.verbose:
         tictoc.report("Communicating links", comm_tic, comm_toc)
