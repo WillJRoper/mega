@@ -186,7 +186,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
 
     # Tell the world we've finished communicating
     if meta.verbose:
-        tictoc.report("Communicating halos")
+        tictoc.report("Communicating halos to be linked")
 
     # If the progenitor snapshot exists
     tictoc.tic
@@ -241,17 +241,20 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Extract particles for this halo
                 desc_parts = halo_dict[ihalo]
 
-                # Link descendants on this rank
+                # Get prog ids present on this rank
                 descids = part_descids[np.in1d(desc_pids, desc_parts)]
-                (ndesc, desc_haloids, desc_npart,
-                 desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
-                                                    desc_nparts)
+                
+                # Link descendants on this rank
+                if descids.size > 0:
+                    (ndesc, desc_haloids, desc_npart,
+                     desc_npart_cont) = get_direct_desc(tictoc, meta, descids,
+                                                        desc_nparts)
 
-                # Store what we have found for this halo
-                d = other_rank_desc_parts[other_rank]
-                d[ihalo] = Halo(None, None, None, None, None, None, None, None,
-                                None, ndesc, desc_haloids, desc_npart,
-                                desc_npart_cont, None, None)
+                    # Store what we have found for this halo
+                    d = other_rank_desc_parts[other_rank]
+                    d[ihalo] = Halo(None, None, None, None, None, None,
+                                    None, None,None, ndesc, desc_haloids,
+                                    desc_npart, desc_npart_cont, None, None)
 
     else:
         for other_rank, halo_dict in enumerate(
