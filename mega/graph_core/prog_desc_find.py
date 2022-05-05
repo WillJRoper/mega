@@ -174,6 +174,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                          prog_pids, desc_pids):
 
     # Lets share the halos with progenitors and descendants
+    tictoc.tic
     for other_rank in range(meta.nranks):
         other_rank_prog_parts[other_rank] = comm.gather(
             other_rank_prog_parts[other_rank],
@@ -181,8 +182,14 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         other_rank_desc_parts[other_rank] = comm.gather(
             other_rank_desc_parts[other_rank],
             root=other_rank)
+    tictoc.toc
+
+    # Tell the world we've finished communicating
+    if meta.verbose:
+        tictoc.report("Communicating halos")
 
     # If the progenitor snapshot exists
+    tictoc.tic
     if not meta.isfirst:
 
         # We can now loop over the halos we've been given by other
@@ -194,25 +201,34 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Extract particles for this halo
                 prog_parts = halo_dict[ihalo]
 
-                # Link progenitors on this rank
+                # Get prog ids present on this rank
                 progids = part_progids[np.in1d(prog_pids, prog_parts)]
-                (nprog, prog_haloids, prog_npart,
-                 prog_npart_cont, preals) = get_direct_prog(tictoc,
-                                                            meta,
-                                                            progids,
-                                                            prog_reals,
-                                                            prog_nparts)
+                
+                # Link progenitors on this rank
+                if progids.size > 0 :
+                    (nprog, prog_haloids, prog_npart,
+                     prog_npart_cont, preals) = get_direct_prog(tictoc,
+                                                                meta,
+                                                                progids,
+                                                                prog_reals,
+                                                                prog_nparts)
 
-                # Store what we have found for this halo
-                d = other_rank_prog_parts[other_rank]
-                d[ihalo] = Halo(None, None, nprog, prog_haloids, prog_npart,
-                                prog_npart_cont, None, None, preals,
-                                None, None, None, None, None, None)
+                    # Store what we have found for this halo
+                    d = other_rank_prog_parts[other_rank]
+                    d[ihalo] = Halo(None, None, nprog, prog_haloids,
+                                    prog_npart, prog_npart_cont, None,
+                                    None, preals, None, None, None,
+                                    None, None, None)
     else:
         for other_rank, halo_dict in enumerate(
                 other_rank_prog_parts[meta.rank]):
             other_rank_prog_parts[other_rank] = {}
+    tictoc.toc
 
+    # Tell the world we've finished progenitor linking
+    if meta.verbose:
+        tictoc.report("Linking Progenitors")
+        
     # If descendant snapshot exists
     if not meta.isfinal:
 
@@ -241,8 +257,14 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         for other_rank, halo_dict in enumerate(
                 other_rank_desc_parts[meta.rank]):
             other_rank_desc_parts[other_rank] = {}
+    tictoc.toc
 
+    # Tell the world we've finished progenitor linking
+    if meta.verbose:
+        tictoc.report("Linking Descendants")
+        
     # Send back the progenitors and descendants we have found
+    tictoc.tic
     for other_rank in range(meta.nranks):
         other_rank_prog_parts[other_rank] = comm.gather(
             other_rank_prog_parts[other_rank],
@@ -250,7 +272,11 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         other_rank_desc_parts[other_rank] = comm.gather(
             other_rank_desc_parts[other_rank],
             root=other_rank)
+    tictoc.toc
 
+    if meta.verbose:
+        tictoc.report("Communicating links")
+        
     return other_rank_prog_parts, other_rank_desc_parts
 
 
