@@ -292,6 +292,9 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
         # Initialise tasks for each rank
         rank_halos_dict = {r: {} for r in range(meta.nranks)}
 
+        message(meta.rank, root["start_index"][...])
+        message(meta.rank, root["stride"][...])
+        
         # Allocate tasks, each halo goes to the rank containing most
         # of it's particles
         for ihalo in range(nhalo):
