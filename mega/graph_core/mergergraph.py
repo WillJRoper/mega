@@ -48,9 +48,13 @@ def graph_main(density_rank, meta):
     (desc_npart, deschalo_nparts, desc_rank_partbins,
      rank_part_descids, rank_desc_pids,
      desc_rank_pidbins) = io.read_desc_data(tictoc, meta, density_rank, comm)
-
     if meta.verbose:
         tictoc.report("Reading descendant data")
+
+    if meta.verbose and meta.rank == 0:
+        for r in range(meta.nranks):
+            message(meta.rank, "Rank %d has %d particles" % (r,
+                                                             rank_part_haloids.size)
 
     comm.Barrier()
 
@@ -88,10 +92,10 @@ def graph_main(density_rank, meta):
                                                     rank_prog_pids,
                                                     rank_desc_pids)
 
+    comm.Barrier()
+    
     if meta.verbose:
         tictoc.report("Sorting local halos")
-
-    comm.Barrier()
 
     # Now we need to send all of our requests to other ranks to get the
     # particles they have that I need
