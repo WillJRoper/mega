@@ -795,6 +795,9 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
             # Increment halo counter
             isubhalo += 1
+
+        assert nsubhalo == isubhalo,
+        "stored less halos than were found"
                 
         # Convert lists to arrays
         all_subhalo_simpids = np.array(all_subhalo_simpids)
