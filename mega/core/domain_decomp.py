@@ -323,7 +323,7 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
     # Convert dict to list for scattering
     rank_halos = [rank_halos_dict[r] for r in range(meta.nranks)]
 
-    if meta.verbose:
+    if meta.debug and meta.rank == 0:
         for r in range(meta.nranks):
             message(meta.rank, "Rank %d has %d halos" % (r,
                                                          len(rank_halos[r])))

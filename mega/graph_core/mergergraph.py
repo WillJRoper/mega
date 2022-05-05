@@ -51,7 +51,7 @@ def graph_main(density_rank, meta):
     if meta.verbose:
         tictoc.report("Reading descendant data")
 
-    if meta.verbose and meta.rank == 0:
+    if meta.debug and meta.rank == 0:
         for r in range(meta.nranks):
             message(meta.rank, "Rank %d has %d particles" % (r,
                                                              rank_part_haloids.size))
