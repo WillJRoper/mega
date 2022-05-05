@@ -116,37 +116,45 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
         # Extract particles for this halo
         parts = halo_tasks[ihalo]
-        npart = len(parts)
+        npart = parts.size
 
         # If the progenitor snapshot exists
         if not meta.isfirst:
 
             # Assign the particles on this rank to this rank
             okinds = np.in1d(parts, prog_pids)
-            other_rank_prog_parts[meta.rank][ihalo] = parts[okinds]
+            parts_thisrank = parts[okinds]
+            other_rank_prog_parts[meta.rank][ihalo] = parts_thisrank
 
-            # Get particles not on this rank
-            foreign_parts = parts[~okinds]
+            # If all parts are on this rank there's nothing to do
+            if parts_thisrank.size != npart:
+                
+                # Get particles not on this rank
+                foreign_parts = parts[~okinds]
 
-            # Give the other ranks the particles not on this rank
-            for r in range(meta.nranks):
-                if r != meta.rank:
-                    other_rank_prog_parts[r][ihalo] = foreign_parts
+                # Give the other ranks the particles not on this rank
+                for r in range(meta.nranks):
+                    if r != meta.rank:
+                        other_rank_prog_parts[r][ihalo] = foreign_parts
 
         # If descendant snapshot exists
         if not meta.isfinal:
             
             # Assign the particles on this rank to this rank
             okinds = np.in1d(parts, desc_pids)
-            other_rank_desc_parts[meta.rank][ihalo] = parts[okinds]
+            parts_thisrank = parts[okinds]
+            other_rank_desc_parts[meta.rank][ihalo] = parts_thisrank
 
-            # Get particles not on this rank
-            foreign_parts = parts[~okinds]
-
-            # Give the other ranks the particles not on this rank
-            for r in range(meta.nranks):
-                if r != meta.rank:
-                    other_rank_desc_parts[r][ihalo] = foreign_parts
+            # If all parts are on this rank there's nothing to do
+            if parts_thisrank.size != npart:
+            
+                # Get particles not on this rank
+                foreign_parts = parts[~okinds]
+                
+                # Give the other ranks the particles not on this rank
+                for r in range(meta.nranks):
+                    if r != meta.rank:
+                        other_rank_desc_parts[r][ihalo] = foreign_parts
 
         # Populate halo object with results
         null_entry = np.array([], dtype=int)
