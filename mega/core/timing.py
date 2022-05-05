@@ -58,6 +58,12 @@ class TicToc:
         self.toc = time.time()
         return self.toc
 
+    def get_extic(self):
+        return time.perf_counter()
+
+    def get_extoc(self):
+        return time.perf_counter()
+
     def how_long(self):
         return self.toc - self.tic
 
@@ -116,11 +122,21 @@ class TicToc:
         self.task_time[process].setdefault("Start", []).append(self.tic)
         self.task_time[process].setdefault("End", []).append(self.toc)
 
-    def report(self, process):
+    def report(self, process, start=None, end=None):
 
-        # How long did we take?
-        how_long = self.how_long()
-
+        # Are we using internal timers?
+        if start is None:
+            # How long did we take?
+            how_long = self.how_long()
+        else:
+            # Use what has been handed to us
+            if end is None:
+                # How long did we take?
+                how_long = self.toc - start
+            else:
+                # How long did we take?
+                how_long = end - start
+            
         # Print in us/milliseconds for short periods, seconds otherwise
         if how_long < 1 * 10**-4:
             message(self.meta.rank, "%s took: %.2f us" % (process,

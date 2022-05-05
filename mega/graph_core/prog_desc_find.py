@@ -174,7 +174,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                          prog_pids, desc_pids):
 
     # Lets share the halos with progenitors and descendants
-    tictoc.tic
+    comm_tic = tictoc.get_extic()
     for other_rank in range(meta.nranks):
         other_rank_prog_parts[other_rank] = comm.gather(
             other_rank_prog_parts[other_rank],
@@ -182,14 +182,14 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         other_rank_desc_parts[other_rank] = comm.gather(
             other_rank_desc_parts[other_rank],
             root=other_rank)
-    tictoc.toc
+    comm_toc = tictoc.get_extoc()
 
     # Tell the world we've finished communicating
     if meta.verbose:
-        tictoc.report("Communicating halos to be linked")
+        tictoc.report("Communicating halos to be linked", comm_tic, comm_toc)
 
     # If the progenitor snapshot exists
-    tictoc.tic
+    prog_tic = tictoc.get_extic()
     if not meta.isfirst:
 
         # We can now loop over the halos we've been given by other
@@ -203,7 +203,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
 
                 # Get prog ids present on this rank
                 progids = part_progids[np.in1d(prog_pids, prog_parts)]
-                
+           
                 # Link progenitors on this rank
                 if progids.size > 0 :
                     (nprog, prog_haloids, prog_npart,
@@ -223,13 +223,14 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         for other_rank, halo_dict in enumerate(
                 other_rank_prog_parts[meta.rank]):
             other_rank_prog_parts[other_rank] = {}
-    tictoc.toc
+    prog_toc = tictoc.get_extoc()
 
     # Tell the world we've finished progenitor linking
     if meta.verbose:
-        tictoc.report("Linking Progenitors")
+        tictoc.report("Linking Progenitors", prog_tic, prog_toc)
         
     # If descendant snapshot exists
+    desc_tic = tictoc.get_extic()
     if not meta.isfinal:
 
         # We can now loop over the halos we've been given by other
@@ -260,14 +261,14 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         for other_rank, halo_dict in enumerate(
                 other_rank_desc_parts[meta.rank]):
             other_rank_desc_parts[other_rank] = {}
-    tictoc.toc
+    desc_toc = tictoc.get_extoc()
 
     # Tell the world we've finished progenitor linking
     if meta.verbose:
-        tictoc.report("Linking Descendants")
+        tictoc.report("Linking Descendants", desc_tic, desc_toc)
         
     # Send back the progenitors and descendants we have found
-    tictoc.tic
+    comm_tic = tictoc.get_extic()
     for other_rank in range(meta.nranks):
         other_rank_prog_parts[other_rank] = comm.gather(
             other_rank_prog_parts[other_rank],
@@ -275,11 +276,11 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
         other_rank_desc_parts[other_rank] = comm.gather(
             other_rank_desc_parts[other_rank],
             root=other_rank)
-    tictoc.toc
+    comm_tic = tictoc.get_extoc()
 
     if meta.verbose:
-        tictoc.report("Communicating links")
-        
+        tictoc.report("Communicating links", comm_tic, comm_toc)
+       
     return other_rank_prog_parts, other_rank_desc_parts
 
 
