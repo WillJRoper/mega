@@ -206,7 +206,8 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                                         prog_pids >= np.min(prog_parts))
 
                 # Get prog ids present on this rank
-                progids = part_progids[np.in1d(prog_pids[okinds], prog_parts)]
+                parts_on_rank = np.in1d(prog_pids[okinds], prog_parts)
+                progids = part_progids[okinds][parts_on_rank]
            
                 # Link progenitors on this rank
                 if progids.size > 0 :
