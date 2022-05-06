@@ -250,8 +250,16 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Extract particles for this halo
                 desc_parts = halo_dict[ihalo]
 
+                if len(desc_parts) == 0:
+                    continue
+
+                # Remove extraneous partiles to shrink the query
+                okinds = np.logical_and(desc_pids <= np.max(desc_parts),
+                                        desc_pids >= np.min(desc_parts))
+
                 # Get prog ids present on this rank
-                descids = part_descids[np.in1d(desc_pids, desc_parts)]
+                parts_on_rank = np.in1d(desc_pids[okinds], desc_parts)
+                descids = part_descids[okinds][parts_on_rank]
 
                 # Link descendants on this rank
                 if descids.size > 0:
