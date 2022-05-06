@@ -79,8 +79,8 @@ def graph_main(density_rank, meta):
     tictoc.stop_func_time()
 
     # Get the halos we have to work on
-    my_halos = graph_halo_decomp(tictoc, nhalo, meta, comm,
-                                 density_rank, rank_pidbins)
+    my_halos, halo_location = graph_halo_decomp(tictoc, nhalo, meta, comm,
+                                                density_rank, rank_pidbins)
 
     if meta.verbose:
         tictoc.report("Splitting halos across ranks")
@@ -93,7 +93,7 @@ def graph_main(density_rank, meta):
                                                     rank_desc_pids)
 
     comm.Barrier()
-    
+
     if meta.verbose:
         tictoc.report("Sorting local halos")
 

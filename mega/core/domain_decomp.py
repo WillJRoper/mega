@@ -294,7 +294,7 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
 
         message(meta.rank, root["start_index"][...])
         message(meta.rank, root["stride"][...])
-        
+
         # Allocate tasks, each halo goes to the rank containing most
         # of it's particles
         for ihalo in range(nhalo):
@@ -303,12 +303,12 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
             begin = root["start_index"][ihalo]
             end = begin + root["stride"][ihalo]
             parts = root["sim_part_ids"][begin: end]
-            
+
             # Which rank holds the majority of this halo's particles?
             rs, counts = np.unique(
                 np.digitize(parts, rank_pidbins),
-                                   return_counts=True)
-            
+                return_counts=True)
+
             # Binning returns the index of the right hand bin edge
             r = rs[np.argmax(counts)] - 1
 
@@ -331,7 +331,12 @@ def graph_halo_decomp(tictoc, nhalo, meta, comm, density_rank,
     # Give everyone their tasks
     my_tasks = comm.scatter(rank_halos, root=0)
 
-    return my_tasks
+    # Get the halo ids on this rank
+    my_task_ids = np.unique(list(my_tasks.keys()))
 
+    # Lets collect which halos are where on each rank
+    halo_location = {}
+    for r in range(meta.nranks):
+        halo_location[r] = comm.bcast(my_task_ids, root=r)
 
-
+    return my_tasks, halo_location

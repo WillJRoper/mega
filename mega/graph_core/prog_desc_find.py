@@ -128,7 +128,7 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
             # If all parts are on this rank there's nothing to do
             if parts_thisrank.size != npart:
-                
+
                 # Get particles not on this rank
                 foreign_parts = parts[~okinds]
 
@@ -139,7 +139,7 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
         # If descendant snapshot exists
         if not meta.isfinal:
-            
+
             # Assign the particles on this rank to this rank
             okinds = np.in1d(parts, desc_pids)
             parts_thisrank = parts[okinds]
@@ -147,10 +147,10 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
             # If all parts are on this rank there's nothing to do
             if parts_thisrank.size != npart:
-            
+
                 # Get particles not on this rank
                 foreign_parts = parts[~okinds]
-                
+
                 # Give the other ranks the particles not on this rank
                 for r in range(meta.nranks):
                     if r != meta.rank:
@@ -169,9 +169,9 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
 
 @timer("Linking")
 def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
-                         other_rank_desc_parts, part_progids, prog_nparts,
-                         part_descids, prog_reals, desc_nparts,
-                         prog_pids, desc_pids):
+                 other_rank_desc_parts, part_progids, prog_nparts,
+                 part_descids, prog_reals, desc_nparts,
+                 prog_pids, desc_pids):
 
     # Lets share the halos with progenitors and descendants
     comm_tic = tictoc.get_extic()
@@ -201,6 +201,9 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Extract particles for this halo
                 prog_parts = halo_dict[ihalo]
 
+                if len(prog_parts) == 0:
+                    continue
+
                 # Remove extraneous partiles to shrink the query
                 okinds = np.logical_and(prog_pids <= np.max(prog_parts),
                                         prog_pids >= np.min(prog_parts))
@@ -208,9 +211,9 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Get prog ids present on this rank
                 parts_on_rank = np.in1d(prog_pids[okinds], prog_parts)
                 progids = part_progids[okinds][parts_on_rank]
-           
+
                 # Link progenitors on this rank
-                if progids.size > 0 :
+                if progids.size > 0:
                     (nprog, prog_haloids, prog_npart,
                      prog_npart_cont, preals) = get_direct_prog(tictoc,
                                                                 meta,
@@ -233,7 +236,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
     # Tell the world we've finished progenitor linking
     if meta.verbose:
         tictoc.report("Linking Progenitors", prog_tic, prog_toc)
-        
+
     # If descendant snapshot exists
     desc_tic = tictoc.get_extic()
     if not meta.isfinal:
@@ -249,7 +252,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
 
                 # Get prog ids present on this rank
                 descids = part_descids[np.in1d(desc_pids, desc_parts)]
-                
+
                 # Link descendants on this rank
                 if descids.size > 0:
                     (ndesc, desc_haloids, desc_npart,
@@ -259,7 +262,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                     # Store what we have found for this halo
                     d = other_rank_desc_parts[other_rank]
                     d[ihalo] = Halo(None, None, None, None, None, None,
-                                    None, None,None, ndesc, desc_haloids,
+                                    None, None, None, ndesc, desc_haloids,
                                     desc_npart, desc_npart_cont, None, None)
 
     else:
@@ -271,7 +274,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
     # Tell the world we've finished progenitor linking
     if meta.verbose:
         tictoc.report("Linking Descendants", desc_tic, desc_toc)
-        
+
     # Send back the progenitors and descendants we have found
     comm_tic = tictoc.get_extic()
     for other_rank in range(meta.nranks):
@@ -285,7 +288,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
 
     if meta.verbose:
         tictoc.report("Communicating links", comm_tic, comm_toc)
-       
+
     return other_rank_prog_parts, other_rank_desc_parts
 
 
