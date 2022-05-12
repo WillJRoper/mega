@@ -46,34 +46,36 @@ class TicToc:
         self.task_time = {k: {"Start": [], "End": []} for k in self.processes}
         self.task_time["START"] = None
         self.task_time["END"] = None
-        
+
         # Variables to handle nested tasks
         self.current_tasks = []
 
     def get_tic(self):
-        self.tic = time.time()
+        self.tic = time.perf_counter()
         return self.tic
 
     def get_toc(self):
-        self.toc = time.time()
+        self.toc = time.perf_counter()
         return self.toc
 
-    def get_extic(self):
+    @staticmethod
+    def get_extic():
         return time.perf_counter()
 
-    def get_extoc(self):
+    @staticmethod
+    def get_extoc():
         return time.perf_counter()
 
     def how_long(self):
         return self.toc - self.tic
 
     def start(self):
-        self.task_time["START"] = time.time()
+        self.task_time["START"] = time.perf_counter()
 
     def end(self):
-        self.task_time["END"] = time.time()
+        self.task_time["END"] = time.perf_counter()
         self.get_runtime()
-        
+
         # Convert task time lists to arrays
         for k in self.task_time:
             if k in ["START", "END"]:
@@ -89,9 +91,13 @@ class TicToc:
         # Start timing
         self.get_tic()
 
-        # If so temporarily end timing it
+        # Record that we are doing something
         self.current_tasks.append(process)
+
+        # Are we already doing something?
         if len(self.current_tasks) > 1:
+
+            # Temporarily end the previous task timing
             self.task_time[self.current_tasks[-2]]["End"].append(self.tic)
 
             # Start timing
@@ -105,16 +111,17 @@ class TicToc:
         # Stop timing
         self.get_toc()
 
+        # We have finished the current task so remove it
         finished = self.current_tasks.pop(-1)
         self.task_time[finished]["End"].append(self.toc)
 
         # Check if we are inside another process
         if len(self.current_tasks) > 0:
 
-            # Stop timing
-            self.get_toc()
+            # Restart the old task
+            self.get_tic()
 
-            self.task_time[self.current_tasks[-1]]["Start"].append(self.toc)
+            self.task_time[self.current_tasks[-1]]["Start"].append(self.tic)
 
     def record_time(self, process):
 
@@ -136,7 +143,7 @@ class TicToc:
             else:
                 # How long did we take?
                 how_long = end - start
-            
+
         # Print in us/milliseconds for short periods, seconds otherwise
         if how_long < 1 * 10**-4:
             message(self.meta.rank, "%s took: %.2f us" % (process,
@@ -218,7 +225,7 @@ class TicToc:
                 message(self.meta.rank, "|".join(table_headings[tab_row]))
 
                 message(self.meta.rank, ("-" * (col_width - 1) + "+")
-                        * (ncols -1) + "-" * col_width)
+                        * (ncols - 1) + "-" * col_width)
 
                 # Loop over ranks and print table
                 for r in range(self.meta.nranks):
@@ -233,16 +240,16 @@ class TicToc:
                             spent = 0.0
                             pcent = 0.0
                         if spent < 1:
-                            s = "%.2f ms / %.2f" % (spent * 10**3, pcent) + " %"
-                            rank_row.append("".ljust(col_width - len(s) - 1) + s)
+                            s = "%.2f ms / %.2f" % (spent *
+                                                    10**3, pcent) + " %"
+                            rank_row.append(
+                                "".ljust(col_width - len(s) - 1) + s)
                         else:
                             s = "%.2f s / %.2f" % (spent, pcent) + " %"
-                            rank_row.append("".ljust(col_width - len(s) - 1) + s)
+                            rank_row.append(
+                                "".ljust(col_width - len(s) - 1) + s)
 
                     message(self.meta.rank, "|".join(rank_row))
 
                 # Print the footer
                 message(self.meta.rank, ("=" * col_width) * ncols)
-
-
-
