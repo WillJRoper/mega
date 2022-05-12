@@ -363,7 +363,7 @@ def read_current_data(tictoc, meta, density_rank, comm):
 
     # Get minimum and maximum pid in my slice
     rank_pids = hdf["all_sim_part_ids"][rank_partbins[meta.rank]:
-                                         rank_partbins[meta.rank + 1]]
+                                        rank_partbins[meta.rank + 1]]
     min_pid = np.zeros((1))
     max_pid = np.zeros((1))
     min_pid[0] = np.min(rank_pids)
@@ -419,7 +419,7 @@ def read_desc_data(tictoc, meta, density_rank, comm):
 
         # Get minimum and maximum pid in my slice
         rank_pids = hdf["all_sim_part_ids"][desc_rank_partbins[meta.rank]:
-                                             desc_rank_partbins[meta.rank + 1]]
+                                            desc_rank_partbins[meta.rank + 1]]
         min_pid = np.zeros((1))
         max_pid = np.zeros((1))
         min_pid[0] = np.min(rank_pids)
@@ -581,7 +581,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     # Add trailing underscore to basename_mod if used
     if len(basename_mod) > 0 and basename_mod[-1] != "_":
         basename_mod += "_"
-    
+
     # Create the root group
     snap = h5py.File(meta.savepath + meta.halo_basename + basename_mod
                      + str(meta.snap) + ".hdf5", "w")
@@ -797,7 +797,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
             isubhalo += 1
 
         assert nsubhalo == isubhalo, "stored less halos than were found"
-                
+
         # Convert lists to arrays
         all_subhalo_simpids = np.array(all_subhalo_simpids)
         all_subhalo_pids = np.array(all_subhalo_pids)
@@ -883,7 +883,6 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
     # Set up arrays to store host results
     nhalo = len(results)
-    index_haloids = np.array(list(results.keys()))
     halo_nparts = np.full(nhalo, -2, dtype=int)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
@@ -896,39 +895,6 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     desc_mass_conts = []
     prog_nparts = []
     desc_nparts = []
-
-    if meta.desc_snap is not None:
-
-        # Load the descendant snapshot
-        hdf = h5py.File(meta.halopath + meta.halo_basename
-                        + meta.desc_snap + '.hdf5', 'r')
-
-        # Get the reality flag array
-        if density_rank == 0:
-            desc_reals = hdf['real_flag'][...]
-        else:
-            desc_reals = hdf['Subhalos']['real_flag'][...]
-
-        hdf.close()
-    else:
-        desc_reals = np.array([False])
-
-    if meta.prog_snap is not None:
-
-        # Load the progenitor snapshot
-        hdf = h5py.File(meta.halopath + meta.halo_basename
-                        + meta.prog_snap + '.hdf5', 'r')
-
-        # Get progenitor snapshot data
-        if density_rank == 0:
-            prog_reals = hdf['real_flag'][...]
-        else:
-            prog_reals = hdf['Subhalos']['real_flag'][...]
-
-        hdf.close()
-
-    else:
-        prog_reals = np.array([False])
 
     while len(results) > 0:
 
@@ -949,55 +915,41 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         desc_haloids = halo.desc_haloids
         desc_npart = halo.desc_npart
         desc_npart_cont = halo.desc_npart_cont
-        preals = halo.prog_reals
         npart = halo.npart
 
-        # If this halo has no real progenitors and is less than 20 particle
+        # If this halo has no progenitors and is less than 20 particle
         # it is by definition not a halo
         if nprog == 0 and npart < 20:
             reals[ihalo] = False
             notreals += 1
-            continue
 
-        # If the halo has neither descendants or progenitors we do not
-        # need to store it
+        # If the halo has neither descendants or progenitors it is not a halo
         elif nprog < 1 and ndesc < 1:
             reals[ihalo] = False
             transients += 1
-            continue
 
-        # If any progenitor is real then this halo is real
-        if True in preals:
-            reals[ihalo] = True
+        # Write out the data produced
+        nprogs[ihalo] = nprog  # number of progenitors
+        ndescs[ihalo] = ndesc  # number of descendants
+        halo_nparts[ihalo] = npart  # mass of the halo
 
-        if reals[ihalo]:
+        # If we have progenitors store them and the pointers
+        if nprog > 0:
+            prog_start_index[ihalo] = len(progs)
+            progs.extend(prog_haloids)
+            prog_mass_conts.extend(prog_npart_cont)
+            prog_nparts.extend(prog_npart)
+        else:  # else put null pointer
+            prog_start_index[ihalo] = 2 ** 30
 
-            # If this halo is real then it's descendants are real
-            if meta.desc_snap is not None:
-                desc_reals[desc_haloids] = True
-
-            # Write out the data produced
-            nprogs[ihalo] = nprog  # number of progenitors
-            ndescs[ihalo] = ndesc  # number of descendants
-            halo_nparts[ihalo] = npart  # mass of the halo
-
-            # If we have progenitors store them and the pointers
-            if nprog > 0:
-                prog_start_index[ihalo] = len(progs)
-                progs.extend(prog_haloids)
-                prog_mass_conts.extend(prog_npart_cont)
-                prog_nparts.extend(prog_npart)
-            else:  # else put null pointer
-                prog_start_index[ihalo] = 2 ** 30
-
-            # If we have descendants store them and the pointers
-            if ndesc > 0:
-                desc_start_index[ihalo] = len(descs)
-                descs.extend(desc_haloids)
-                desc_mass_conts.extend(desc_npart_cont)
-                desc_nparts.extend(desc_npart)
-            else:  # else put null pointer
-                desc_start_index[ihalo] = 2 ** 30
+        # If we have descendants store them and the pointers
+        if ndesc > 0:
+            desc_start_index[ihalo] = len(descs)
+            descs.extend(desc_haloids)
+            desc_mass_conts.extend(desc_npart_cont)
+            desc_nparts.extend(desc_npart)
+        else:  # else put null pointer
+            desc_start_index[ihalo] = 2 ** 30
 
     progs = np.array(progs)
     descs = np.array(descs)
@@ -1014,7 +966,11 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         hdf = h5py.File(meta.dgraphpath + 'Sub_' + meta.graph_basename
                         + meta.snap + '.hdf5', 'w')
 
-    hdf5_write_dataset(hdf, 'halo_IDs', index_haloids)
+    # Write out metadata
+    hdf.attrs["Redshift"] = meta.z
+    hdf.attrs["boxsize"] = meta.boxsize
+
+    # Write out datasets
     hdf5_write_dataset(hdf, 'nProgs', nprogs)
     hdf5_write_dataset(hdf, 'nDescs', ndescs)
     hdf5_write_dataset(hdf, 'nparts', halo_nparts)
@@ -1026,9 +982,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     hdf5_write_dataset(hdf, 'Desc_nPart_Contribution', desc_mass_conts)
     hdf5_write_dataset(hdf, 'Prog_nPart', prog_nparts)
     hdf5_write_dataset(hdf, 'Desc_nPart', desc_nparts)
-    hdf5_write_dataset(hdf, 'prog_real_flag', prog_reals)
     hdf5_write_dataset(hdf, 'real_flag', reals)
-    hdf5_write_dataset(hdf, 'desc_real_flag', desc_reals)
 
     hdf.close()
 
@@ -1044,7 +998,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         count_and_report_progs(nprogs, meta, halo_type="Subhalo")
         count_and_report_descs(ndescs, meta, halo_type="Subhalo")
 
-    return reals, desc_reals
+    return reals
 
 
 @timer("Writing")

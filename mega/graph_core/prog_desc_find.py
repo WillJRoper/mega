@@ -4,7 +4,7 @@ from mega.graph_core.graph_halo import Halo
 
 
 @timer("Progenitor-Linking")
-def get_direct_prog(tictoc, meta, prog_haloids, prog_reals, prog_nparts):
+def get_direct_prog(tictoc, meta, prog_haloids, prog_nparts):
     """
 
     :param meta:
@@ -24,19 +24,6 @@ def get_direct_prog(tictoc, meta, prog_haloids, prog_reals, prog_nparts):
     uniprog_haloids = uniprog_haloids[okinds]
     uniprog_counts = uniprog_counts[okinds]
 
-    # # Halos only linked if they have link_thresh or more particles in common
-    # okinds = uniprog_counts >= meta.link_thresh
-    # uniprog_haloids = uniprog_haloids[okinds]
-    # uniprog_counts = uniprog_counts[okinds]
-
-    # Get the reality flag
-    preals = prog_reals[uniprog_haloids]
-
-    # Get only real halos
-    uniprog_haloids = uniprog_haloids[preals]
-    uniprog_counts = uniprog_counts[preals]
-    preals = preals[preals]
-
     # Find the number of progenitor halos from the size of the unique array
     nprog = uniprog_haloids.size
 
@@ -51,9 +38,8 @@ def get_direct_prog(tictoc, meta, prog_haloids, prog_reals, prog_nparts):
     prog_npart = prog_npart[sorting_inds]
     prog_haloids = uniprog_haloids[sorting_inds]
     prog_npart_cont = uniprog_counts[sorting_inds]
-    preals = preals[sorting_inds]
 
-    return nprog, prog_haloids, prog_npart, prog_npart_cont, preals
+    return nprog, prog_haloids, prog_npart, prog_npart_cont
 
 
 @timer("Descendant-Linking")
@@ -159,7 +145,7 @@ def sort_prog_desc(tictoc, meta, halo_tasks, prog_pids, desc_pids):
         # Populate halo object with results
         null_entry = np.array([], dtype=int)
         results[ihalo] = Halo(parts, npart, 0, null_entry, null_entry,
-                              null_entry, None, None, null_entry,
+                              null_entry, None, None,
                               0, null_entry, null_entry,
                               null_entry,
                               None, None)
@@ -215,17 +201,16 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                 # Link progenitors on this rank
                 if progids.size > 0:
                     (nprog, prog_haloids, prog_npart,
-                     prog_npart_cont, preals) = get_direct_prog(tictoc,
-                                                                meta,
-                                                                progids,
-                                                                prog_reals,
-                                                                prog_nparts)
+                     prog_npart_cont) = get_direct_prog(tictoc,
+                                                        meta,
+                                                        progids,
+                                                        prog_nparts)
 
                     # Store what we have found for this halo
                     d = other_rank_prog_parts[other_rank]
                     d[ihalo] = Halo(None, None, nprog, prog_haloids,
                                     prog_npart, prog_npart_cont, None,
-                                    None, preals, None, None, None,
+                                    None, None, None, None,
                                     None, None, None)
     else:
         for other_rank, halo_dict in enumerate(
@@ -270,7 +255,7 @@ def linking_loop(tictoc, meta, comm, other_rank_prog_parts,
                     # Store what we have found for this halo
                     d = other_rank_desc_parts[other_rank]
                     d[ihalo] = Halo(None, None, None, None, None, None,
-                                    None, None, None, ndesc, desc_haloids,
+                                    None, None, ndesc, desc_haloids,
                                     desc_npart, desc_npart_cont, None, None)
 
     else:

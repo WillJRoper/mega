@@ -140,30 +140,13 @@ def graph_main(density_rank, meta):
     if meta.rank == 0:
 
         # Write the data and get the reals arrays
-        reals, desc_reals = io.write_dgraph_data(tictoc, meta, all_results,
-                                                 density_rank, reals)
+        io.write_dgraph_data(tictoc, meta, all_results,
+                             density_rank, reals)
 
         if meta.verbose:
             tictoc.report("Writing")
-
-        # Clean up real flags in halo files
-        if meta.clean_snaps:
-            io.clean_real_flags(tictoc, meta, density_rank, reals, meta.snap)
-
-            if not meta.isfinal:
-                io.clean_real_flags(tictoc, meta, density_rank, desc_reals,
-                                    meta.desc_snap)
-
-            if meta.verbose:
-                tictoc.report("Cleaning real flags")
 
     tictoc.end()
 
     if meta.profile:
         tictoc.end_report(comm)
-
-        with open(
-                meta.profile_path + "Graph_" + str(
-                    rank) + '_' + meta.snap + '.pck',
-                'wb') as pfile:
-            pickle.dump(tictoc.task_time, pfile)
