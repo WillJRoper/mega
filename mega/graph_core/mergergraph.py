@@ -4,7 +4,6 @@ import mega.core.serial_io as io
 import mega.graph_core.prog_desc_find as pdfind
 from mega.core.domain_decomp import graph_halo_decomp
 from mega.core.talking_utils import message, pad_print_middle
-from mega.core.timing import TicToc
 
 import mpi4py
 from mpi4py import MPI
@@ -18,10 +17,6 @@ rank = comm.rank  # rank of this process
 status = MPI.Status()  # get MPI status object
 
 
-# TODO: All mentions of mass need to be converted to Npart and mass arrays
-#  need to be introduced
-
-
 def graph_main(density_rank, meta):
     """
 
@@ -29,9 +24,8 @@ def graph_main(density_rank, meta):
     :return:
     """
 
-    # Instantiate timer
-    tictoc = TicToc(meta)
-    tictoc.start()
+    # Get the timer instance
+    tictoc = meta.tictoc
 
     # ======================= Set up everything we need =======================
 
@@ -145,8 +139,3 @@ def graph_main(density_rank, meta):
 
         if meta.verbose:
             tictoc.report("Writing")
-
-    tictoc.end()
-
-    if meta.profile:
-        tictoc.end_report(comm)
