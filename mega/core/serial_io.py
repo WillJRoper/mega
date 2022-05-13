@@ -1010,16 +1010,13 @@ def clean_real_flags(tictoc, meta, density_rank, reals, snap):
     # Set the reality flag in the halo catalog
     if density_rank == 0:
         message(meta.rank, "Overwriting host real flags: %s" % snap)
-        del hdf['real_flag']
-        hdf.create_dataset('real_flag', shape=reals.shape, dtype=bool,
+        hdf.create_dataset('linked_real_flag', shape=reals.shape, dtype=bool,
                            data=reals,
                            compression='gzip')
     else:
         message(meta.rank, "Overwriting subhalo real flags: %s" % snap)
         sub_current = hdf['Subhalos']
-        del sub_current['real_flag']
-        sub_current.create_dataset('real_flag', shape=reals.shape, dtype=bool,
-                                   data=reals,
-                                   compression='gzip')
+        sub_current.create_dataset('linked_real_flag', shape=reals.shape,
+                                   dtype=bool, data=reals, compression='gzip')
 
     hdf.close()
