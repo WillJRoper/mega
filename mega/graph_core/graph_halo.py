@@ -137,3 +137,73 @@ class Halo:
         self.desc_haloids = self.desc_haloids[sinds]
         self.desc_npart_cont = self.desc_npart_cont[sinds]
         self.desc_npart = self.desc_npart[sinds]
+
+
+class Janitor_Halo:
+    """
+    Attributes:
+
+    """
+
+    # Predefine possible attributes to avoid overhead
+    __slots__ = ["memory", "npart", "real", "nprog", "prog_haloids",
+                 "prog_npart", "prog_npart_cont", "prog_mass",
+                 "prog_mass_cont", "prog_reals", "ndesc",
+                 "desc_haloids", "desc_npart", "desc_npart_cont",
+                 "desc_mass", "desc_mass_cont"]
+
+    def __init__(self, npart, real, prog_haloids, prog_npart, prog_npart_cont,
+                 prog_mass, prog_mass_cont, prog_reals,
+                 desc_haloids, desc_npart, desc_npart_cont,
+                 desc_mass, desc_mass_cont):
+
+        # Define metadata
+        self.memory = None
+
+        # Halo properties
+        self.npart = npart
+        self.real = real
+
+        # Progenitor properties
+        self.prog_reals = prog_reals[prog_reals]
+        self.prog_haloids = prog_haloids[prog_reals]
+        self.prog_npart = prog_npart[prog_reals]
+        self.prog_npart_cont = prog_npart_cont[prog_reals]
+        self.prog_mass = None
+        self.prog_mass_cont = None
+        self.nprog = len(self.prog_haloids)
+
+        # Sort progenitors
+        self.sort_progs()
+
+        # Descendant properties
+        self.desc_haloids = desc_haloids
+        self.desc_npart = desc_npart
+        self.desc_npart_cont = desc_npart_cont
+        self.desc_mass = desc_mass
+        self.desc_mass_cont = desc_mass_cont
+        self.ndesc = len(self.desc_haloids)
+
+        # Update realness flag
+        self.is_real()
+
+    def sort_progs(self):
+
+        # Get indices to sort progenitors
+        sinds = np.argsort(self.prog_npart_cont)[::-1]
+
+        # Apply these indices
+        self.prog_reals = self.prog_reals[sinds]
+        self.prog_haloids = self.prog_haloids[sinds]
+        self.prog_npart = self.prog_npart[sinds]
+        self.prog_npart_cont = self.prog_npart_cont[sinds]
+
+    def is_real(self):
+
+        # Consider if this halo is real
+        # If neither boolean is satisfied it inherits the energy defined
+        # realness flag
+        if self.nprog > 0:
+            self.real = True
+        elif self.npart < 20 and self.nprog == 0:
+            self.real = False

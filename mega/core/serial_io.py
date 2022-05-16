@@ -920,12 +920,10 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         # If this halo has no progenitors and is less than 20 particle
         # it is by definition not a halo
         if nprog == 0 and npart < 20:
-            reals[ihalo] = False
             notreals += 1
 
         # If the halo has neither descendants or progenitors it is not a halo
         elif nprog < 1 and ndesc < 1:
-            reals[ihalo] = False
             transients += 1
 
         # Write out the data produced
@@ -985,6 +983,134 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     hdf5_write_dataset(hdf, 'real_flag', reals)
 
     hdf.close()
+
+    message(meta.rank, "Found %d halos to not be real out of %d" % (notreals,
+                                                                    nhalo))
+    message(meta.rank, "Found %d transient halos out of %d" % (transients,
+                                                               nhalo))
+
+    if density_rank == 0:
+        count_and_report_progs(nprogs, meta, halo_type="Host")
+        count_and_report_descs(ndescs, meta, halo_type="Host")
+    else:
+        count_and_report_progs(nprogs, meta, halo_type="Subhalo")
+        count_and_report_descs(ndescs, meta, halo_type="Subhalo")
+
+    return reals
+
+
+@timer("Writing")
+def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
+                              density_rank):
+
+    # Lets combine the list of results from everyone into a single dictionary
+    results = {}
+    for d in all_results:
+        results.update(d)
+
+    # Initialise counter for halos removed due to not being temporally real
+    notreals = 0
+
+    # Initialise counter for transient halos (halos with no progs or descs)
+    transients = 0
+
+    # Set up arrays to store host results
+    nhalo = len(results)
+    halo_nparts = np.full(nhalo, -2, dtype=int)
+    nprogs = np.zeros(nhalo, dtype=int)
+    ndescs = np.zeros(nhalo, dtype=int)
+    reals = np.zeros(nhalo, dtype=bool)
+    prog_start_index = np.full(nhalo, -2, dtype=int)
+    desc_start_index = np.full(nhalo, -2, dtype=int)
+
+    progs = []
+    descs = []
+    prog_mass_conts = []
+    desc_mass_conts = []
+    prog_nparts = []
+    desc_nparts = []
+
+    while len(results) > 0:
+
+        # Extract a halo to store
+        ihalo, halo = results.popitem()
+
+        assert (len(set(halo.prog_haloids)) == len(halo.prog_haloids)), \
+            "Not all progenitors are unique"
+        assert (len(set(halo.desc_haloids)) == len(halo.desc_haloids)), \
+            "Not all progenitors are unique"
+
+        # Extract this halo's data
+        nprog = halo.nprog
+        prog_haloids = halo.prog_haloids
+        prog_npart = halo.prog_npart
+        prog_npart_cont = halo.prog_npart_cont
+        ndesc = halo.ndesc
+        desc_haloids = halo.desc_haloids
+        desc_npart = halo.desc_npart
+        desc_npart_cont = halo.desc_npart_cont
+        npart = halo.npart
+        real = halo.real
+
+        # If this halo has no progenitors and is less than 20 particle
+        # it is by definition not a halo
+        if nprog == 0 and npart < 20:
+            notreals += 1
+
+        # If the halo has neither descendants or progenitors it is not a halo
+        elif nprog < 1 and ndesc < 1:
+            transients += 1
+
+        # Write out the data produced
+        nprogs[ihalo] = nprog  # number of progenitors
+        ndescs[ihalo] = ndesc  # number of descendants
+        halo_nparts[ihalo] = npart  # mass of the halo
+        reals[ihalo] = real  # real flag, either energy defined or temporally
+
+        # If we have progenitors store them and the pointers
+        if nprog > 0:
+            prog_start_index[ihalo] = len(progs)
+            progs.extend(prog_haloids)
+            prog_mass_conts.extend(prog_npart_cont)
+            prog_nparts.extend(prog_npart)
+        else:  # else put null pointer
+            prog_start_index[ihalo] = 2 ** 30
+
+        # If we have descendants store them and the pointers
+        if ndesc > 0:
+            desc_start_index[ihalo] = len(descs)
+            descs.extend(desc_haloids)
+            desc_mass_conts.extend(desc_npart_cont)
+            desc_nparts.extend(desc_npart)
+        else:  # else put null pointer
+            desc_start_index[ihalo] = 2 ** 30
+
+    # Convert lists to arrays
+    progs = np.array(progs)
+    descs = np.array(descs)
+    prog_mass_conts = np.array(prog_mass_conts)
+    desc_mass_conts = np.array(desc_mass_conts)
+    prog_nparts = np.array(prog_nparts)
+    desc_nparts = np.array(desc_nparts)
+
+    # Write out metadata
+    hdf.attrs["Redshift"] = meta.z
+    hdf.attrs["boxsize"] = meta.boxsize
+    hdf.attrs["nhalo"] = nhalo
+
+    # Write out datasets
+    hdf5_write_dataset(hdf, 'nProgs', nprogs)
+    hdf5_write_dataset(hdf, 'nDescs', ndescs)
+    hdf5_write_dataset(hdf, 'nparts', halo_nparts)
+    hdf5_write_dataset(hdf, 'prog_start_index', prog_start_index)
+    hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
+    hdf5_write_dataset(hdf, 'Prog_haloIDs', progs)
+    hdf5_write_dataset(hdf, 'Desc_haloIDs', descs)
+    hdf5_write_dataset(hdf, 'Prog_nPart_Contribution', prog_mass_conts)
+    hdf5_write_dataset(hdf, 'Desc_nPart_Contribution', desc_mass_conts)
+    hdf5_write_dataset(hdf, 'Prog_nPart', prog_nparts)
+    hdf5_write_dataset(hdf, 'Desc_nPart', desc_nparts)
+    hdf5_write_dataset(hdf, 'real_flag', reals)
 
     message(meta.rank, "Found %d halos to not be real out of %d" % (notreals,
                                                                     nhalo))

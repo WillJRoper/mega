@@ -5,6 +5,7 @@ import mega.core.param_utils as p_utils
 import mega.graph_core.mergergraph as mgmpi
 from mega.core.talking_utils import say_hello
 from mega.core.timing import TicToc
+from mega.graph_core.link_cleaning import walk_and_purge
 
 import mpi4py
 import numpy as np
@@ -62,9 +63,11 @@ def main():
     if flags['subgraphdirect']:
         mgmpi.graph_main(1, meta)
 
+    comm.barrier()
+
     # If we are at the final snapshot we have to clean up all links
-    # if meta.isfinal:
-        # walk_and_purge(tictoc, meta)
+    if meta.isfinal:
+        walk_and_purge(tictoc, meta, comm, snaplist)
 
     tictoc.end()
 
