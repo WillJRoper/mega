@@ -51,6 +51,7 @@ def main():
     # Instantiate timer
     tictoc = TicToc(meta)
     tictoc.start()
+    meta.tictoc = tictoc
 
     # ============== Find Direct Progenitors and Descendents ==============
     if flags['graphdirect']:
