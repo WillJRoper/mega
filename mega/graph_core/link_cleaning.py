@@ -140,5 +140,5 @@ def walk_and_purge(tictoc, meta, comm, snaplist):
         if meta.findsubs:
             sub_prog_reals = clean_snap(tictoc, meta, comm, snap, 1,
                                         sub_prog_reals, out_hdf)
-
-    out_hdf.close()
+    if meta.rank == 0:
+        out_hdf.close()
