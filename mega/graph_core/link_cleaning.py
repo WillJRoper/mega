@@ -9,7 +9,7 @@ def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
 
     # Open this snapshots file
     hdf = h5py.File(meta.dgraphpath + meta.graph_basename
-                    + snap + '.hdf5', 'w')
+                    + snap + '.hdf5', 'r')
 
     # Open necessary datasets
     nprogs = hdf["nProgs"][...]
