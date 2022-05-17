@@ -1139,7 +1139,7 @@ def clean_real_flags(tictoc, meta, density_rank, reals, snap):
         try:
             hdf.create_dataset('linked_real_flag', shape=reals.shape,
                                dtype=bool, data=reals, compression='gzip')
-        except OSError:  # handle the case where the dataset exists
+        except (OSError, ValueError):  # handle when the dataset exists
             del hdf["linked_real_flag"]
             hdf.create_dataset('linked_real_flag', shape=reals.shape,
                                dtype=bool, data=reals, compression='gzip')
@@ -1150,7 +1150,7 @@ def clean_real_flags(tictoc, meta, density_rank, reals, snap):
             sub_current.create_dataset('linked_real_flag', shape=reals.shape,
                                        dtype=bool, data=reals,
                                        compression='gzip')
-        except OSError:  # handle the case where the dataset exists
+        except (OSError, ValueError):  # handle when the dataset exists
             del sub_current["linked_real_flag"]
             sub_current.create_dataset('linked_real_flag', shape=reals.shape,
                                        dtype=bool, data=reals,
