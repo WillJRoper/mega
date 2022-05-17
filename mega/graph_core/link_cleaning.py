@@ -137,7 +137,7 @@ def walk_and_purge(tictoc, meta, comm, snaplist):
                                 prog_reals, out_hdf)
 
         # Clean up subhalos in this snap
-        if meta.find_subs:
+        if meta.findsubs:
             sub_prog_reals = clean_snap(tictoc, meta, comm, snap, 1,
                                         sub_prog_reals, out_hdf)
 
