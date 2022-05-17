@@ -8,8 +8,12 @@ from mega.core.serial_io import write_cleaned_dgraph_data, clean_real_flags
 def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
 
     # Open this snapshots file
-    hdf = h5py.File(meta.dgraphpath + meta.graph_basename
-                    + snap + '.hdf5', 'r')
+    if density_rank == 0:
+        hdf = h5py.File(meta.dgraphpath + meta.graph_basename
+                        + snap + '.hdf5', 'r')
+    else:
+        hdf = h5py.File(meta.dgraphpath + "Sub_" + meta.graph_basename
+                        + snap + '.hdf5', 'r')
 
     # Open necessary datasets
     nprogs = hdf["nProgs"][...]
