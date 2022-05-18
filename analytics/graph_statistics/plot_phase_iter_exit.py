@@ -1,12 +1,18 @@
+""" A script to plot the exit coefficient of the halo catalog
+
+    Run with python plot_phase_iter_exit.py <param> <snap>
+    use a number larger than the number of snapshots to plot all snapshots
+"""
+
+import mega.core.param_utils as p_utils
+import seaborn as sns
+import h5py
+from matplotlib.colors import LogNorm
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 sys.path.insert(1, "core/")
 sys.path.insert(1, "../mega_global_phase/core/")
-import utilities
-from matplotlib.colors import LogNorm
-import h5py
-import seaborn as sns
 
 
 sns.set_style("whitegrid")
@@ -28,12 +34,19 @@ def alpha_v_plot():
 
     # Read the parameter file
     paramfile = sys.argv[1]
-    inputs, flags, params, cosmology, simulation = utilities.read_param(paramfile)
+    (inputs, flags, params, cosmology,
+     simulation) = p_utils.read_param(paramfile)
+
+    snap_ind = sys.argv[3]
 
     # Load the snapshot list
-    snaplist = list(np.loadtxt(inputs["snapList"], dtype=str))
-    
-    halo_sub = int(sys.argv[2])
+    snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
+
+    # Set up object containing housekeeping metadata
+    meta = p_utils.Metadata(snaplist, snap_ind, cosmology, inputs,
+                            flags, params, simulation)
+
+    halo_sub = meta.findsubs
 
     # Define bins
     bins = np.linspace(params["min_alpha_v"], params["ini_alpha_v"], 25)
@@ -42,14 +55,15 @@ def alpha_v_plot():
     # Loop through Merger Graph data assigning each value to the relevant list
     for snap in snaplist:
 
-        if len(sys.argv) > 3:
+        if snap_ind < len(snaplist):
             if snap != snaplist[int(sys.argv[3])]:
                 continue
 
         print(snap)
 
         # Create file to store this snapshots graph results
-        hdf = h5py.File(inputs["haloSavePath"] + "halos_" + str(snap) + ".hdf5", "r")
+        hdf = h5py.File(meta.savepath + meta.halo_basename + basename_mod
+                        + str(meta.snap) + ".hdf5", "r")
 
         # Get the data
         mass_host = hdf["total_masses"][...]
@@ -78,8 +92,6 @@ def alpha_v_plot():
             ax = fig.add_subplot(111)
 
             H, _ = np.histogram(alpha_host, bins=bins)
-            print(H)
-            print(np.unique(alpha_host).size)
 
             # Plot data
             ax.plot(bin_cents, H, label="Host", color="r")
@@ -103,7 +115,8 @@ def alpha_v_plot():
             ax.legend(handles, labels)
 
             # Save figure
-            fig.savefig(inputs["analyticPlotPath"] + "alpha_v_exit_" + snap + ".png", bbox_inches="tight")
+            fig.savefig(inputs["profile_plot_path"] + "alpha_v_exit_"
+                        + snap + ".png", bbox_inches="tight")
 
             plt.close(fig)
 
@@ -115,7 +128,41 @@ def alpha_v_plot():
 
         total_alpha_host = np.array(alpha_hosts)
         total_alpha_sub = np.array(alpha_subs)
-        mass_hosts = np.array(mass_hosts)
+        mass_hosts_sub = np.array(mass_hosts)
+
+        # Set up plot
+        fig = plt.figure(figsize=(8, 6))
+        ax = fig.add_subplot(111)
+
+        H, _ = np.histogram(total_alpha_host, bins=bins)
+
+        # Plot data
+        ax.plot(bin_cents, H, label="Host", color="r")
+
+        if halo_sub:
+
+            H, _ = np.histogram(total_alpha_sub, bins=bins)
+
+            # Plot data
+            ax.plot(bin_cents, H, label="Subhalo", color="b")
+
+        # Label axes
+        ax.set_ylabel(r"$N$")
+        ax.set_xlabel(r"$\alpha_{v}$")
+
+        # Set scale
+        ax.set_yscale("log")
+
+        # Get and draw legend
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles, labels)
+
+        # Save figure
+        fig.savefig(inputs["profile_plot_path"] +
+                    "alpha_v_exit.png", bbox_inches="tight")
+
+        plt.close(fig)
+
 
 if __name__ == "__main__":
 
