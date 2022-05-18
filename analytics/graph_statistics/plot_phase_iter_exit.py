@@ -124,7 +124,7 @@ def alpha_v_plot():
             print(snap, e)
             continue
 
-    if len(sys.argv) == 3:
+    if sys.argv[2] > len(snaplist):
 
         total_alpha_host = np.array(alpha_hosts)
         total_alpha_sub = np.array(alpha_subs)
