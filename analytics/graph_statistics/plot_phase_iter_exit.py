@@ -37,7 +37,7 @@ def alpha_v_plot():
     (inputs, flags, params, cosmology,
      simulation) = p_utils.read_param(paramfile)
 
-    snap_ind = sys.argv[2]
+    snap_ind = int(sys.argv[2])
 
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
