@@ -66,7 +66,7 @@ def alpha_v_plot():
                         + str(meta.snap) + ".hdf5", "r")
 
         # Get the data
-        mass_host = hdf["total_masses"][...]
+        mass_host = hdf["masses"][...]
         alpha_host = hdf['exit_vlcoeff'][...]
         mass_hosts.extend(mass_host)
         alpha_hosts.extend(alpha_host)
@@ -74,7 +74,7 @@ def alpha_v_plot():
         if halo_sub:
 
             # Get the data
-            mass_sub = hdf["Subhalos"]["total_masses"][...]
+            mass_sub = hdf["Subhalos"]["masses"][...]
             alpha_sub = hdf["Subhalos"]['exit_vlcoeff'][...]
             mass_subs.extend(mass_sub)
             alpha_subs.extend(alpha_sub)
