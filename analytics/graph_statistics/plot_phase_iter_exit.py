@@ -62,7 +62,7 @@ def alpha_v_plot():
         print(snap)
 
         # Create file to store this snapshots graph results
-        hdf = h5py.File(meta.savepath + meta.halo_basename + basename_mod
+        hdf = h5py.File(meta.savepath + meta.halo_basename
                         + str(meta.snap) + ".hdf5", "r")
 
         # Get the data
