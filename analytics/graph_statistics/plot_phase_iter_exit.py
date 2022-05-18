@@ -42,18 +42,18 @@ def alpha_v_plot():
     # Load the snapshot list
     snaplist = list(np.loadtxt(inputs['snapList'], dtype=str))
 
-    # Set up object containing housekeeping metadata
-    meta = p_utils.Metadata(snaplist, snap_ind, cosmology, inputs,
-                            flags, params, simulation)
-
-    halo_sub = meta.findsubs
-
     # Define bins
     bins = np.linspace(params["min_alpha_v"], params["ini_alpha_v"], 25)
     bin_cents = (bins[:-1] + bins[1:]) / 2
 
     # Loop through Merger Graph data assigning each value to the relevant list
-    for snap in snaplist:
+    for i, snap in enumerate(snaplist):
+
+        # Set up object containing housekeeping metadata
+        meta = p_utils.Metadata(snaplist, i, cosmology, inputs,
+                                flags, params, simulation)
+
+        halo_sub = meta.findsubs
 
         if snap_ind < len(snaplist):
             if snap != snaplist[int(sys.argv[2])]:
