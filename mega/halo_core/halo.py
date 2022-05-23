@@ -10,15 +10,15 @@ class Halo:
     """
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["memory", "print_props", "pids", "shifted_inds", "sim_pids",
-                 "pos", "vel", "types", "masses", "int_nrg",
+    __slots__ = ["memory", "print_props", "parent", "pids", "shifted_inds",
+                 "sim_pids", "pos", "vel", "types", "masses", "int_nrg",
                  "vel_with_hubflow", "npart", "npart_types", "real",
                  "mean_pos", "mean_vel", "mean_vel_hubflow", "mass",
                  "ptype_mass", "KE", "therm_nrg", "GE", "rms_r", "rms_vr",
                  "veldisp3d", "veldisp1d", "vmax", "hmr", "hmvr", "vlcoeff"]
 
     def __init__(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
-                 masses, int_nrg, vlcoeff, meta):
+                 masses, int_nrg, vlcoeff, meta, parent=None):
         """
         :param pids:
         :param sim_pids:
@@ -40,6 +40,9 @@ class Halo:
         self.print_props = ["npart", "npart_types", "KE", "GE", "real",
                             "mean_pos", "mean_vel", "mass", "ptype_mass"]
 
+        # Set the current point of the phase space iteration
+        self.vlcoeff = vlcoeff
+
         # # We need to remove some variables for meta that won't be need in the
         # # halo object and cause issues when calculating memory footprint
         # # TODO: This would be better dealt with by having a light weight meta
@@ -48,6 +51,44 @@ class Halo:
         # self.meta.crit_density = None
         # self.meta.omega_m = None
         # self.meta.mean_den = None
+
+        # Store the parent halo, None if no parent
+        self.parent = parent
+
+        # If the parent has the same number of particles we don't
+        # need to recalculate everything and can inherit the parent's
+        # properties
+        if parent is not None:
+            if len(pids) == parent.npart:
+                self.set_attrs_from_parent(parent)
+            else:
+                self.set_attrs(pids, shifted_pids, sim_pids, pos, vel, types,
+                               masses, int_nrg, meta)
+        else:  # we have a brand new halo
+            self.set_attrs(pids, shifted_pids, sim_pids, pos, vel, types,
+                           masses, int_nrg, meta)
+
+    def __str__(self):
+
+        # Set up string for printing
+        pstr = ""
+
+        # Print a heading for this halo
+        report_string = get_heading(60, "Halo")
+        pstr += "|" + report_string + "|" + "\n" + " " * 9
+
+        # Loop over properties to print
+        for prop in self.print_props:
+            # Get property value
+            pstr += "|" + pad_print_middle(prop, getattr(self, prop),
+                                           length=60) + "|" + "\n" + " " * 9
+
+        pstr += "|" + "=" * len(report_string) + "|"
+
+        return pstr
+
+    def set_attrs(self, pids, shifted_pids, sim_pids, pos, vel, types,
+                  masses, int_nrg, meta):
 
         # Particle information
         self.pids = np.array(pids, dtype=int)
@@ -75,7 +116,6 @@ class Halo:
         self.vmax = None
         self.hmr = None
         self.hmvr = None
-        self.vlcoeff = vlcoeff
 
         # Calculate weighted mean position and velocities
         self.mean_pos = np.average(self.pos, weights=self.masses, axis=0)
@@ -99,24 +139,46 @@ class Halo:
                        self.masses, meta.z, meta.G)
         self.real = (np.log10(10 ** self.KE + self.therm_nrg) / self.GE) <= 1
 
-    def __str__(self):
+    def set_attrs_from_parent(self, parent):
 
-        # Set up string for printing
-        pstr = ""
+        # Particle information
+        self.pids = parent.pids
+        self.shifted_inds = parent.shifted_pids
+        self.sim_pids = parent.sim_pids
+        self.pos = parent.pos
+        self.vel = parent.vel
+        self.types = parent.types
+        self.masses = parent.masses
+        self.int_nrg = parent.int_nrg
 
-        # Print a heading for this halo
-        report_string = get_heading(60, "Halo")
-        pstr += "|" + report_string + "|" + "\n" + " " * 9
+        # Halo properties
+        # (some only populated when a halo exits phase space iteration)
+        self.npart = parent.npart
+        self.npart_types = parent.npart_types
+        self.mass = parent.mass
+        self.ptype_mass = None
+        self.rms_r = None
+        self.rms_vr = None
+        self.veldisp3d = None
+        self.veldisp1d = None
+        self.vmax = None
+        self.hmr = None
+        self.hmvr = None
 
-        # Loop over properties to print
-        for prop in self.print_props:
-            # Get property value
-            pstr += "|" + pad_print_middle(prop, getattr(self, prop),
-                                           length=60) + "|" + "\n" + " " * 9
+        # Calculate weighted mean position and velocities
+        self.mean_pos = parent.mean_pos
+        self.mean_vel = parent.mean_vel
 
-        pstr += "|" + "=" * len(report_string) + "|"
+        # Add the hubble flow to the velocities
+        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
+        self.vel_with_hubflow = parent.vel_with_hubflow
+        self.mean_vel_hubflow = parent.mean_vel_hubflow
 
-        return pstr
+        # Energy properties (energies are in per unit mass units)
+        self.KE = parent.KE
+        self.therm_nrg = parent.therm_nrg
+        self.GE = parent.GE
+        self.real = parent.real
 
     def compute_props(self, meta):
         """

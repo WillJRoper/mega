@@ -274,7 +274,7 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
                             halo.types[this_pids],
                             halo.masses[this_pids],
                             halo.int_nrg[this_pids],
-                            halo.vlcoeff, meta)
+                            halo.vlcoeff, meta, parent=halo)
 
             if new_halo.real or new_halo.vlcoeff < meta.min_vlcoeff:
 
@@ -352,4 +352,3 @@ def get_real_sub_halos(tictoc, halo, meta):
     """
     return get_real_halos(tictoc, halo, meta.sub_vlinkl_indp,
                           np.max(meta.sub_linkl), meta)
-
