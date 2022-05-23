@@ -62,10 +62,10 @@ class Halo:
             if len(pids) == parent.npart:
                 self.set_attrs_from_parent(parent)
             else:
-                self.set_attrs(pids, shifted_pids, sim_pids, pos, vel, types,
-                               masses, int_nrg, meta)
+                self.set_attrs(tictoc, pids, shifted_pids, sim_pids, pos, vel,
+                               types, masses, int_nrg, meta)
         else:  # we have a brand new halo
-            self.set_attrs(pids, shifted_pids, sim_pids, pos, vel, types,
+            self.set_attrs(tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
                            masses, int_nrg, meta)
 
     def __str__(self):
@@ -87,7 +87,7 @@ class Halo:
 
         return pstr
 
-    def set_attrs(self, pids, shifted_pids, sim_pids, pos, vel, types,
+    def set_attrs(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
                   masses, int_nrg, meta):
 
         # Particle information
@@ -143,7 +143,7 @@ class Halo:
 
         # Particle information
         self.pids = parent.pids
-        self.shifted_inds = parent.shifted_pids
+        self.shifted_inds = parent.shifted_inds
         self.sim_pids = parent.sim_pids
         self.pos = parent.pos
         self.vel = parent.vel
