@@ -19,9 +19,7 @@ sns.set_style("whitegrid")
 
 
 def alpha_v_plot():
-    """ A function that extracts the number of progenitors and descendants for all halos and
-    produces two histograms, one for the number of progenitors and one for the number of
-    descendants.
+    """
 
     :return: None
     """
@@ -124,7 +122,7 @@ def alpha_v_plot():
             print(snap, e)
             continue
 
-    if sys.argv[2] > len(snaplist):
+    if int(sys.argv[2]) > len(snaplist):
 
         total_alpha_host = np.array(alpha_hosts)
         total_alpha_sub = np.array(alpha_subs)
