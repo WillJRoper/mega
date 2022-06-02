@@ -62,7 +62,7 @@ class Metadata:
             self.halo_basename += "_"
         if self.graph_basename[-1] != "_":
             self.graph_basename += "_"
-        
+
         # Parameter file flags
         self.verbose = flags["verbose"]
         self.findsubs = flags["find_subs"]
@@ -203,7 +203,7 @@ class Metadata:
                             * (4 * np.pi * 200 * self.mean_den / 3) ** (1 / 6)
                             * 10 ** (10 / 3))
         self.sub_vlinkl_indp = self.vlinkl_indp \
-                               * (self.linkl[1] / self.sub_linkl[1]) ** (1 / 2)
+            * (self.linkl[1] / self.sub_linkl[1]) ** (1 / 2)
 
         # Halo
         self.part_thresh = params["part_threshold"]
