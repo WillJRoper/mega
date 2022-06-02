@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 
+
 setup(
     name="mega",
     version="0.9.0",
