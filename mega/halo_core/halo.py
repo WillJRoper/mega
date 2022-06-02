@@ -209,7 +209,7 @@ class Halo:
         :param decrement:
         :return:
         """
-        self.vlcoeff -= self.vlcoeff * decrement
+        self.vlcoeff = 10 ** (np.log10(self.vlcoeff) - decrement)
 
     def wrap_pos(self, l):
         """
