@@ -237,10 +237,11 @@ class Halo:
 
     def clean_halo(self):
         """ A helper method to clean memory hogging attributes to limit the
-            memory used by the dictionary holding halos prior to output.
+            memory in communications containing output halos.
         :return:
         """
-        # Remove attributes that are no longer needed
+        # Remove attributes that are no longer
         del self.pos
         del self.vel
         del self.masses
+        del self.parent
