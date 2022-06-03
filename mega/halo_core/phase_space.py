@@ -242,6 +242,11 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
         # Get a halo to work on
         halo = test_halos.pop()
 
+        # Print a halo if it's in the anomalous
+        # TODO: REMOVE THIS!!!
+        if 2184463 in halo.sim_pids:
+            print(halo)
+
         # Define the phase space linking length
         vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
