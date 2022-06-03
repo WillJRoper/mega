@@ -10,6 +10,7 @@ from mega.core.talking_utils import message, pad_print_middle
 from mega.core.collect_result import collect_halos
 
 import pickle
+import numpy as np
 import mpi4py
 from mpi4py import MPI
 
@@ -127,7 +128,7 @@ def hosthalofinder(meta):
         message(meta.rank, "=" * meta.table_width)
 
     tictoc.stop_func_time()
-    
+
     # ========================= Domain Decomposition =========================
 
     # Get the particles and tree particles on this rank
@@ -180,19 +181,19 @@ def hosthalofinder(meta):
 
     # Extract the spatial halos for this tasks particles
     halo_pinds = spatial_node_task(tictoc, meta, rank_parts,
-                                  rank_tree_parts, pos, tree)
+                                   rank_tree_parts, pos, tree)
 
     if meta.verbose:
         tictoc.report("Spatial search")
 
-    # Are also finding baryons?
+    # Are we also finding baryons?
     if meta.with_hydro:
 
         # ==================== Hydro Domain Decomposition ====================
 
         # Get the baryonic particles and tree particles on this rank
         rank_bary_parts = dd.hydro_cell_domain_decomp(tictoc, meta, comm,
-                                                       cell_ranks)
+                                                      cell_ranks)
         rank_bary_parts, rank_rank_tree_bary_parts = rank_bary_parts
 
         if meta.verbose:
@@ -233,8 +234,8 @@ def hosthalofinder(meta):
 
         # Extract the baryonic spatial halos for this task's particles
         bary_halo_pinds = spatial_node_task(tictoc, meta, bary_parts,
-                                           rank_tree_bary_parts, bary_pos, 
-                                           bary_tree, part_type=0)
+                                            rank_tree_bary_parts, bary_pos,
+                                            bary_tree, part_type=0)
 
         if meta.verbose:
             tictoc.report("Baryonic spatial search")
@@ -245,7 +246,7 @@ def hosthalofinder(meta):
         my_combined_halos = combine_halo_types(tictoc, meta, halo_pinds,
                                                rank_tree_parts, tree_pos,
                                                bary_halo_pinds,
-                                               rank_tree_bary_parts, 
+                                               rank_tree_bary_parts,
                                                bary_tree_pos,
                                                tree, bary_tree)
 
