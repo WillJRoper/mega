@@ -122,7 +122,7 @@ class Halo:
 
         # Calculate weighted mean position and velocities
         self.mean_pos = np.average(self.true_pos, weights=self.masses, axis=0)
-        self.mean_vel = np.average(self.vel, weights=self.masses, axis=0)
+        self.mean_vel = np.average(self.true_vel, weights=self.masses, axis=0)
 
         # Centre position and velocity
         self.pos -= self.mean_pos
@@ -136,7 +136,9 @@ class Halo:
                                            weights=self.masses, axis=0)
 
         # Energy properties (energies are in per unit mass units)
-        self.KE = kinetic(tictoc, self.vel_with_hubflow, self.masses)
+        self.KE = kinetic(tictoc,
+                          self.vel_with_hubflow - self.mean_vel_hubflow,
+                          self.masses)
         self.therm_nrg = np.sum(self.int_nrg)
         self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
                        self.masses, meta.z, meta.G)
