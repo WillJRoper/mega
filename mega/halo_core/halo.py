@@ -11,7 +11,8 @@ class Halo:
 
     # Predefine possible attributes to avoid overhead
     __slots__ = ["memory", "print_props", "parent", "pids", "shifted_inds",
-                 "sim_pids", "pos", "vel", "types", "masses", "int_nrg",
+                 "sim_pids", "true_pos", "pos", "true_vel",
+                 "vel", "types", "masses", "int_nrg",
                  "vel_with_hubflow", "npart", "npart_types", "real",
                  "mean_pos", "mean_vel", "mean_vel_hubflow", "mass",
                  "ptype_mass", "KE", "therm_nrg", "GE", "rms_r", "rms_vr",
@@ -95,9 +96,11 @@ class Halo:
         self.shifted_inds = shifted_pids
         self.sim_pids = sim_pids
         self.pos = pos
+        self.true_pos = pos
         if meta.periodic:
             self.wrap_pos(meta.boxsize)
         self.vel = vel
+        self.true_vel = vel
         self.types = types
         self.masses = masses
         self.int_nrg = int_nrg
@@ -118,7 +121,7 @@ class Halo:
         self.hmvr = None
 
         # Calculate weighted mean position and velocities
-        self.mean_pos = np.average(self.pos, weights=self.masses, axis=0)
+        self.mean_pos = np.average(self.true_pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.vel, weights=self.masses, axis=0)
 
         # Centre position and velocity
@@ -146,7 +149,9 @@ class Halo:
         self.shifted_inds = parent.shifted_inds
         self.sim_pids = parent.sim_pids
         self.pos = parent.pos
+        self.true_pos = parent.true_pos
         self.vel = parent.vel
+        self.true_vel = parent.true_vel
         self.types = parent.types
         self.masses = parent.masses
         self.int_nrg = parent.int_nrg
@@ -242,6 +247,8 @@ class Halo:
         """
         # Remove attributes that are no longer
         del self.pos
+        del self.true_pos
         del self.vel
+        del self.true_vel
         del self.masses
         del self.parent
