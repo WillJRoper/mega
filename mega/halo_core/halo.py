@@ -124,20 +124,23 @@ class Halo:
         self.mean_pos = np.average(self.true_pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.true_vel, weights=self.masses, axis=0)
 
-        # Centre position and velocity
+        # Centre position
         self.pos -= self.mean_pos
-        self.vel -= self.mean_vel
 
         # Add the hubble flow to the velocities
         # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
         hubflow = meta.cosmo.H(meta.z).value * self.pos
         self.vel_with_hubflow = self.vel + hubflow
-        self.mean_vel_hubflow = np.average(self.vel,
+        self.mean_vel_hubflow = np.average(self.vel_with_hubflow,
                                            weights=self.masses, axis=0)
+
+        # Centre velocity
+        self.vel -= self.mean_vel
+        self.vel_with_hubflow -= self.mean_vel_hubflow
 
         # Energy properties (energies are in per unit mass units)
         self.KE = kinetic(tictoc,
-                          self.vel_with_hubflow - self.mean_vel_hubflow,
+                          self.vel_with_hubflow,
                           self.masses)
         self.therm_nrg = np.sum(self.int_nrg)
         self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
