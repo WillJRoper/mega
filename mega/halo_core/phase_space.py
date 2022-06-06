@@ -281,11 +281,11 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
                 # Compute the halo properties
                 new_halo.compute_props(meta)
 
-                # Get the memory footprint of this halo
-                new_halo.memory = utils.get_size(new_halo)
-
                 # Limit memory footprint of stored halo
                 new_halo.clean_halo()
+
+                # Get the memory footprint of this halo
+                new_halo.memory = utils.get_size(new_halo)
 
                 # Store the resulting halo
                 results.append(new_halo)
@@ -312,15 +312,8 @@ def get_real_host_halos(tictoc, halo, meta):
 
     :param tictoc:
     :param halo:
-    :param boxsize:
-    :param vlinkl_halo_indp:
-    :param linkl:
-    :param decrement:
-    :param redshift:
-    :param G:
-    :param soft:
-    :param min_vlcoeff:
-    :param cosmo:
+    :param meta:
+
     :return:
     """
 
@@ -339,15 +332,8 @@ def get_real_sub_halos(tictoc, halo, meta):
 
     :param tictoc:
     :param halo:
-    :param boxsize:
-    :param vlinkl_halo_indp:
-    :param linkl:
-    :param decrement:
-    :param redshift:
-    :param G:
-    :param soft:
-    :param min_vlcoeff:
-    :param cosmo:
+    :param meta:
+
     :return:
     """
     return get_real_halos(tictoc, halo, meta.sub_vlinkl_indp,
