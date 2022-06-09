@@ -1,5 +1,6 @@
-import mega.halo_core.halo_properties as hprop
 import numpy as np
+
+import mega.halo_core.halo_properties as hprop
 from mega.core.talking_utils import get_heading, pad_print_middle
 from mega.halo_core.halo_energy import kinetic, grav
 
@@ -14,9 +15,10 @@ class Halo:
                  "sim_pids", "true_pos", "pos", "true_vel",
                  "vel", "types", "masses", "int_nrg",
                  "vel_with_hubflow", "npart", "npart_types", "real",
-                 "mean_pos", "mean_vel", "mean_vel_hubflow", "mass",
-                 "ptype_mass", "KE", "therm_nrg", "GE", "rms_r", "rms_vr",
-                 "veldisp3d", "veldisp1d", "vmax", "hmr", "hmvr", "vlcoeff"]
+                 "mean_pos", "mean_vel", "mean_vel_hubflow", "spatial_tree",
+                 "mass", "ptype_mass", "KE", "therm_nrg", "GE", "rms_r",
+                 "rms_vr", "veldisp3d", "veldisp1d", "vmax", "hmr", "hmvr",
+                 "vlcoeff", "mb_part", "cop"]
 
     def __init__(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
                  masses, int_nrg, vlcoeff, meta, parent=None):
@@ -124,17 +126,17 @@ class Halo:
         self.mean_pos = np.average(self.true_pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.true_vel, weights=self.masses, axis=0)
 
-        # Centre position
+        # Centre positions
         self.pos -= self.mean_pos
 
         # Add the hubble flow to the velocities
         # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
         hubflow = meta.cosmo.H(meta.z).value * self.pos
-        self.vel_with_hubflow = self.vel + hubflow
+        self.vel_with_hubflow = self.true_vel + hubflow
         self.mean_vel_hubflow = np.average(self.vel_with_hubflow,
                                            weights=self.masses, axis=0)
 
-        # Centre velocity
+        # Centre velocities
         self.vel -= self.mean_vel
         self.vel_with_hubflow -= self.mean_vel_hubflow
 
