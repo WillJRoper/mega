@@ -123,7 +123,7 @@ class Halo:
         self.hmvr = None
 
         # Calculate weighted mean position and velocities
-        self.mean_pos = np.average(self.true_pos, weights=self.masses, axis=0)
+        self.mean_pos = np.average(self.pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.true_vel, weights=self.masses, axis=0)
 
         # Centre positions
@@ -245,7 +245,8 @@ class Halo:
         # *** Note: fails if halo's extent is greater than 50%
         # of the boxsize in any dimension ***
         for ixyz in range(l.size):
-            self.pos[ixyz][np.where(sep[ixyz] > 0.5 * l[ixyz])] += l[ixyz]
+            self.pos[ixyz][np.where(
+                np.abs(sep[ixyz]) > 0.5 * l[ixyz])] += l[ixyz]
 
     def clean_halo(self):
         """ A helper method to clean memory hogging attributes to limit the
