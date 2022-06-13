@@ -246,7 +246,7 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
         vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
         # Define the phase space vectors for this halo
-        halo_phases = np.concatenate((halo.true_pos / linkl * 2,
+        halo_phases = np.concatenate((halo.pos / linkl * 2,
                                       halo.vel_with_hubflow / vlinkl),
                                      axis=1)
 
