@@ -49,7 +49,7 @@ class Metadata:
         """
 
         # IO paths
-        self.inputpath = inputs["data"] + inputs["basename"]
+        self.inputpath = inputs["data"]
         self.savepath = inputs["haloSavePath"]
         self.halopath = self.savepath
         self.halo_basename = inputs["halo_basename"]
@@ -59,6 +59,8 @@ class Metadata:
 
         # Flags for input type
         self.input_type = simulation["data_type"]
+        if self.input_type is not "GADGET_split":
+            self.inputpath += inputs["basename"]
 
         # Add a trailing underscore to basenames if necessary
         if self.halo_basename[-1] != "_":
