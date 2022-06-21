@@ -47,7 +47,7 @@ def read_metadata(meta):
         hdf.close()
 
     elif meta.input_type == "GADGET_split":
-        hdf = h5py.File(meta.inputpath + meta.snap + ".0.hdf5", "r")
+        hdf = h5py.File(meta.inputpath.replace("<snap>", meta.snap), "r")
         boxsize = hdf["Header"].attrs["BoxSize"]
         npart = hdf["Header"].attrs["NumPart_Total"]
         z = hdf["Header"].attrs["Redshift"]
