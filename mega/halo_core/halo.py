@@ -144,7 +144,7 @@ class Halo:
         self.KE = kinetic(tictoc,
                           self.vel_with_hubflow,
                           self.masses)
-        self.therm_nrg = np.sum(self.int_nrg)
+        self.therm_nrg = 0  # np.sum(self.int_nrg)
         self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
                        self.masses, meta.z, meta.G)
         self.real = (np.log10(10 ** self.KE + self.therm_nrg) / self.GE) <= 1
