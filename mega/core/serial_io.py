@@ -38,12 +38,20 @@ def read_metadata(meta):
     :param meta: The metadata object in which this data will be stored
     :return:
     """
+    if meta.input_type == "SWIFT":
 
-    hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
-    boxsize = hdf["Header"].attrs["BoxSize"]
-    npart = hdf["Header"].attrs["NumPart_Total"]
-    z = hdf["Header"].attrs["Redshift"]
-    hdf.close()
+        hdf = h5py.File(meta.inputpath + meta.snap + ".hdf5", "r")
+        boxsize = hdf["Header"].attrs["BoxSize"]
+        npart = hdf["Header"].attrs["NumPart_Total"]
+        z = hdf["Header"].attrs["Redshift"]
+        hdf.close()
+
+    elif meta.input_type == "GADGET_split":
+        hdf = h5py.File(meta.inputpath + meta.snap + ".0.hdf5", "r")
+        boxsize = hdf["Header"].attrs["BoxSize"]
+        npart = hdf["Header"].attrs["NumPart_Total"]
+        z = hdf["Header"].attrs["Redshift"]
+        hdf.close()
 
     return boxsize, npart, z
 

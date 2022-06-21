@@ -32,7 +32,7 @@ class Metadata:
     """
 
     def __init__(self, snaplist, snap_ind, cosmology, inputs, flags, params,
-                 simulation, boxsize=None, npart=None, z=None, tot_mass=None):
+                 simulation, boxsize=None, npart=None, z=None):
         """
 
         :param snaplist:
@@ -56,6 +56,9 @@ class Metadata:
         self.graph_basename = inputs["graph_basename"]
         self.dgraphpath = inputs["directgraphSavePath"]
         self.profile_path = inputs["profile_plot_path"]
+
+        # Flags for input type
+        self.input_type = simulation["data_type"]
 
         # Add a trailing underscore to basenames if necessary
         if self.halo_basename[-1] != "_":
