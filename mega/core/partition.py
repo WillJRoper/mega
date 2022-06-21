@@ -56,13 +56,13 @@ def stripe_cells(meta):
     # Define dictionary to hold cells eventual ranks
     cell_rank_dict = {}
 
-    assert nranks < cdim**3, "There are more ranks than cells!"
+    assert nranks < ncells, "There are more ranks than cells!"
 
     # What cells are where?
     # NOTE: linspace will always put a single integer for the max value so
     #       we include it and subtract 1.
     cell_ranks = np.linspace(0, nranks, ncells, dtype=int)
-    cell_ranks[cell_ranks == ncells] -= 1
+    cell_ranks[cell_ranks == nranks] -= 1
 
     # Loop over cells and populate the dictionary
     for i in range(cdim):
