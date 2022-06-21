@@ -57,7 +57,7 @@ def stripe_cells(meta):
     cell_rank_dict = {}
 
     # How many cells on each rank?
-    nrank_cells = int(np.floor(cdim ** 3 / nranks))
+    nrank_cells = int(np.ceil(cdim ** 3 / nranks))
 
     # Loop over cells
     rank = 0
@@ -77,8 +77,6 @@ def stripe_cells(meta):
 
                 if count % nrank_cells == 0:
                     rank += 1
-
-    print(rank, np.max(cell_ranks))
 
     # Ensure all cells have been partioned
     assert np.min(cell_ranks) >= 0, "Not all cells assigned to a rank"
