@@ -52,6 +52,7 @@ def read_metadata(meta):
         npart = hdf["Header"].attrs["NumPart_Total"]
         z = hdf["Header"].attrs["Redshift"]
         hdf.close()
+        boxsize = np.array([boxsize, boxsize, boxsize])
 
     return boxsize, npart, z
 
