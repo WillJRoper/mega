@@ -59,7 +59,7 @@ class Metadata:
 
         # Flags for input type
         self.input_type = simulation["data_type"]
-        if self.input_type == "GADGET_split":
+        if self.input_type != "GADGET_split":
             self.inputpath += inputs["basename"]
 
         # Add a trailing underscore to basenames if necessary
