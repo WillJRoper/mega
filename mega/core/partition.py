@@ -78,6 +78,8 @@ def stripe_cells(meta):
                 if count % nrank_cells == 0:
                     rank += 1
 
+    print(rank, np.max(cell_ranks))
+
     # Ensure all cells have been partioned
     assert np.min(cell_ranks) >= 0, "Not all cells assigned to a rank"
     assert np.max(cell_ranks) >= nranks, "Cells sorted into too many ranks"
