@@ -53,15 +53,14 @@ def stripe_cells(meta):
     nranks = meta.nranks
 
     # Define dictionary to hold cells eventual ranks
-    cell_ranks = np.full(cdim ** 3, -2, dtype=int)
     cell_rank_dict = {}
 
-    # How many cells on each rank?
-    nrank_cells = int(np.ceil(cdim ** 3 / nranks))
+    assert nranks < cdim**3, "There are more ranks than cells!"
 
-    # Loop over cells
-    rank = 0
-    count = 0
+    # What cells are where?
+    cell_ranks = np.linspace(0, nranks, cdim ** 3, dtype=int)
+
+    # Loop over cells and populate the dictionary
     for i in range(cdim):
         for j in range(cdim):
             for k in range(cdim):
@@ -70,13 +69,8 @@ def stripe_cells(meta):
                 ind = utils.get_cellid(cdim, i, j, k)
 
                 # Set the rank for this cell
-                cell_ranks[ind] = rank
-                cell_rank_dict.setdefault(rank, []).append((i, j, k))
-
-                count += 1
-
-                if count % nrank_cells == 0:
-                    rank += 1
+                cell_rank_dict.setdefault(cell_ranks[ind],
+                                          []).append((i, j, k))
 
     # Ensure all cells have been partioned
     assert np.min(cell_ranks) >= 0, "Not all cells assigned to a rank"
