@@ -2,7 +2,7 @@ import numpy as np
 import h5py
 
 import mega.core.utilities as utils
-from mega.core.partition import pick_vector, split_vector, get_parts_in_cell
+from mega.core.partition import stripe_cells, get_parts_in_cell
 from mega.core.talking_utils import message
 from mega.core.timing import timer
 
@@ -36,10 +36,9 @@ def cell_domain_decomp(tictoc, meta, comm, part_type, cell_ranks=None):
     # Get the number of particles we are working with
     npart = meta.npart[part_type]
 
-    # Split the cells over the ranks
+    # Stripe the cells over the ranks
     if cell_ranks is None:
-        samplecells = pick_vector(meta.nranks, meta.cdim)
-        cell_ranks, cell_rank_dict = split_vector(meta.cdim, samplecells)
+        cell_ranks, cell_rank_dict = stripe_cells(meta)
 
     # Find the cell each particle belongs to
     cells, npart_on_rank = get_parts_in_cell(npart, meta, part_type)

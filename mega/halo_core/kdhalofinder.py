@@ -194,14 +194,14 @@ def hosthalofinder(meta):
         # Get the baryonic particles and tree particles on this rank
         rank_bary_parts = dd.hydro_cell_domain_decomp(tictoc, meta, comm,
                                                       cell_ranks)
-        rank_bary_parts, rank_rank_tree_bary_parts = rank_bary_parts
+        rank_bary_parts, rank_tree_bary_parts = rank_bary_parts
 
         if meta.verbose:
             tictoc.report("Baryonic Particle Domain Decomposition")
 
         # Get tree positions and true indices for the baryonic particles
         hydro_tree_data = serial_io.read_baryonic(tictoc, meta,
-                                                  rank_rank_tree_bary_parts)
+                                                  rank_tree_bary_parts)
         bary_tree_pos, rank_tree_bary_parts = hydro_tree_data
 
         if meta.verbose:

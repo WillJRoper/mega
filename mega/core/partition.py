@@ -1,6 +1,7 @@
 import numpy as np
 
 from mega.core.serial_io import read_range
+import mega.core.utilities as utils
 
 
 def initial_partition(npart, nranks, rank):
@@ -45,60 +46,33 @@ def get_parts_in_cell(npart, meta, part_type):
     return cells, high_lim - low_lim
 
 
-def pick_vector(nranks, cdim):
+def stripe_cells(meta):
 
-    # Define the number of cells
-    ncells = cdim ** 3
-
-    # Set up array to hold the sample cell selections
-    samplecells = []
-
-    # Set up the loop variables
-    step = ncells / nranks
-    l = 0
-
-    # Loop over cells
-    ii = 0
-    for i in range(cdim):
-        for j in range(cdim):
-            for k in range(cdim):
-                if ii % step == 0 and l < nranks:
-                    samplecells.append((i, j, k))
-                    l += 1
-                ii += 1
-
-    return samplecells
-
-
-def split_vector(cdim, samplecells):
+    # Get metadata values
+    cdim = meta.cdim
+    nranks = meta.nranks
 
     # Define dictionary to hold cells eventual ranks
     cell_ranks = np.full(cdim**3, -2, dtype=int)
     cell_rank_dict = {}
 
-    # Loop over cells
-    ind = 0
-    for i in range(cdim):
-        for j in range(cdim):
-            for k in range(cdim):
-                select = -1
-                rsqmax = 10**10
-                for l in range(len(samplecells)):
-                    dx = samplecells[l][0] - i
-                    dy = samplecells[l][1] - j
-                    dz = samplecells[l][2] - k
-                    rsq = (dx * dx + dy * dy + dz * dz)
-                    if rsq < rsqmax:
-                        rsqmax = rsq
-                        select = l
+    # How many planes does each rank get?
+    planes = np.linspace(0, cdim, nranks + 1, dtype=int)
 
-                # Set the closest seed rank as the rank for this cell
-                cell_ranks[ind] = select
-                cell_rank_dict.setdefault(select, []).append((i, j, k))
-                ind += 1
+    # Loop over cells
+    for (rank, k_low), k_high in zip(enumerate(planes[:-1]), planes[1:]):
+        for k in range(k_low, k_high):
+            for i in range(cdim):
+                for j in range(cdim):
+
+                    # Get cell index
+                    ind = utils.get_cellid(cdim, i, j, k)
+
+                    # Set the rank for this cell
+                    cell_ranks[ind] = rank
+                    cell_rank_dict.setdefault(rank, []).append((i, j, k))
 
     # Ensure all cells have been partioned
     assert np.min(cell_ranks) == 0, "Not all cells assigned to a rank"
-    assert np.max(cell_ranks) == len(samplecells) - 1, "More ranks than exist"
 
     return cell_ranks, cell_rank_dict
