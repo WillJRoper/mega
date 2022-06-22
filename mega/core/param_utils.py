@@ -22,6 +22,10 @@ def read_param(paramfile):
     cosmology = parsed_yaml_file["cosmology"]
     simulation = parsed_yaml_file["simulation"]
 
+    # Set some default values
+    if "nthreads" not in params:
+        params["nthreads"] = -1
+
     return inputs, flags, params, cosmology, simulation
 
 
@@ -86,6 +90,7 @@ class Metadata:
         # MPI information (given value if needed)
         self.rank = None
         self.nranks = None
+        self.nthreads = params["nthreads"]
 
         # Information about the box
         # Open hdf5 file

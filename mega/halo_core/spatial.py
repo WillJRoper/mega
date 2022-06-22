@@ -8,7 +8,7 @@ from mega.halo_core.halo_stitching import add_halo
 from mega.core.talking_utils import count_and_report_halos
 
 
-def find_halos(tree, pos, linkl, npart):
+def find_halos(meta, tree, pos, linkl, npart):
     """
 
     :param tree:
@@ -40,7 +40,7 @@ def find_halos(tree, pos, linkl, npart):
     # =============== Assign Particles To Initial Halos ===============
 
     # Query the tree returning a list of lists
-    query = tree.query_ball_point(pos, r=linkl)
+    query = tree.query_ball_point(pos, r=linkl, workers=meta.nthreads)
 
     # Loop through query results assigning initial halo IDs
     for query_part_inds in iter(query):
@@ -140,7 +140,7 @@ def find_halos(tree, pos, linkl, npart):
     return part_haloids, assigned_parts
 
 
-def find_subhalos(halo_pos, sub_linkl):
+def find_subhalos(meta, halo_pos, sub_linkl):
     """
 
     :param halo_pos:
@@ -169,7 +169,7 @@ def find_subhalos(halo_pos, sub_linkl):
     tree = cKDTree(halo_pos, leafsize=32, compact_nodes=True,
                    balanced_tree=True)
 
-    query = tree.query_ball_point(halo_pos, r=sub_linkl)
+    query = tree.query_ball_point(halo_pos, r=sub_linkl, workers=meta.nthreads)
 
     # Loop through query results
     for query_part_inds in iter(query):
@@ -305,7 +305,7 @@ def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
         low, high = part_bins[ind], part_bins[ind + 1]
 
         # Run the host halo finder to get the spatial catalog
-        res_tup = find_halos(tree, pos[low: high, :], meta.linkl[part_type],
+        res_tup = find_halos(meta, tree, pos[low: high, :], meta.linkl[part_type],
                              rank_tree_parts.shape[0])
         task_part_haloids, task_assigned_parts = res_tup
 
@@ -314,8 +314,8 @@ def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
             item = task_assigned_parts.popitem()
             halo, part_inds = item
             (ihalo, rank_part_haloids, halo_pids) = add_halo(ihalo, part_inds,
-                                                      rank_part_haloids,
-                                                      halo_pids)
+                                                             rank_part_haloids,
+                                                             halo_pids)
 
     if meta.debug:
 
@@ -344,7 +344,7 @@ def get_sub_halos(tictoc, halo_pids, halo_pos, meta):
     """
 
     # Do a spatial search for subhalos
-    part_subhaloids, assignedsub_parts = find_subhalos(halo_pos,
+    part_subhaloids, assignedsub_parts = find_subhalos(meta, halo_pos,
                                                        meta.sub_linkl[1])
 
     # Get the true indices for these particles
