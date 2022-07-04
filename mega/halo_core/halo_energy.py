@@ -31,9 +31,9 @@ def kinetic(tictoc, v, masses):
     # Compute kinetic energy of the halo
     v2 = v ** 2
     vel2 = np.sum([v2[:, 0], v2[:, 1], v2[:, 2]], axis=0)
-    KE_part = np.log10(np.sum(0.5 * vel2))
+    KE = np.sum(0.5 * vel2)
 
-    return KE_part
+    return KE
 
 
 @timer("Grav-Energy")
@@ -49,7 +49,7 @@ def grav(tictoc, halo_poss, halo_npart, soft, masses, redshift, G):
                      / np.sqrt(dists + soft ** 2))
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = np.log10(G * GE * (1 + redshift) * 1 / 3.086e+19) + 10
+    GE = G * GE * (1 + redshift) * 1 / 3.086e+19 + 10
 
     return GE
 

@@ -147,7 +147,7 @@ class Halo:
         self.therm_nrg = 0  # np.sum(self.int_nrg)
         self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
                        self.masses, meta.z, meta.G)
-        self.real = (np.log10(10 ** self.KE + self.therm_nrg) / self.GE) <= 1
+        self.real = ((self.KE + self.therm_nrg) / self.GE) <= 1
 
     def set_attrs_from_parent(self, parent):
 
