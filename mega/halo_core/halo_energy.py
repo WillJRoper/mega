@@ -49,7 +49,7 @@ def grav(tictoc, halo_poss, halo_npart, soft, masses, redshift, G):
                      / np.sqrt(dists + soft ** 2))
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE = G * GE * (1 + redshift) * 1 / 3.086e+19 + 10
+    GE = G * GE * (1 + redshift) * 1 / 3.086e+19 * 10 ** 10
 
     return GE
 
