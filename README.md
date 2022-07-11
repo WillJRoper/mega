@@ -1,4 +1,6 @@
 # MEGA
-MErger Graph Algorithm: A robust but simple halo finder and merger graph builder with functionality to deconstruct graphs into merger trees. 
+## MErger Graph Algorithm: A robust halo finder and merger graph construction algorithm. 
 
-DOCS TO COME (WIP)
+Initial detailing of the algorithm can be found in the MEGA paper: https://arxiv.org/abs/2003.01187
+
+DOCS TO COME (VERY SOON)
