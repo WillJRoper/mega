@@ -429,7 +429,3 @@ def hosthalofinder(meta):
     if meta.profile:
 
         tictoc.end_report(comm)
-
-        with open(meta.profile_path + "Halo_" + str(rank) + '_'
-                  + meta.snap + '.pck', 'wb') as pfile:
-            pickle.dump(tictoc.task_time, pfile)

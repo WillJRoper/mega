@@ -166,7 +166,7 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
 
         # Define the phase space vectors for this halo
         halo_phases = np.concatenate((halo.pos / linkl * 2,
-                                      halo.vel_with_hubflow / vlinkl),
+                                      halo.vel / vlinkl),
                                      axis=1)
 
         # Query these particles in phase space to find distinct bound halos

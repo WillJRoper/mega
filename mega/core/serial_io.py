@@ -281,6 +281,9 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
     hdf.close()
 
+    # Include hubble flow in velocities
+    vel += meta.cosmo.H(meta.z).value * (pos - (meta.boxsize / 2))
+
     return sim_pids, pos, vel, masses, part_types, int_energy
 
 

@@ -126,23 +126,13 @@ class Halo:
         self.mean_pos = np.average(self.pos, weights=self.masses, axis=0)
         self.mean_vel = np.average(self.true_vel, weights=self.masses, axis=0)
 
-        # Centre positions
+        # Centre positions and velocities
         self.pos -= self.mean_pos
-
-        # Add the hubble flow to the velocities
-        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
-        hubflow = meta.cosmo.H(meta.z).value * self.pos
-        self.vel_with_hubflow = self.true_vel + hubflow
-        self.mean_vel_hubflow = np.average(self.vel_with_hubflow,
-                                           weights=self.masses, axis=0)
-
-        # Centre velocities
         self.vel -= self.mean_vel
-        self.vel_with_hubflow -= self.mean_vel_hubflow
 
         # Energy properties (energies are in per unit mass units)
         self.KE = kinetic(tictoc,
-                          self.vel_with_hubflow,
+                          self.vel,
                           self.masses)
         self.therm_nrg = 0  # np.sum(self.int_nrg)
         self.GE = grav(tictoc, self.pos, self.npart, meta.soft,
@@ -151,7 +141,7 @@ class Halo:
 
     def set_attrs_from_parent(self, parent):
 
-        # Particle information
+        # Set all properties from the parent
         self.pids = parent.pids
         self.shifted_inds = parent.shifted_inds
         self.sim_pids = parent.sim_pids
@@ -162,9 +152,6 @@ class Halo:
         self.types = parent.types
         self.masses = parent.masses
         self.int_nrg = parent.int_nrg
-
-        # Halo properties
-        # (some only populated when a halo exits phase space iteration)
         self.npart = parent.npart
         self.npart_types = parent.npart_types
         self.mass = parent.mass
@@ -176,17 +163,8 @@ class Halo:
         self.vmax = None
         self.hmr = None
         self.hmvr = None
-
-        # Calculate weighted mean position and velocities
         self.mean_pos = parent.mean_pos
         self.mean_vel = parent.mean_vel
-
-        # Add the hubble flow to the velocities
-        # *** NOTE: this DOES NOT include a gadget factor of a^-1/2 ***
-        self.vel_with_hubflow = parent.vel_with_hubflow
-        self.mean_vel_hubflow = parent.mean_vel_hubflow
-
-        # Energy properties (energies are in per unit mass units)
         self.KE = parent.KE
         self.therm_nrg = parent.therm_nrg
         self.GE = parent.GE
@@ -200,17 +178,17 @@ class Halo:
 
         # Get rms radii from the centred position and velocity
         self.rms_r = hprop.rms_rad(self.pos)
-        self.rms_vr = hprop.rms_rad(self.vel_with_hubflow)
+        self.rms_vr = hprop.rms_rad(self.vel)
 
         # Compute the velocity dispersion
-        self.veldisp3d, self.veldisp1d = hprop.vel_disp(self.vel_with_hubflow)
+        self.veldisp3d, self.veldisp1d = hprop.vel_disp(self.vel)
 
         # Compute maximal rotational velocity
         self.vmax = hprop.vmax(self.pos, self.masses, meta.G)
 
         # Calculate half mass radius in position and velocity space
         self.hmr = hprop.half_mass_rad(self.pos, self.masses)
-        self.hmvr = hprop.half_mass_rad(self.vel_with_hubflow, self.masses)
+        self.hmvr = hprop.half_mass_rad(self.vel, self.masses)
 
         # Define mass in each particle type
         self.ptype_mass = [np.sum(self.masses[self.types == i])

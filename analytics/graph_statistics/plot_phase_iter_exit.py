@@ -47,17 +47,17 @@ def alpha_v_plot():
     # Loop through Merger Graph data assigning each value to the relevant list
     for i, snap in enumerate(snaplist):
 
-        # Set up object containing housekeeping metadata
-        meta = p_utils.Metadata(snaplist, i, cosmology, inputs,
-                                flags, params, simulation)
-
-        halo_sub = meta.findsubs
-
         if snap_ind < len(snaplist):
             if snap != snaplist[int(sys.argv[2])]:
                 continue
 
         print(snap)
+
+        # Set up object containing housekeeping metadata
+        meta = p_utils.Metadata(snaplist, i, cosmology, inputs,
+                                flags, params, simulation)
+
+        halo_sub = meta.findsubs
 
         # Create file to store this snapshots graph results
         hdf = h5py.File(meta.savepath + meta.halo_basename
