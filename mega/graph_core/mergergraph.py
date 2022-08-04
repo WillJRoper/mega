@@ -2,7 +2,6 @@ import pickle
 
 import mega.core.serial_io as io
 import mega.graph_core.prog_desc_find as pdfind
-from mega.core.domain_decomp import graph_halo_decomp
 from mega.core.talking_utils import message, pad_print_middle
 
 import mpi4py
@@ -30,25 +29,21 @@ def graph_main(density_rank, meta):
     # ======================= Set up everything we need =======================
 
     # Lets read the initial data we need to hand off the work
-    (prog_npart, proghalo_nparts, prog_rank_partbins, rank_part_progids,
-     prog_reals, rank_prog_pids,
-     prog_rank_pidbins) = io.read_prog_data(tictoc, meta, density_rank, comm)
+    prog_objs, prog_min_pids, prog_max_pids = io.read_link_data(
+        tictoc, meta, density_rank, meta.prog_snap
+    )
     if meta.verbose:
         tictoc.report("Reading progenitor data")
-    (nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts,
-     rank_pidbins) = io.read_current_data(tictoc, meta, density_rank, comm)
+    halos, min_pids, max_pids, nhalo = io.read_current_data(
+        tictoc, meta, density_rank
+    )
     if meta.verbose:
-        tictoc.report("Reading halo data")
-    (desc_npart, deschalo_nparts, desc_rank_partbins,
-     rank_part_descids, rank_desc_pids,
-     desc_rank_pidbins) = io.read_desc_data(tictoc, meta, density_rank, comm)
+        tictoc.report("Reading and splitting halo data")
+    desc_objs, desc_min_pids, desc_max_pids = io.read_link_data(
+        tictoc, meta, density_rank, meta.desc_snap
+    )
     if meta.verbose:
         tictoc.report("Reading descendant data")
-
-    if meta.debug and meta.rank == 0:
-        for r in range(meta.nranks):
-            message(meta.rank, "Rank %d has %d particles" % (r,
-                                                             rank_part_haloids.size))
 
     comm.Barrier()
 
@@ -72,50 +67,41 @@ def graph_main(density_rank, meta):
 
     tictoc.stop_func_time()
 
-    # Get the halos we have to work on
-    my_halos, halo_location = graph_halo_decomp(tictoc, nhalo, meta, comm,
-                                                density_rank, rank_pidbins)
+    tictoc.start_func_time("Linking")
 
-    if meta.verbose:
-        tictoc.report("Splitting halos across ranks")
+    # Now loop over the halos we have on this rank and compare them to
+    # all progenitors and descendants
+    for halo in halos:
 
-    # Sort through halos on this rank and work out where
-    # we need to communicate for links
-    (results, other_rank_prog_parts,
-     other_rank_desc_parts) = pdfind.sort_prog_desc(tictoc, meta, my_halos,
-                                                    rank_prog_pids,
-                                                    rank_desc_pids)
+        # Loop over the progenitors testing each one
+        for prog in prog_objs:
 
-    comm.Barrier()
+            # Lets do the early skip if we can
+            if prog.min_pid > halo.max_pid or prog.max_pid < halo.min_pid:
+                continue
 
-    if meta.verbose:
-        tictoc.report("Sorting local halos")
+            # Compare this halo and progenitor
+            halo.compare_prog(prog, meta)
 
-    # Now we need to send all of our requests to other ranks to get the
-    # particles they have that I need
-    forn_prog_parts, forn_desc_parts = pdfind.linking_loop(tictoc,
-                                                           meta, comm,
-                                                           other_rank_prog_parts,
-                                                           other_rank_desc_parts,
-                                                           rank_part_progids,
-                                                           proghalo_nparts,
-                                                           rank_part_descids,
-                                                           prog_reals,
-                                                           deschalo_nparts,
-                                                           rank_prog_pids,
-                                                           rank_desc_pids)
+        # Loop over the descendants testing each one
+        for desc in desc_objs:
 
-    # Combine the results from other ranks with our own
-    results = pdfind.update_halos(tictoc, meta, results, forn_prog_parts,
-                                  forn_desc_parts)
+            # Lets do the early skip if we can
+            if desc.min_pid > halo.max_pid or desc.max_pid < halo.min_pid:
+                continue
 
-    if meta.verbose:
-        tictoc.report("Updating foreign links")
+            # Compare this halo and progenitor
+            halo.compare_desc(desc, meta)
 
     comm.Barrier()
+
+    tictoc.stop_func_time()
+
+    if meta.verbose:
+        tictoc.report("Linking progenitors and descendants")
 
     # Clean up results removing halos that don't meet the linking criteria
-    results = pdfind.clean_halos(tictoc, meta, results)
+    results = pdfind.clean_halos(tictoc, meta, halos)
 
     if meta.verbose:
         tictoc.report("Cleaning up progenitors and descendants")
@@ -135,7 +121,7 @@ def graph_main(density_rank, meta):
 
         # Write the data and get the reals arrays
         io.write_dgraph_data(tictoc, meta, all_results,
-                             density_rank, reals)
+                             density_rank)
 
         if meta.verbose:
             tictoc.report("Writing")

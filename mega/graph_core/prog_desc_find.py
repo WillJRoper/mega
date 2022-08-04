@@ -323,11 +323,13 @@ def update_halos(tictoc, meta, results,
 
 
 @timer("Cleaning")
-def clean_halos(tictoc, meta, results):
+def clean_halos(tictoc, meta, halos):
 
     # Loop over halos and clean up progenitors and descendants
-    for ihalo in results:
-        results[ihalo].clean_progs(meta)
-        results[ihalo].clean_descs(meta)
+    results = {}
+    for halo in halos:
+        halo.clean_progs(meta)
+        halo.clean_descs(meta)
+        results[halo.halo_id] = halo
 
     return results

@@ -8,138 +8,185 @@ class Halo:
     """
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["memory", "pids", "npart", "nprog", "prog_haloids",
-                 "prog_npart", "prog_npart_cont", "prog_mass",
-                 "prog_mass_cont", "ndesc",
-                 "desc_haloids", "desc_npart", "desc_npart_cont",
-                 "desc_mass", "desc_mass_cont", "min_pid", "max_pid"]
+    __slots__ = ["memory", "pids", "part_types", "part_masses",
+                 "npart", "mass", "real",  "halo_id", "min_pid", "max_pid",
+                 "nprog", "prog_haloids", "prog_npart", "prog_npart_cont",
+                 "prog_npart_cont_type", "prog_mass", "prog_mass_cont",
+                 "ndesc",  "desc_haloids", "desc_npart", "desc_npart_cont",
+                 "desc_npart_cont_type", "desc_mass", "desc_mass_cont", ]
 
-    def __init__(self, pids, npart, nprog, prog_haloids,
-                 prog_npart, prog_npart_cont,
-                 prog_mass, prog_mass_cont,
-                 ndesc, desc_haloids,
-                 desc_npart, desc_npart_cont,
-                 desc_mass, desc_mass_cont):
+    def __init__(self, pids, part_types, part_masses, npart, real, halo_id,
+                 meta):
 
-        # Define metadata
+        # Profiling variables
         self.memory = None
 
+        # Particle information
+        self.pids = np.array(pids, dtype=int)
+        self.part_types = np.array(part_types, dtype=int)
+        self.part_masses = np.array(pids, dtype=np.float64)
+
         # Halo properties
-        self.pids = pids
-        if pids is not None:
-            self.pids = np.array(pids, dtype=int)
         self.npart = npart
-
-        # Progenitor properties
-        self.nprog = nprog
-        self.prog_haloids = prog_haloids
-        self.prog_npart = prog_npart
-        self.prog_npart_cont = prog_npart_cont
-        self.prog_mass = prog_mass
-        self.prog_mass_cont = prog_mass_cont
-
-        # Descendant properties
-        self.ndesc = ndesc
-        self.desc_haloids = desc_haloids
-        self.desc_npart = desc_npart
-        self.desc_npart_cont = desc_npart_cont
-        self.desc_mass = desc_mass
-        self.desc_mass_cont = desc_mass_cont
+        self.mass = np.array([np.sum(part_masses[part_types == ptype])
+                              for ptype in range(len(meta.npart))])
+        self.real = real
+        self.halo_id = halo_id
 
         # Include min and max pid for quick exit
         self.min_pid = np.min(pids)
         self.max_pid = np.max(pids)
 
-    def update_progs(self, other_halo):
+        # Progenitor properties
+        self.nprog = 0
+        self.prog_haloids = []
+        self.prog_npart = []
+        self.prog_npart_cont = []
+        self.prog_npart_cont_type = []
+        self.prog_mass = []
+        self.prog_mass_cont = []
 
-        # Loop over progenitors found for other_halo
-        for other_ind, prog in enumerate(other_halo.prog_haloids):
+        # Descendant properties
+        self.ndesc = 0
+        self.desc_haloids = []
+        self.desc_npart = []
+        self.desc_npart_cont = []
+        self.desc_npart_cont_type = []
+        self.desc_mass = []
+        self.desc_mass_cont = []
 
-            # If we already have this prog update it
-            ind = np.where(self.prog_haloids == prog)[0]
-            if len(ind) > 0:
-                self.prog_npart_cont[ind] += other_halo.prog_npart_cont[other_ind]
-            else:
+    def compare_prog(self, prog, meta):
 
-                # Convert properties to lists
-                self.prog_haloids = list(self.prog_haloids)
-                self.prog_npart_cont = list(self.prog_npart_cont)
-                self.prog_npart = list(self.prog_npart)
+        # Get the particles in common
+        pids_common, _, prog_inds = np.intersect1d(
+            self.pids, prog.pids, return_indices=True
+        )
 
-                # Include this new progenitor
-                self.prog_haloids.append(prog)
-                self.prog_npart_cont.append(
-                    other_halo.prog_npart_cont[other_ind])
-                self.prog_npart.append(other_halo.prog_npart[other_ind])
+        # Define the number of particles contributed
+        ncont = pids_common.size
 
-                # Convert back to arrays
-                self.prog_haloids = np.array(self.prog_haloids, dtype=int)
-                self.prog_npart_cont = np.array(self.prog_npart_cont,
-                                                dtype=int)
-                self.prog_npart = np.array(self.prog_npart, dtype=int)
+        # If we have found no particles in common exit early
+        if ncont == 0:
+            return
 
-        # Update the number of progendants
-        self.nprog = len(self.prog_haloids)
+        # Otherwise lets include this progenitor
+        self.nprog += 1
+        self.prog_haloids.append(prog.halo_id)
+        self.prog_npart.append(prog.npart)
+        self.prog_mass.append(prog.mass)
 
-    def update_descs(self, other_halo):
+        # Get the masses and types in common
+        mass_common = prog.part_masses[prog_inds]
+        type_common = prog.part_types[prog_inds]
 
-        # Loop over descendents found for other_halo
-        for other_ind, desc in enumerate(other_halo.desc_haloids):
+        # Calculate contributions
+        self.prog_npart_cont.append(mass_common.size)
+        self.prog_npart_cont_type.append(
+            [mass_common[type_common == ptype].size
+             for ptype in range(len(meta.npart))]
+        )
+        self.prog_mass_cont.append([np.sum(mass_common[type_common == ptype])
+                                    for ptype in range(len(meta.npart))])
 
-            # If we already have this desc update it
-            ind = np.where(self.desc_haloids == desc)[0]
-            if len(ind) > 0:
-                self.desc_npart_cont[ind] += other_halo.desc_npart_cont[other_ind]
-            else:
+    def compare_desc(self, desc, meta):
 
-                # Convert properties to lists
-                self.desc_haloids = list(self.desc_haloids)
-                self.desc_npart_cont = list(self.desc_npart_cont)
-                self.desc_npart = list(self.desc_npart)
+        # Get the particles in common
+        pids_common, _, desc_inds = np.intersect1d(
+            self.pids, desc.pids, return_indices=True
+        )
 
-                # Include this new descendant
-                self.desc_haloids.append(desc)
-                self.desc_npart_cont.append(
-                    other_halo.desc_npart_cont[other_ind])
-                self.desc_npart.append(other_halo.desc_npart[other_ind])
+        # Define the number of particles contributed
+        ncont = pids_common.size
 
-                # Convert back to arrays
-                self.desc_haloids = np.array(self.desc_haloids, dtype=int)
-                self.desc_npart_cont = np.array(self.desc_npart_cont,
-                                                dtype=int)
-                self.desc_npart = np.array(self.desc_npart, dtype=int)
+        # If we have found no particles in common exit early
+        if ncont == 0:
+            return
 
-        # Update the number of descendants
-        self.ndesc = len(self.desc_haloids)
+        # Otherwise lets include this progenitor
+        self.ndesc += 1
+        self.desc_haloids.append(desc.halo_id)
+        self.desc_npart.append(desc.npart)
+        self.desc_mass.append(desc.mass)
+
+        # Get the masses and types in common
+        mass_common = desc.part_masses[desc_inds]
+        type_common = desc.part_types[desc_inds]
+
+        # Calculate contributions
+        self.desc_npart_cont.append(mass_common.size)
+        self.desc_npart_cont_type.append(
+            [mass_common[type_common == ptype].size
+             for ptype in range(len(meta.npart))]
+        )
+        self.desc_mass_cont.append([np.sum(mass_common[type_common == ptype])
+                                    for ptype in range(len(meta.npart))])
 
     def clean_progs(self, meta):
+
+        # Convert to arrays
+        self.prog_haloids = np.array(self.prog_haloids)
+        self.prog_npart_cont = np.array(self.prog_npart_cont)
+        self.prog_npart_cont_type = np.array(self.prog_npart_cont_type)
+        self.prog_npart = np.array(self.prog_npart)
+        self.prog_mass = np.array(self.prog_mass)
+        self.prog_mass_cont = np.array(self.prog_mass_cont)
+
+        # Handle array shape for 2D arrays with no progentiors
+        if self.nprog == 0:
+            self.prog_npart_cont_type = np.empty((0, len(meta.npart)))
+            self.prog_mass_cont = np.empty((0, len(meta.npart)))
 
         # Remove progenitors that don't fulfill the link threshold
         okinds = self.prog_npart_cont >= meta.link_thresh
         self.prog_haloids = self.prog_haloids[okinds]
         self.prog_npart_cont = self.prog_npart_cont[okinds]
+        self.prog_npart_cont_type = self.prog_npart_cont_type[okinds, :]
         self.prog_npart = self.prog_npart[okinds]
+        self.prog_mass = self.prog_mass[okinds]
+        self.prog_mass_cont = self.prog_mass_cont[okinds, :]
         self.nprog = len(self.prog_haloids)
 
         # Sort the results by contribution
-        sinds = np.argsort(self.prog_npart_cont)[::-1]
+        sinds = np.argsort(self.prog_npart_cont)[:: -1]
         self.prog_haloids = self.prog_haloids[sinds]
         self.prog_npart_cont = self.prog_npart_cont[sinds]
+        self.prog_npart_cont_type = self.prog_npart_cont_type[sinds, :]
+        self.prog_mass = self.prog_mass[sinds]
+        self.prog_mass_cont = self.prog_mass_cont[sinds, :]
         self.prog_npart = self.prog_npart[sinds]
 
     def clean_descs(self, meta):
+
+        # Convert to arrays
+        self.desc_haloids = np.array(self.desc_haloids)
+        self.desc_npart_cont = np.array(self.desc_npart_cont)
+        self.desc_npart_cont_type = np.array(self.desc_npart_cont_type)
+        self.desc_npart = np.array(self.desc_npart)
+        self.desc_mass = np.array(self.desc_mass)
+        self.desc_mass_cont = np.array(self.desc_mass_cont)
+
+        # Handle array shape for 2D arrays with no progentiors
+        if self.ndesc == 0:
+            self.desc_npart_cont_type = np.empty((0, len(meta.npart)))
+            self.desc_mass_cont = np.empty((0, len(meta.npart)))
 
         # Remove descendants that don't fulfill the link threshold
         okinds = self.desc_npart_cont >= meta.link_thresh
         self.desc_haloids = self.desc_haloids[okinds]
         self.desc_npart_cont = self.desc_npart_cont[okinds]
+        self.desc_npart_cont_type = self.desc_npart_cont_type[okinds, :]
         self.desc_npart = self.desc_npart[okinds]
+        self.desc_mass = self.desc_mass[okinds]
+        self.desc_mass_cont = self.desc_mass_cont[okinds, :]
         self.ndesc = len(self.desc_haloids)
 
         # Sort the results by contribution
-        sinds = np.argsort(self.desc_npart_cont)[::-1]
+        sinds = np.argsort(self.desc_npart_cont)[:: -1]
         self.desc_haloids = self.desc_haloids[sinds]
         self.desc_npart_cont = self.desc_npart_cont[sinds]
+        self.desc_npart_cont_type = self.desc_npart_cont_type[sinds, :]
+        self.desc_mass = self.desc_mass[sinds]
+        self.desc_mass_cont = self.desc_mass_cont[sinds, :]
         self.desc_npart = self.desc_npart[sinds]
 
 
@@ -147,22 +194,25 @@ class LinkHalo:
 
     # Predefine possible attributes to avoid overhead
     __slots__ = ["memory", "pids", "part_types", "part_masses", "npart",
-                 "mass", "real", "min_pid", "max_pid"]
+                 "mass", "real", "halo_id", "min_pid", "max_pid"]
 
-    def __init__(self, pids, part_types, part_masses, npart, mass, real):
+    def __init__(self, pids, part_types, part_masses, npart, real, halo_id,
+                 meta):
 
         # Profiling variables
         self.memory = None
 
         # Particle information
-        self.pids = pids
-        self.part_types = part_types
-        self.part_masses = part_masses
+        self.pids = np.array(pids, dtype=int)
+        self.part_types = np.array(part_types, dtype=int)
+        self.part_masses = np.array(pids, dtype=np.float64)
 
         # Halo properties
         self.npart = npart
-        self.mass = mass
+        self.mass = np.array([np.sum(part_masses[part_types == ptype])
+                              for ptype in range(len(meta.npart))])
         self.real = real
+        self.halo_id = halo_id
 
         # Include min and max pid for quick exit
         self.min_pid = np.min(pids)

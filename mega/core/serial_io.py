@@ -6,6 +6,7 @@ from mpi4py import MPI
 from mega.core.talking_utils import count_and_report_descs
 from mega.core.talking_utils import count_and_report_progs
 from mega.core.talking_utils import message, count_and_report_halos
+from mega.graph_core.graph_halo import LinkHalo, Halo
 from mega.core.timing import timer
 
 
@@ -26,6 +27,21 @@ def hdf5_write_dataset(grp, key, data, compression="gzip"):
 
     grp.create_dataset(key, shape=data.shape, dtype=data.dtype, data=data,
                        compression=compression)
+
+
+@timer("Reading")
+def hdf5_read_dataset(tictoc, meta, key, density_rank):
+
+    # Open hdf5 file
+    hdf = h5py.File(meta.halopath + meta.halo_basename
+                    + meta.snap + '.hdf5', 'r')
+
+    if density_rank == 0:
+        root = hdf
+    else:
+        root = hdf["Subhalos"]
+
+    return root[key][...]
 
 
 def read_metadata(meta):
@@ -288,94 +304,77 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 
 @timer("Reading")
-def read_prog_data(tictoc, meta, density_rank, comm):
+def read_link_data(tictoc, meta, density_rank, snap):
     if not meta.isfirst:
 
         # Open hdf5 file
         hdf = h5py.File(meta.halopath + meta.halo_basename
-                        + meta.prog_snap + '.hdf5', 'r')
+                        + snap + '.hdf5', 'r')
 
         if density_rank == 0:
             root = hdf
         else:
             root = hdf["Subhalos"]
 
-        # # Get the halo data we need
-        # nparts = root["nparts"][...]
-        # halo_type_masses = root["part_type_masses"][...]
-        # reals = root["real_flag"][...]
-        # nprog_halos = nparts.size
-        # sim_pids = {}
-        # start_index = {}
-        # stride = {}
-        # part_masses = {}
-        # for part_type in meta.part_types:
-        #     part_root = root["PartType%d" % part_type]
-        #     sim_pids[part_type] = part_root["SimPartIDs"][...]
-        #     part_masses[part_type] = part_root["PartMasses"][...]
-        #     start_index[part_type] = part_root["start_index"][...]
-        #     stride[part_type] = part_root["stride"][...]
+        # Get the halo data we need
+        nparts = root["nparts"][...]
+        reals = root["real_flag"][...]
+        nlink_halos = reals.size
+        sim_pids = {}
+        start_index = {}
+        stride = {}
+        part_masses = {}
+        for part_type in meta.part_types:
+            part_root = root["PartType%d" % part_type]
+            sim_pids[part_type] = part_root["SimPartIDs"][...]
+            part_masses[part_type] = part_root["PartMasses"][...]
+            start_index[part_type] = part_root["start_index"][...]
+            stride[part_type] = part_root["stride"][...]
 
-        # # Set up arrays to store link halo objects and pid information
-        # prog_objs = np.empty(nprog_halos, dtype=object)
-        # min_pids = np.zeros(nprog_halos, dtype=int)
-        # max_pids = np.zeros(nprog_halos, dtype=int)
+        # Set up arrays to store link halo objects and pid information
+        link_objs = np.empty(nlink_halos, dtype=object)
+        min_pids = np.zeros(nlink_halos, dtype=int)
+        max_pids = np.zeros(nlink_halos, dtype=int)
 
-        # # Loop over progenitor halos making objects
+        # Loop over halos making objects
+        for ihalo in range(nlink_halos):
 
-        # How many particles do we have?
-        prog_npart = root["particle_halo_IDs"].size
+            # Get halo data
+            real = reals[ihalo]
+            npart = nparts[ihalo, :]
 
-        # Get the initial rank particle bins
-        prog_rank_partbins = np.linspace(0, prog_npart,
-                                         meta.nranks + 1,
-                                         dtype=int)
+            # Set up arrays
+            pids = []
+            types = []
+            masses = []
 
-        # Lets get our slice
-        myslice = (prog_rank_partbins[meta.rank],
-                   prog_rank_partbins[meta.rank + 1])
+            # Loop over particle types
+            for part_type in meta.part_types:
 
-        # Get minimum and maximum pid in my slice
-        rank_pids = hdf["all_sim_part_ids"][myslice[0]: myslice[1]]
+                # Get start pointer and stride
+                b, l = start_index[part_type][ihalo], stride[part_type][ihalo]
 
-        min_pid = np.zeros((1))
-        max_pid = np.zeros((1))
-        min_pid[0] = np.min(rank_pids)
-        max_pid[0] = np.max(rank_pids)
+                # Store this particle species
+                pids.extend(sim_pids[part_type][b:b + l])
+                types.extend([part_type, ] * npart[part_type])
+                masses.extend(part_masses[part_type][b:b + l])
 
-        # Lets get the global minimum and maximum
-        comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
-        comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
+            # Instantiate this link halo
+            link_objs[ihalo] = LinkHalo(pids, types, masses, npart, real,
+                                        ihalo, meta)
+            min_pids[ihalo] = link_objs[ihalo].min_pid
+            max_pids[ihalo] = link_objs[ihalo].max_pid
 
-        # Get particle rank bins
-        prog_rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
-                                        meta.nranks + 1,
-                                        dtype=int)
-
-        # Extract our particle's halo ids
-        rank_part_progids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
-
-        # Lets get the progenitor halo data
-        # (this is nhalo in length so give every rank a copy)
-        proghalo_nparts = root["nparts"][...]
-        prog_reals = root["real_flag"][...]
-
-        hdf.close()  # close the root group
     else:
-        prog_npart = None
-        prog_rank_partbins = None
-        rank_part_progids = None
-        proghalo_nparts = None
-        prog_reals = None
-        rank_pids = None
-        prog_rank_pidbins = None
+        link_objs = None
+        min_pids = None
+        max_pids = None
 
-    return (prog_npart, proghalo_nparts, prog_rank_partbins,
-            rank_part_progids, prog_reals, rank_pids, prog_rank_pidbins)
+    return link_objs, min_pids, max_pids
 
 
 @timer("Reading")
-def read_current_data(tictoc, meta, density_rank, comm):
+def read_current_data(tictoc, meta, density_rank):
 
     # How many halos and particles are we dealing with in the current snapshot?
     hdf = h5py.File(meta.halopath + meta.halo_basename
@@ -388,109 +387,61 @@ def read_current_data(tictoc, meta, density_rank, comm):
         root = hdf["Subhalos"]
         nhalo = hdf.attrs['nSubhalo']
 
-    # How many particles do we have?
-    npart = root["particle_halo_IDs"].size
+    # Read some useful metadata
+    nhalo_tot = hdf.attrs["nHalo"]
 
-    # Lets get the halo particle ids we have on this rank
-    rank_partbins = np.linspace(0, npart,
-                                meta.nranks + 1,
-                                dtype=int)
+    # Get the halo data we need (but only for halos on this rank)
+    nparts = root["nparts"][meta.rank::meta.nranks]
+    reals = root["real_flag"][meta.rank::meta.nranks]
+    halo_ids = root["halo_IDs"][meta.rank::meta.nranks]
+    nhalos = reals.size
+    start_index = {}
+    stride = {}
 
-    # Get minimum and maximum pid in my slice
-    rank_pids = hdf["all_sim_part_ids"][rank_partbins[meta.rank]:
-                                        rank_partbins[meta.rank + 1]]
-    min_pid = np.zeros((1))
-    max_pid = np.zeros((1))
-    min_pid[0] = np.min(rank_pids)
-    max_pid[0] = np.max(rank_pids)
+    # Set up arrays to store link halo objects and pid information
+    halos = np.empty(nhalos, dtype=object)
+    min_pids = np.zeros(nhalos, dtype=int)
+    max_pids = np.zeros(nhalos, dtype=int)
 
-    # Lets get the global minimum and maximum
-    comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
-    comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
+    # Loop over particle types and collect data for this particle type
+    for part_type in meta.part_types:
+        part_root = root["PartType%d" % part_type]
 
-    # Get particle rank bins
-    rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
-                               meta.nranks + 1,
-                               dtype=int)
+        # Get the start pointer and length for halos on this rank
+        start_index[part_type] = part_root["start_index"][meta.rank::meta.nranks]
+        stride[part_type] = part_root["stride"][meta.rank::meta.nranks]
 
-    # Lets get our slice
-    myslice = (rank_partbins[meta.rank],
-               rank_partbins[meta.rank + 1])
+    # Loop over the start indices and strides for this rank's halos
+    for myihalo in range(nhalos):
 
-    # Extract our particle's halo ids
-    rank_part_haloids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
+        # Get halo data
+        real = reals[myihalo]
+        npart = nparts[myihalo, :]
+        halo_id = halo_ids[myihalo]
 
-    # Lets get the halo data
-    # (this is nhalo in length so give every rank a copy)
-    halo_nparts = root["nparts"][...]
-    reals = root["real_flag"][...]
+        # Set up lists for particle informaton
+        pids = []
+        types = []
+        masses = []
 
-    hdf.close()
+        # Loop over particle types and collect data for this halo
+        for part_type in meta.part_types:
 
-    return nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts, rank_pidbins
+            # Get start pointer and stride
+            b, l = start_index[part_type][myihalo], stride[part_type][myihalo]
 
+            # Store this particle species
+            part_root = root["PartType%d" % part_type]
+            pids.extend(part_root["SimPartIDs"][b:b + l])
+            types.extend([part_type, ] * npart[part_type])
+            masses.extend(part_root["PartMasses"][b:b + l])
 
-@timer("Reading")
-def read_desc_data(tictoc, meta, density_rank, comm):
+        # Instantiate this link halo
+        halos[myihalo] = Halo(pids, types, masses, npart, real, halo_id, meta)
+        min_pids[myihalo] = halos[myihalo].min_pid
+        max_pids[myihalo] = halos[myihalo].max_pid
 
-    if meta.desc_snap is not None:
-
-        # How many particles are we dealing with in the descendent snapshot?
-        hdf = h5py.File(meta.halopath + meta.halo_basename
-                        + meta.desc_snap + '.hdf5', 'r')
-
-        if density_rank == 0:
-            root = hdf
-        else:
-            root = hdf["Subhalos"]
-
-        # How many particles do we have?
-        desc_npart = root["particle_halo_IDs"].size
-
-        # Get the initial rank particle bins
-        desc_rank_partbins = np.linspace(0, desc_npart,
-                                         meta.nranks + 1,
-                                         dtype=int)
-
-        # Get minimum and maximum pid in my slice
-        rank_pids = hdf["all_sim_part_ids"][desc_rank_partbins[meta.rank]:
-                                            desc_rank_partbins[meta.rank + 1]]
-        min_pid = np.zeros((1))
-        max_pid = np.zeros((1))
-        min_pid[0] = np.min(rank_pids)
-        max_pid[0] = np.max(rank_pids)
-
-        # Lets get the global minimum and maximum
-        comm.Allreduce(MPI.IN_PLACE, min_pid, op=MPI.MIN)
-        comm.Allreduce(MPI.IN_PLACE, max_pid, op=MPI.MAX)
-
-        # Get particle rank bins
-        desc_rank_pidbins = np.linspace(min_pid[0], max_pid[0] + 1,
-                                        meta.nranks + 1,
-                                        dtype=int)
-
-        # Lets get our slice
-        myslice = (desc_rank_partbins[meta.rank],
-                   desc_rank_partbins[meta.rank + 1])
-
-        # Extract our particle's halo ids
-        rank_part_descids = root["particle_halo_IDs"][myslice[0]: myslice[1]]
-
-        # Lets get the descendant halo data
-        # (this is nhalo in length so give every rank a copy)
-        deschalo_nparts = root["nparts"][...]
-
-        hdf.close()
-    else:
-        desc_npart = None
-        desc_rank_partbins = None
-        rank_part_descids = None
-        deschalo_nparts = None
-        rank_pids = None
-        desc_rank_pidbins = None
-
-    return (desc_npart, deschalo_nparts, desc_rank_partbins, rank_part_descids,
-            rank_pids, desc_rank_pidbins)
+    return halos, min_pids, max_pids, nhalo_tot
 
 
 @timer("Writing")
@@ -912,7 +863,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
 
 
 @timer("Writing")
-def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
+def write_dgraph_data(tictoc, meta, all_results, density_rank):
     # Lets combine the list of results from everyone into a single dictionary
     results = {}
     for d in all_results:
@@ -926,7 +877,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
     # Set up arrays to store host results
     nhalo = len(results)
-    halo_nparts = np.full(nhalo, -2, dtype=int)
+    halo_nparts = np.full((nhalo, len(meta.npart)), -2, dtype=int)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
     prog_start_index = np.full(nhalo, -2, dtype=int)
@@ -934,6 +885,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
 
     progs = []
     descs = []
+    prog_npart_conts = []
+    desc_npart_conts = []
     prog_mass_conts = []
     desc_mass_conts = []
     prog_nparts = []
@@ -953,16 +906,18 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         nprog = halo.nprog
         prog_haloids = halo.prog_haloids
         prog_npart = halo.prog_npart
-        prog_npart_cont = halo.prog_npart_cont
+        prog_npart_cont = halo.prog_npart_cont_type
+        prog_mass_cont = halo.prog_mass_cont
         ndesc = halo.ndesc
         desc_haloids = halo.desc_haloids
         desc_npart = halo.desc_npart
-        desc_npart_cont = halo.desc_npart_cont
+        desc_npart_cont = halo.desc_npart_cont_type
+        desc_mass_cont = halo.desc_mass_cont
         npart = halo.npart
 
         # If this halo has no progenitors and is less than 20 particle
         # it is by definition not a halo
-        if nprog == 0 and npart < 20:
+        if nprog == 0 and np.sum(npart) < 20:
             notreals += 1
 
         # If the halo has neither descendants or progenitors it is not a halo
@@ -978,7 +933,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         if nprog > 0:
             prog_start_index[ihalo] = len(progs)
             progs.extend(prog_haloids)
-            prog_mass_conts.extend(prog_npart_cont)
+            prog_npart_conts.extend(prog_npart_cont)
+            prog_mass_conts.extend(prog_mass_cont)
             prog_nparts.extend(prog_npart)
         else:  # else put null pointer
             prog_start_index[ihalo] = 2 ** 30
@@ -987,13 +943,16 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
         if ndesc > 0:
             desc_start_index[ihalo] = len(descs)
             descs.extend(desc_haloids)
-            desc_mass_conts.extend(desc_npart_cont)
+            desc_npart_conts.extend(desc_npart_cont)
+            desc_mass_conts.extend(desc_mass_cont)
             desc_nparts.extend(desc_npart)
         else:  # else put null pointer
             desc_start_index[ihalo] = 2 ** 30
 
     progs = np.array(progs)
     descs = np.array(descs)
+    prog_npart_conts = np.array(prog_npart_conts)
+    desc_npart_conts = np.array(desc_npart_conts)
     prog_mass_conts = np.array(prog_mass_conts)
     desc_mass_conts = np.array(desc_mass_conts)
     prog_nparts = np.array(prog_nparts)
@@ -1019,10 +978,15 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
     hdf5_write_dataset(hdf, 'ProgHaloIDs', progs)
     hdf5_write_dataset(hdf, 'DescHaloIDs', descs)
-    hdf5_write_dataset(hdf, 'ProgNPartContribution', prog_mass_conts)
-    hdf5_write_dataset(hdf, 'DescNPartContribution', desc_mass_conts)
+    hdf5_write_dataset(hdf, 'ProgNPartContribution', prog_npart_conts)
+    hdf5_write_dataset(hdf, 'DescNPartContribution', desc_npart_conts)
+    hdf5_write_dataset(hdf, 'ProgMassContribution', prog_mass_conts)
+    hdf5_write_dataset(hdf, 'DescMassContribution', desc_mass_conts)
     hdf5_write_dataset(hdf, 'ProgNPart', prog_nparts)
     hdf5_write_dataset(hdf, 'DescNPart', desc_nparts)
+
+    # Load and write out the realness flags
+    reals = hdf5_read_dataset(tictoc, meta, "real_flag", density_rank)
     hdf5_write_dataset(hdf, 'real_flag', reals)
 
     hdf.close()
