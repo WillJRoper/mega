@@ -12,7 +12,7 @@ class Halo:
                  "prog_npart", "prog_npart_cont", "prog_mass",
                  "prog_mass_cont", "ndesc",
                  "desc_haloids", "desc_npart", "desc_npart_cont",
-                 "desc_mass", "desc_mass_cont"]
+                 "desc_mass", "desc_mass_cont", "min_pid", "max_pid"]
 
     def __init__(self, pids, npart, nprog, prog_haloids,
                  prog_npart, prog_npart_cont,
@@ -45,6 +45,10 @@ class Halo:
         self.desc_npart_cont = desc_npart_cont
         self.desc_mass = desc_mass
         self.desc_mass_cont = desc_mass_cont
+
+        # Include min and max pid for quick exit
+        self.min_pid = np.min(pids)
+        self.max_pid = np.max(pids)
 
     def update_progs(self, other_halo):
 
@@ -137,6 +141,32 @@ class Halo:
         self.desc_haloids = self.desc_haloids[sinds]
         self.desc_npart_cont = self.desc_npart_cont[sinds]
         self.desc_npart = self.desc_npart[sinds]
+
+
+class LinkHalo:
+
+    # Predefine possible attributes to avoid overhead
+    __slots__ = ["memory", "pids", "part_types", "part_masses", "npart",
+                 "mass", "real", "min_pid", "max_pid"]
+
+    def __init__(self, pids, part_types, part_masses, npart, mass, real):
+
+        # Profiling variables
+        self.memory = None
+
+        # Particle information
+        self.pids = pids
+        self.part_types = part_types
+        self.part_masses = part_masses
+
+        # Halo properties
+        self.npart = npart
+        self.mass = mass
+        self.real = real
+
+        # Include min and max pid for quick exit
+        self.min_pid = np.min(pids)
+        self.max_pid = np.max(pids)
 
 
 class Janitor_Halo:

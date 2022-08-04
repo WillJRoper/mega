@@ -300,6 +300,29 @@ def read_prog_data(tictoc, meta, density_rank, comm):
         else:
             root = hdf["Subhalos"]
 
+        # # Get the halo data we need
+        # nparts = root["nparts"][...]
+        # halo_type_masses = root["part_type_masses"][...]
+        # reals = root["real_flag"][...]
+        # nprog_halos = nparts.size
+        # sim_pids = {}
+        # start_index = {}
+        # stride = {}
+        # part_masses = {}
+        # for part_type in meta.part_types:
+        #     part_root = root["PartType%d" % part_type]
+        #     sim_pids[part_type] = part_root["SimPartIDs"][...]
+        #     part_masses[part_type] = part_root["PartMasses"][...]
+        #     start_index[part_type] = part_root["start_index"][...]
+        #     stride[part_type] = part_root["stride"][...]
+
+        # # Set up arrays to store link halo objects and pid information
+        # prog_objs = np.empty(nprog_halos, dtype=object)
+        # min_pids = np.zeros(nprog_halos, dtype=int)
+        # max_pids = np.zeros(nprog_halos, dtype=int)
+
+        # # Loop over progenitor halos making objects
+
         # How many particles do we have?
         prog_npart = root["particle_halo_IDs"].size
 
@@ -488,17 +511,20 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     :return:
     """
 
+    # TODO: Add particle masses and types to output
+
     # Initialise particle halo id arrays
     phase_part_haloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
     phase_part_subhaloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
 
     # Set up arrays to store halo results
+    start_index = np.zeros(nhalo, dtype=int)
+    stride = np.zeros(nhalo, dtype=int)
     all_halo_simpids = []
     all_halo_pids = []
     all_halo_simpids_type = {i: [] for i in meta.part_types}
     all_halo_pids_type = {i: [] for i in meta.part_types}
-    start_index = np.zeros(nhalo, dtype=int)
-    stride = np.zeros(nhalo, dtype=int)
+    all_part_masses_type = {i: [] for i in meta.part_types}
     start_index_type = np.zeros((nhalo, len(meta.npart)), dtype=int)
     stride_type = np.zeros((nhalo, len(meta.npart)), dtype=int)
     halo_nparts = np.zeros((nhalo, len(meta.npart)), dtype=int)
@@ -531,10 +557,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         # Set up arrays to store subhalo results
         all_subhalo_simpids = []
         all_subhalo_pids = []
-        all_subhalo_simpids_type = {i: [] for i in meta.part_types}
-        all_subhalo_pids_type = {i: [] for i in meta.part_types}
         sub_start_index = np.zeros(nsubhalo, dtype=int)
         sub_stride = np.zeros(nsubhalo, dtype=int)
+        all_subhalo_simpids_type = {i: [] for i in meta.part_types}
+        all_subhalo_pids_type = {i: [] for i in meta.part_types}
+        all_subpart_masses_type = {i: [] for i in meta.part_types}
         sub_start_index_type = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
         sub_stride_type = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
         subhalo_nparts = np.zeros((nsubhalo, len(meta.npart)), dtype=int)
@@ -565,10 +592,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         # Set up dummy subhalo results
         all_subhalo_simpids = None
         all_subhalo_pids = None
-        all_subhalo_simpids_type = None
-        all_subhalo_pids_type = None
         sub_start_index = None
         sub_stride = None
+        all_subhalo_simpids_type = None
+        all_subhalo_pids_type = None
+        all_subpart_masses_type = None
         sub_start_index_type = None
         sub_stride_type = None
         subhalo_nparts = None
@@ -644,11 +672,12 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         # Loop over particle types and store data split by part type
         for part_type in meta.part_types:
             okinds = np.where(halo.types == part_type)[0]
-            all_halo_simpids_type[part_type].extend(halo.sim_pids[okinds])
-            all_halo_pids_type[part_type].extend(halo.pids[okinds])
             start_index_type[ihalo,
                              part_type] = len(all_halo_simpids_type[part_type])
             stride_type[ihalo, part_type] = len(halo.pids[okinds])
+            all_halo_simpids_type[part_type].extend(halo.sim_pids[okinds])
+            all_halo_pids_type[part_type].extend(halo.pids[okinds])
+            all_part_masses_type[part_type].extend(halo.masses[okinds])
 
         # Store baryonic results
         if meta.with_hydro:
@@ -667,12 +696,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         all_halo_pids_type[part_type] = np.array(
             all_halo_pids_type[part_type]
         )
+        all_part_masses_type[part_type] = np.array(
+            all_part_masses_type[part_type]
+        )
 
     # Save halo property arrays
-    hdf5_write_dataset(snap, "start_index", start_index)
-    hdf5_write_dataset(snap, "stride", stride)
-    hdf5_write_dataset(snap, "sim_part_ids", all_halo_simpids)
-    hdf5_write_dataset(snap, "part_ids", all_halo_pids)
     hdf5_write_dataset(snap, "halo_IDs", halo_ids)
     hdf5_write_dataset(snap, "mean_positions", mean_poss)
     hdf5_write_dataset(snap, "mean_velocities", mean_vels)
@@ -692,17 +720,18 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     hdf5_write_dataset(snap, "exit_vlcoeff", exit_vlcoeff)
 
     # Loop over particle types and write out part_type specific data
-    if meta.with_hydro:
-        for part_type in meta.part_types:
-            part_root = snap.create_group("PartType%d" % part_type)
-            hdf5_write_dataset(part_root, "start_index",
-                               start_index_type[:, part_type])
-            hdf5_write_dataset(part_root, "stride",
-                               stride_type[:, part_type])
-            hdf5_write_dataset(part_root, "sim_part_ids",
-                               all_halo_simpids_type[part_type])
-            hdf5_write_dataset(part_root, "part_ids",
-                               all_halo_pids_type[part_type])
+    for part_type in meta.part_types:
+        part_root = snap.create_group("PartType%d" % part_type)
+        hdf5_write_dataset(part_root, "start_index",
+                           start_index_type[:, part_type])
+        hdf5_write_dataset(part_root, "stride",
+                           stride_type[:, part_type])
+        hdf5_write_dataset(part_root, "SimPartIDs",
+                           all_halo_simpids_type[part_type])
+        hdf5_write_dataset(part_root, "PartIDs",
+                           all_halo_pids_type[part_type])
+        hdf5_write_dataset(part_root, "PartMasses",
+                           all_part_masses_type[part_type])
 
     # Write out baryonic results
     if meta.with_hydro:
@@ -726,7 +755,7 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
                                      "PartType%d" % part_type)
             sim_pids[offset: offset + meta.npart[part_type]] = sim_part_ids
 
-    # Write out the sorting indices
+    # Write out the particle ID array
     hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)
 
     # Now we can set the correct halo_ids
@@ -792,14 +821,16 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
             # Loop over particle types and store data split by part type
             for part_type in meta.part_types:
                 okinds = np.where(subhalo.types == part_type)[0]
-                all_subhalo_simpids_type[part_type].extend(
-                    subhalo.sim_pids[okinds])
-                all_subhalo_pids_type[part_type].extend(
-                    subhalo.pids[okinds])
                 sub_start_index_type[isubhalo, part_type] = len(
                     all_subhalo_simpids_type[part_type])
                 sub_stride_type[isubhalo, part_type] = len(
                     subhalo.pids[okinds])
+                all_subhalo_simpids_type[part_type].extend(
+                    subhalo.sim_pids[okinds])
+                all_subhalo_pids_type[part_type].extend(
+                    subhalo.pids[okinds])
+                all_subpart_masses_type[part_type].extend(
+                    subhalo.masses[okinds])
 
             # Store baryonic results
             if meta.with_hydro:
@@ -820,12 +851,11 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
             all_subhalo_pids_type[part_type] = np.array(
                 all_subhalo_pids_type[part_type]
             )
+            all_subpart_masses_type[part_type] = np.array(
+                all_subpart_masses_type[part_type]
+            )
 
         # Save subhalo property arrays
-        hdf5_write_dataset(sub_root, "start_index", sub_start_index)
-        hdf5_write_dataset(sub_root, "stride", sub_stride)
-        hdf5_write_dataset(sub_root, "sim_part_ids", all_subhalo_simpids)
-        hdf5_write_dataset(sub_root, "part_ids", all_subhalo_pids)
         hdf5_write_dataset(sub_root, "subhalo_IDs", subhalo_ids)
         hdf5_write_dataset(sub_root, "host_IDs", host_ids)
         hdf5_write_dataset(sub_root, "mean_positions", sub_mean_poss)
@@ -846,17 +876,18 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         hdf5_write_dataset(sub_root, "exit_vlcoeff", sub_exit_vlcoeff)
 
         # Loop over particle types and write out specific
-        if meta.with_hydro:
-            for part_type in meta.part_types:
-                part_root = sub_root.create_group("PartType%d" % part_type)
-                hdf5_write_dataset(part_root, "start_index",
-                                   sub_start_index_type[:, part_type])
-                hdf5_write_dataset(part_root, "stride",
-                                   sub_stride_type[:, part_type])
-                hdf5_write_dataset(part_root, "sim_part_ids",
-                                   all_subhalo_simpids_type[part_type])
-                hdf5_write_dataset(part_root, "part_ids",
-                                   all_subhalo_pids_type[part_type])
+        for part_type in meta.part_types:
+            part_root = sub_root.create_group("PartType%d" % part_type)
+            hdf5_write_dataset(part_root, "start_index",
+                               sub_start_index_type[:, part_type])
+            hdf5_write_dataset(part_root, "stride",
+                               sub_stride_type[:, part_type])
+            hdf5_write_dataset(part_root, "SimPartIDs",
+                               all_subhalo_simpids_type[part_type])
+            hdf5_write_dataset(part_root, "PartIDs",
+                               all_subhalo_pids_type[part_type])
+            hdf5_write_dataset(part_root, "PartMasses",
+                               all_subpart_masses_type[part_type])
 
         # Write out baryonic results
         if meta.with_hydro:
@@ -981,17 +1012,17 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank, reals):
     hdf.attrs["boxsize"] = meta.boxsize
 
     # Write out datasets
-    hdf5_write_dataset(hdf, 'nProgs', nprogs)
-    hdf5_write_dataset(hdf, 'nDescs', ndescs)
-    hdf5_write_dataset(hdf, 'nparts', halo_nparts)
+    hdf5_write_dataset(hdf, 'n_progs', nprogs)
+    hdf5_write_dataset(hdf, 'n_descs', ndescs)
+    hdf5_write_dataset(hdf, 'n_parts', halo_nparts)
     hdf5_write_dataset(hdf, 'prog_start_index', prog_start_index)
     hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
-    hdf5_write_dataset(hdf, 'Prog_haloIDs', progs)
-    hdf5_write_dataset(hdf, 'Desc_haloIDs', descs)
-    hdf5_write_dataset(hdf, 'Prog_nPart_Contribution', prog_mass_conts)
-    hdf5_write_dataset(hdf, 'Desc_nPart_Contribution', desc_mass_conts)
-    hdf5_write_dataset(hdf, 'Prog_nPart', prog_nparts)
-    hdf5_write_dataset(hdf, 'Desc_nPart', desc_nparts)
+    hdf5_write_dataset(hdf, 'ProgHaloIDs', progs)
+    hdf5_write_dataset(hdf, 'DescHaloIDs', descs)
+    hdf5_write_dataset(hdf, 'ProgNPartContribution', prog_mass_conts)
+    hdf5_write_dataset(hdf, 'DescNPartContribution', desc_mass_conts)
+    hdf5_write_dataset(hdf, 'ProgNPart', prog_nparts)
+    hdf5_write_dataset(hdf, 'DescNPart', desc_nparts)
     hdf5_write_dataset(hdf, 'real_flag', reals)
 
     hdf.close()
