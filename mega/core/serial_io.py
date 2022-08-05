@@ -878,6 +878,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     # Set up arrays to store host results
     nhalo = len(results)
     halo_nparts = np.full((nhalo, len(meta.npart)), -2, dtype=int)
+    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=int)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
     prog_start_index = np.full(nhalo, -2, dtype=int)
@@ -891,6 +892,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     desc_mass_conts = []
     prog_nparts = []
     desc_nparts = []
+    prog_masses = []
+    desc_masses = []
 
     while len(results) > 0:
 
@@ -904,13 +907,16 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
 
         # Extract this halo's data
         nprog = halo.nprog
+        mass = halo.mass
         prog_haloids = halo.prog_haloids
         prog_npart = halo.prog_npart
+        prog_mass = halo.prog_mass
         prog_npart_cont = halo.prog_npart_cont_type
         prog_mass_cont = halo.prog_mass_cont
         ndesc = halo.ndesc
         desc_haloids = halo.desc_haloids
         desc_npart = halo.desc_npart
+        desc_mass = halo.desc_mass
         desc_npart_cont = halo.desc_npart_cont_type
         desc_mass_cont = halo.desc_mass_cont
         npart = halo.npart
@@ -927,7 +933,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
         # Write out the data produced
         nprogs[ihalo] = nprog  # number of progenitors
         ndescs[ihalo] = ndesc  # number of descendants
-        halo_nparts[ihalo] = npart  # mass of the halo
+        halo_nparts[ihalo] = npart  # npart of the halo
+        halo_masses[ihalo] = mass  # mass of the halo
 
         # If we have progenitors store them and the pointers
         if nprog > 0:
@@ -936,6 +943,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
             prog_npart_conts.extend(prog_npart_cont)
             prog_mass_conts.extend(prog_mass_cont)
             prog_nparts.extend(prog_npart)
+            prog_masses.extend(prog_mass)
         else:  # else put null pointer
             prog_start_index[ihalo] = 2 ** 30
 
@@ -946,9 +954,11 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
             desc_npart_conts.extend(desc_npart_cont)
             desc_mass_conts.extend(desc_mass_cont)
             desc_nparts.extend(desc_npart)
+            desc_masses.extend(desc_mass)
         else:  # else put null pointer
             desc_start_index[ihalo] = 2 ** 30
 
+    # Convert lists to arrays ready for writing
     progs = np.array(progs)
     descs = np.array(descs)
     prog_npart_conts = np.array(prog_npart_conts)
@@ -957,6 +967,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     desc_mass_conts = np.array(desc_mass_conts)
     prog_nparts = np.array(prog_nparts)
     desc_nparts = np.array(desc_nparts)
+    prog_masses = np.array(prog_masses)
+    desc_masses = np.array(desc_masses)
 
     # Create file to store this snapshots graph results
     if density_rank == 0:
@@ -974,6 +986,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     hdf5_write_dataset(hdf, 'n_progs', nprogs)
     hdf5_write_dataset(hdf, 'n_descs', ndescs)
     hdf5_write_dataset(hdf, 'n_parts', halo_nparts)
+    hdf5_write_dataset(hdf, 'halo_mass', halo_masses)
     hdf5_write_dataset(hdf, 'prog_start_index', prog_start_index)
     hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
     hdf5_write_dataset(hdf, 'ProgHaloIDs', progs)
@@ -984,6 +997,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     hdf5_write_dataset(hdf, 'DescMassContribution', desc_mass_conts)
     hdf5_write_dataset(hdf, 'ProgNPart', prog_nparts)
     hdf5_write_dataset(hdf, 'DescNPart', desc_nparts)
+    hdf5_write_dataset(hdf, 'ProgMasses', prog_masses)
+    hdf5_write_dataset(hdf, 'DescMasses', desc_masses)
 
     # Load and write out the realness flags
     reals = hdf5_read_dataset(tictoc, meta, "real_flag", density_rank)
@@ -1024,6 +1039,7 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
     # Set up arrays to store host results
     nhalo = len(results)
     halo_nparts = np.full(nhalo, -2, dtype=int)
+    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=int)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
     reals = np.zeros(nhalo, dtype=bool)
@@ -1032,10 +1048,14 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
 
     progs = []
     descs = []
+    prog_npart_conts = []
+    desc_npart_conts = []
     prog_mass_conts = []
     desc_mass_conts = []
     prog_nparts = []
     desc_nparts = []
+    prog_masses = []
+    desc_masses = []
 
     while len(results) > 0:
 
@@ -1049,13 +1069,18 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
 
         # Extract this halo's data
         nprog = halo.nprog
+        mass = halo.mass
         prog_haloids = halo.prog_haloids
         prog_npart = halo.prog_npart
-        prog_npart_cont = halo.prog_npart_cont
+        prog_mass = halo.prog_mass
+        prog_npart_cont = halo.prog_npart_cont_type
+        prog_mass_cont = halo.prog_mass_cont
         ndesc = halo.ndesc
         desc_haloids = halo.desc_haloids
         desc_npart = halo.desc_npart
-        desc_npart_cont = halo.desc_npart_cont
+        desc_mass = halo.desc_mass
+        desc_npart_cont = halo.desc_npart_cont_type
+        desc_mass_cont = halo.desc_mass_cont
         npart = halo.npart
         real = halo.real
 
@@ -1071,15 +1096,18 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
         # Write out the data produced
         nprogs[ihalo] = nprog  # number of progenitors
         ndescs[ihalo] = ndesc  # number of descendants
-        halo_nparts[ihalo] = npart  # mass of the halo
+        halo_nparts[ihalo] = npart  # npart of the halo
+        halo_masses[ihalo] = mass  # mass of the halo
         reals[ihalo] = real  # real flag, either energy defined or temporally
 
         # If we have progenitors store them and the pointers
         if nprog > 0:
             prog_start_index[ihalo] = len(progs)
             progs.extend(prog_haloids)
-            prog_mass_conts.extend(prog_npart_cont)
+            prog_npart_conts.extend(prog_npart_cont)
+            prog_mass_conts.extend(prog_mass_cont)
             prog_nparts.extend(prog_npart)
+            prog_masses.extend(prog_mass)
         else:  # else put null pointer
             prog_start_index[ihalo] = 2 ** 30
 
@@ -1087,18 +1115,24 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
         if ndesc > 0:
             desc_start_index[ihalo] = len(descs)
             descs.extend(desc_haloids)
-            desc_mass_conts.extend(desc_npart_cont)
+            desc_npart_conts.extend(desc_npart_cont)
+            desc_mass_conts.extend(desc_mass_cont)
             desc_nparts.extend(desc_npart)
+            desc_masses.extend(desc_mass)
         else:  # else put null pointer
             desc_start_index[ihalo] = 2 ** 30
 
-    # Convert lists to arrays
+    # Convert lists to arrays ready for writing
     progs = np.array(progs)
     descs = np.array(descs)
+    prog_npart_conts = np.array(prog_npart_conts)
+    desc_npart_conts = np.array(desc_npart_conts)
     prog_mass_conts = np.array(prog_mass_conts)
     desc_mass_conts = np.array(desc_mass_conts)
     prog_nparts = np.array(prog_nparts)
     desc_nparts = np.array(desc_nparts)
+    prog_masses = np.array(prog_masses)
+    desc_masses = np.array(desc_masses)
 
     # Write out metadata
     hdf.attrs["Redshift"] = meta.z
@@ -1106,18 +1140,22 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
     hdf.attrs["nhalo"] = nhalo
 
     # Write out datasets
-    hdf5_write_dataset(hdf, 'nProgs', nprogs)
-    hdf5_write_dataset(hdf, 'nDescs', ndescs)
-    hdf5_write_dataset(hdf, 'nparts', halo_nparts)
+    hdf5_write_dataset(hdf, 'n_progs', nprogs)
+    hdf5_write_dataset(hdf, 'n_descs', ndescs)
+    hdf5_write_dataset(hdf, 'n_parts', halo_nparts)
+    hdf5_write_dataset(hdf, 'halo_mass', halo_masses)
     hdf5_write_dataset(hdf, 'prog_start_index', prog_start_index)
     hdf5_write_dataset(hdf, 'desc_start_index', desc_start_index)
-    hdf5_write_dataset(hdf, 'Prog_haloIDs', progs)
-    hdf5_write_dataset(hdf, 'Desc_haloIDs', descs)
-    hdf5_write_dataset(hdf, 'Prog_nPart_Contribution', prog_mass_conts)
-    hdf5_write_dataset(hdf, 'Desc_nPart_Contribution', desc_mass_conts)
-    hdf5_write_dataset(hdf, 'Prog_nPart', prog_nparts)
-    hdf5_write_dataset(hdf, 'Desc_nPart', desc_nparts)
-    hdf5_write_dataset(hdf, 'real_flag', reals)
+    hdf5_write_dataset(hdf, 'ProgHaloIDs', progs)
+    hdf5_write_dataset(hdf, 'DescHaloIDs', descs)
+    hdf5_write_dataset(hdf, 'ProgNPartContribution', prog_npart_conts)
+    hdf5_write_dataset(hdf, 'DescNPartContribution', desc_npart_conts)
+    hdf5_write_dataset(hdf, 'ProgMassContribution', prog_mass_conts)
+    hdf5_write_dataset(hdf, 'DescMassContribution', desc_mass_conts)
+    hdf5_write_dataset(hdf, 'ProgNPart', prog_nparts)
+    hdf5_write_dataset(hdf, 'DescNPart', desc_nparts)
+    hdf5_write_dataset(hdf, 'ProgMasses', prog_masses)
+    hdf5_write_dataset(hdf, 'DescMasses', desc_masses)
 
     message(meta.rank, "Found %d halos to not be real out of %d" % (notreals,
                                                                     nhalo))

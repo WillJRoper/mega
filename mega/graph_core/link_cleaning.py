@@ -16,17 +16,22 @@ def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
                         + snap + '.hdf5', 'r')
 
     # Open necessary datasets
-    nprogs = hdf["nProgs"][...]
-    ndescs = hdf["nDescs"][...]
-    nparts = hdf["nparts"][...]
+    nprogs = hdf["n_progs"][...]
+    ndescs = hdf["n_descs"][...]
+    nparts = hdf["n_parts"][...]
+    masses = hdf["halo_mass"][...]
     prog_start_index = hdf["prog_start_index"][...]
     desc_start_index = hdf["desc_start_index"][...]
-    prog_haloids = hdf["Prog_haloIDs"][...]
-    desc_haloids = hdf["Desc_haloIDs"][...]
-    prog_cont = hdf["Prog_nPart_Contribution"][...]
-    desc_cont = hdf["Desc_nPart_Contribution"][...]
-    prog_npart = hdf["Prog_nPart"][...]
-    desc_npart = hdf["Desc_nPart"][...]
+    prog_haloids = hdf["ProgHaloIDs"][...]
+    desc_haloids = hdf["DescHaloIDs"][...]
+    prog_cont = hdf["ProgNPartContribution"][...]
+    desc_cont = hdf["DescNPartContribution"][...]
+    prog_mass_cont = hdf["ProgMassContribution"][...]
+    desc_mass_cont = hdf["DescMassContribution"][...]
+    prog_npart = hdf["ProgNPart"][...]
+    desc_npart = hdf["DescNPart"][...]
+    prog_masses = hdf["ProgMass"][...]
+    desc_masses = hdf["DescMass"][...]
     reals = hdf["real_flag"][...]
 
     hdf.close()
@@ -52,34 +57,43 @@ def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
         # Extract this halos values
         nprog = nprogs[ihalo]
         ndesc = ndescs[ihalo]
-        npart = nparts[ihalo]
+        npart = nparts[ihalo, :]
         real = reals[ihalo]
+        mass = masses[ihalo, :]
         this_pstart = prog_start_index[ihalo]
         this_dstart = desc_start_index[ihalo]
         if nprog > 0:
             this_progs = prog_haloids[this_pstart: this_pstart + nprog]
-            this_pcont = prog_cont[this_pstart: this_pstart + nprog]
+            this_pcont = prog_cont[this_pstart: this_pstart + nprog, :]
+            this_pmcont = prog_mass_cont[this_pstart: this_pstart + nprog, :]
             this_pnpart = prog_npart[this_pstart: this_pstart + nprog]
+            this_pmass = prog_masses[this_pstart: this_pstart + nprog, :]
             this_preals = prog_reals[this_progs]
         else:
             this_progs = np.array([], dtype=int)
-            this_pcont = np.array([], dtype=int)
+            this_pcont = np.empty((0, len(meta.npart)))
+            this_pmcont = np.empty((0, len(meta.npart)))
             this_pnpart = np.array([], dtype=int)
+            this_pmass = np.empty((0, len(meta.npart)))
             this_preals = np.array([], dtype=bool)
         if ndesc > 0:
             this_descs = desc_haloids[this_dstart: this_dstart + ndesc]
             this_dcont = desc_cont[this_dstart: this_dstart + ndesc]
+            this_dmcont = desc_mass_cont[this_dstart: this_dstart + ndesc]
+            this_dmass = prog_masses[this_pstart: this_pstart + nprog, :]
             this_dnpart = desc_npart[this_dstart: this_dstart + ndesc]
         else:
             this_descs = np.array([], dtype=int)
-            this_dcont = np.array([], dtype=int)
+            this_dcont = np.empty((0, len(meta.npart)))
+            this_dmcont = np.empty((0, len(meta.npart)))
             this_dnpart = np.array([], dtype=int)
+            this_dmass = np.empty((0, len(meta.npart)))
 
         # Instantiate and store this halo
-        results[ihalo] = Halo(npart, real, this_progs, this_pnpart,
-                              this_pcont, None, None, this_preals,
+        results[ihalo] = Halo(npart, mass, real, this_progs, this_pnpart,
+                              this_pcont, this_pmass, this_pmcont, this_preals,
                               this_descs, this_dnpart, this_dcont,
-                              None, None)
+                              this_dmass, this_dmcont)
 
     # Collect our results
     tictoc.start_func_time("Collecting")

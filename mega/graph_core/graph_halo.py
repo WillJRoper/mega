@@ -226,13 +226,15 @@ class Janitor_Halo:
     """
 
     # Predefine possible attributes to avoid overhead
-    __slots__ = ["memory", "npart", "real", "nprog", "prog_haloids",
-                 "prog_npart", "prog_npart_cont", "prog_mass",
-                 "prog_mass_cont", "prog_reals", "ndesc",
-                 "desc_haloids", "desc_npart", "desc_npart_cont",
-                 "desc_mass", "desc_mass_cont"]
+    __slots__ = ["memory", "npart", "real", "mass",
+                 "nprog", "prog_haloids", "prog_npart", "prog_npart_cont",
+                 "prog_npart_cont_type", "prog_mass", "prog_mass_cont",
+                 "prog_reals",
+                 "ndesc",  "desc_haloids", "desc_npart", "desc_npart_cont",
+                 "desc_npart_cont_type", "desc_mass", "desc_mass_cont", ]
 
-    def __init__(self, npart, real, prog_haloids, prog_npart, prog_npart_cont,
+    def __init__(self, npart, mass, real,
+                 prog_haloids, prog_npart, prog_npart_cont,
                  prog_mass, prog_mass_cont, prog_reals,
                  desc_haloids, desc_npart, desc_npart_cont,
                  desc_mass, desc_mass_cont):
@@ -243,14 +245,17 @@ class Janitor_Halo:
         # Halo properties
         self.npart = npart
         self.real = real
+        self.mass = mass
 
         # Progenitor properties
         self.prog_reals = prog_reals[prog_reals]
         self.prog_haloids = prog_haloids[prog_reals]
         self.prog_npart = prog_npart[prog_reals]
-        self.prog_npart_cont = prog_npart_cont[prog_reals]
-        self.prog_mass = None
-        self.prog_mass_cont = None
+        self.prog_npart_cont = np.sum(prog_npart_cont[prog_reals, :],
+                                      axis=1)
+        self.prog_npart_cont_type = prog_npart_cont[prog_reals, :]
+        self.prog_mass = prog_mass[prog_reals, :]
+        self.prog_mass_cont = prog_mass_cont[prog_reals, :]
         self.nprog = len(self.prog_haloids)
 
         # Sort progenitors
@@ -259,7 +264,8 @@ class Janitor_Halo:
         # Descendant properties
         self.desc_haloids = desc_haloids
         self.desc_npart = desc_npart
-        self.desc_npart_cont = desc_npart_cont
+        self.desc_npart_cont = np.sum(desc_npart_cont, axis=1)
+        self.desc_npart_cont_type = desc_npart_cont
         self.desc_mass = desc_mass
         self.desc_mass_cont = desc_mass_cont
         self.ndesc = len(self.desc_haloids)
