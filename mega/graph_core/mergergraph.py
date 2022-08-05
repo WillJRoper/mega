@@ -73,25 +73,29 @@ def graph_main(density_rank, meta):
     # all progenitors and descendants
     for halo in halos:
 
-        # Loop over the progenitors testing each one
-        for prog in prog_objs:
+        if not meta.isfirst:
 
-            # Lets do the early skip if we can
-            if prog.min_pid > halo.max_pid or prog.max_pid < halo.min_pid:
-                continue
+            # Loop over the progenitors testing each one
+            for prog in prog_objs:
 
-            # Compare this halo and progenitor
-            halo.compare_prog(prog, meta)
+                # Lets do the early skip if we can
+                if prog.min_pid > halo.max_pid or prog.max_pid < halo.min_pid:
+                    continue
 
-        # Loop over the descendants testing each one
-        for desc in desc_objs:
+                # Compare this halo and progenitor
+                halo.compare_prog(prog, meta)
 
-            # Lets do the early skip if we can
-            if desc.min_pid > halo.max_pid or desc.max_pid < halo.min_pid:
-                continue
+        if not meta.isfinal:
 
-            # Compare this halo and progenitor
-            halo.compare_desc(desc, meta)
+            # Loop over the descendants testing each one
+            for desc in desc_objs:
+
+                # Lets do the early skip if we can
+                if desc.min_pid > halo.max_pid or desc.max_pid < halo.min_pid:
+                    continue
+
+                # Compare this halo and progenitor
+                halo.compare_desc(desc, meta)
 
     comm.Barrier()
 

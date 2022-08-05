@@ -305,7 +305,7 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 @timer("Reading")
 def read_link_data(tictoc, meta, density_rank, snap):
-    if not meta.isfirst:
+    if snap is not None:
 
         # Open hdf5 file
         hdf = h5py.File(meta.halopath + meta.halo_basename
