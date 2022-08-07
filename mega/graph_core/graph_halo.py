@@ -189,6 +189,12 @@ class Halo:
         self.desc_mass_cont = self.desc_mass_cont[sinds, :]
         self.desc_npart = self.desc_npart[sinds]
 
+    def clean_halo(self):
+
+        del self.pids
+        del self.part_types
+        del self.part_masses
+
 
 class LinkHalo:
 

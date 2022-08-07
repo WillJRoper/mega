@@ -331,5 +331,6 @@ def clean_halos(tictoc, meta, halos):
         halo.clean_progs(meta)
         halo.clean_descs(meta)
         results[halo.halo_id] = halo
+        results[halo.halo_id].clean_halo()
 
     return results
