@@ -126,7 +126,7 @@ def graph_main(density_rank, meta):
     # For safetys sake, ensure we aren't walking too few!
     # 1/16th of cdim seems a good rule of thumb
     if d < meta.cdim / 16:
-        d = meta.cdim / 16
+        d = int(meta.cdim / 16)
 
     if meta.verbose:
         message(meta.rank, "Walking %d cells away looking for links" % d)

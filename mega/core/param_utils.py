@@ -245,17 +245,17 @@ class Metadata:
         # If we're running the linking we need to make sure
         # the cells are big enough!
         if flags['graphdirect'] or flags['subgraphdirect']:
-        if self.prog_snap is not None:
+            if self.prog_snap is not None:
 
-            # Compute time between steps
-            self.prog_delta_t = (self.cosmo.age(self.z)
-                                 - self.cosmo.age(self.prog_z))
+                # Compute time between steps
+                self.prog_delta_t = (self.cosmo.age(self.z)
+                                     - self.cosmo.age(self.prog_z))
 
-        if self.desc_snap is not None:
+            if self.desc_snap is not None:
 
-            # Compute time between steps
-            self.desc_delta_t = (self.cosmo.age(self.z)
-                                 - self.cosmo.age(self.prog_z))
+                # Compute time between steps
+                self.desc_delta_t = (self.cosmo.age(self.z)
+                                     - self.cosmo.age(self.prog_z))
 
     def check_verbose(self):
         """
