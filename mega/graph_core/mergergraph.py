@@ -113,12 +113,12 @@ def graph_main(density_rank, meta):
                           + halo.mean_vel[1] ** 2
                           + halo.mean_vel[2] ** 2) * meta.U_v_conv
 
-            # Work out how far we have to walk
+            # Work out how far we have to walk (minimum 2 neighbours)
             prog_d = int(np.ceil((vel * meta.prog_delta_t).value
                                  / meta.cell_width)) + 1
             desc_d = int(np.ceil((vel * meta.desc_delta_t).value
                                  / meta.cell_width)) + 1
-            d = np.max((prog_d, desc_d))
+            d = np.max((prog_d, desc_d, 2))
 
             # Loop over all surrounding cells and this one searching for
             # progenitors and descendants
