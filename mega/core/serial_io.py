@@ -73,6 +73,30 @@ def read_metadata(meta):
     return boxsize, npart, z
 
 
+def read_link_metadata(meta, link_snap):
+    """ A function to read metadata about the simulation
+        from the snapshot's header.
+
+        NOTE: Can't time reading this as the timer is not guaranteed to be
+        instantiated, but reading this is essentially instantaneous.
+
+    :param meta: The metadata object in which this data will be stored
+    :return:
+    """
+    if meta.input_type == "SWIFT":
+
+        hdf = h5py.File(meta.inputpath + link_snap + ".hdf5", "r")
+        z = hdf["Header"].attrs["Redshift"]
+        hdf.close()
+
+    elif meta.input_type == "GADGET_split":
+        hdf = h5py.File(meta.inputpath.replace("<snap>", link_snap), "r")
+        z = hdf["Header"].attrs["Redshift"]
+        hdf.close()
+
+    return z
+
+
 @timer("Reading")
 def read_subset(tictoc, meta, key, subset):
     """
@@ -124,6 +148,91 @@ def read_range(tictoc, meta, key, low, high):
     hdf.close()
 
     return arr
+
+
+@timer("Reading")
+def read_halo_range(tictoc, meta, key, low, high, density_rank, snap):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param key:
+    :param low:
+    :param high:
+    :return:
+    """
+
+    # Open hdf5 file
+    hdf = h5py.File(meta.halopath + meta.halo_basename
+                    + snap + '.hdf5', 'r')
+
+    if density_rank == 0:
+        root = hdf
+    else:
+        root = hdf["Subhalos"]
+
+    # Get the positions for searching on this rank
+    # NOTE: for now it"s more efficient to read all particles
+    # and extract the particles we need and throw away the ones
+    # we don"t, could be problematic with large datasets
+    arr = root[key][low:high]
+
+    hdf.close()
+
+    return arr
+
+
+@timer("Reading")
+def count_halos(tictoc, meta, density_rank):
+
+    # Open current hdf5 file
+    hdf = h5py.File(meta.halopath + meta.halo_basename
+                    + meta.snap + '.hdf5', 'r')
+
+    if density_rank == 0:
+        root = hdf
+    else:
+        root = hdf["Subhalos"]
+
+    # Get how many halos we have
+    nhalo = root["nparts"].shape[0]
+    hdf.close()
+
+    if not meta.isfirst:
+
+        # Open current hdf5 file
+        hdf = h5py.File(meta.halopath + meta.halo_basename
+                        + meta.prog_snap + '.hdf5', 'r')
+
+        # Get how many progenitors we have
+        if density_rank == 0:
+            nprog = hdf["nparts"].shape[0]
+        else:
+            nprog = hdf["Subhalos"]["nparts"].shape[0]
+
+        hdf.close()
+
+    else:
+        nprog = 0
+
+    if not meta.isfinal:
+
+        # Open current hdf5 file
+        hdf = h5py.File(meta.halopath + meta.halo_basename
+                        + meta.desc_snap + '.hdf5', 'r')
+
+        # Get how many progenitors we have
+        if density_rank == 0:
+            ndesc = hdf["nparts"].shape[0]
+        else:
+            ndesc = hdf["Subhalos"]["nparts"].shape[0]
+
+        hdf.close()
+
+    else:
+        ndesc = 0
+
+    return nhalo, nprog, ndesc
 
 
 @timer("Reading")
@@ -304,7 +413,7 @@ def read_multi_halo_data(tictoc, meta, part_inds):
 
 
 @timer("Reading")
-def read_link_data(tictoc, meta, density_rank, snap):
+def read_link_data(tictoc, meta, density_rank, snap, link_halos):
     if snap is not None:
 
         # Open hdf5 file
@@ -316,65 +425,67 @@ def read_link_data(tictoc, meta, density_rank, snap):
         else:
             root = hdf["Subhalos"]
 
-        # Get the halo data we need
-        nparts = root["nparts"][...]
-        reals = root["real_flag"][...]
-        nlink_halos = reals.size
-        sim_pids = {}
+        # Get the halo data we need (but only for halos on this rank)
+        nparts = root["nparts"][link_halos, :]
+        reals = root["real_flag"][link_halos]
+        halo_ids = root["halo_IDs"][link_halos]
+        mean_poss = root["mean_positions"][link_halos, :]
+        nhalos = reals.size
         start_index = {}
         stride = {}
-        part_masses = {}
-        for part_type in meta.part_types:
-            part_root = root["PartType%d" % part_type]
-            sim_pids[part_type] = part_root["SimPartIDs"][...]
-            part_masses[part_type] = part_root["PartMasses"][...]
-            start_index[part_type] = part_root["start_index"][...]
-            stride[part_type] = part_root["stride"][...]
 
         # Set up arrays to store link halo objects and pid information
-        link_objs = np.empty(nlink_halos, dtype=object)
-        min_pids = np.zeros(nlink_halos, dtype=int)
-        max_pids = np.zeros(nlink_halos, dtype=int)
+        link_objs = np.empty(nhalos, dtype=object)
 
-        # Loop over halos making objects
-        for ihalo in range(nlink_halos):
+        # Loop over particle types and collect data for this particle type
+        for part_type in meta.part_types:
+            part_root = root["PartType%d" % part_type]
+
+            # Get the start pointer and length for halos on this rank
+            start_index[part_type] = part_root["start_index"][link_halos]
+            stride[part_type] = part_root["stride"][link_halos]
+
+        # Loop over the start indices and strides for this rank's halos
+        for myihalo in range(nhalos):
 
             # Get halo data
-            real = reals[ihalo]
-            npart = nparts[ihalo, :]
+            real = reals[myihalo]
+            npart = nparts[myihalo, :]
+            halo_id = halo_ids[myihalo]
+            mean_pos = mean_poss[myihalo, :]
 
-            # Set up arrays
+            # Set up lists for particle informaton
             pids = []
             types = []
             masses = []
 
-            # Loop over particle types
+            # Loop over particle types and collect data for this halo
             for part_type in meta.part_types:
 
                 # Get start pointer and stride
-                b, l = start_index[part_type][ihalo], stride[part_type][ihalo]
+                b = start_index[part_type][myihalo]
+                l = stride[part_type][myihalo]
 
                 # Store this particle species
-                pids.extend(sim_pids[part_type][b:b + l])
+                part_root = root["PartType%d" % part_type]
+                pids.extend(part_root["SimPartIDs"][b:b + l])
                 types.extend([part_type, ] * npart[part_type])
-                masses.extend(part_masses[part_type][b:b + l])
+                masses.extend(part_root["PartMasses"][b:b + l])
 
             # Instantiate this link halo
-            link_objs[ihalo] = LinkHalo(pids, types, masses, npart, real,
-                                        ihalo, meta)
-            min_pids[ihalo] = link_objs[ihalo].min_pid
-            max_pids[ihalo] = link_objs[ihalo].max_pid
+            link_objs[myihalo] = LinkHalo(pids, types, masses, npart, mean_pos,
+                                          real, halo_id, meta)
 
     else:
         link_objs = None
         min_pids = None
         max_pids = None
 
-    return link_objs, min_pids, max_pids
+    return link_objs
 
 
 @timer("Reading")
-def read_current_data(tictoc, meta, density_rank):
+def read_current_data(tictoc, meta, density_rank, my_halos):
 
     # How many halos and particles are we dealing with in the current snapshot?
     hdf = h5py.File(meta.halopath + meta.halo_basename
@@ -391,25 +502,25 @@ def read_current_data(tictoc, meta, density_rank):
     nhalo_tot = hdf.attrs["nHalo"]
 
     # Get the halo data we need (but only for halos on this rank)
-    nparts = root["nparts"][meta.rank::meta.nranks]
-    reals = root["real_flag"][meta.rank::meta.nranks]
-    halo_ids = root["halo_IDs"][meta.rank::meta.nranks]
+    nparts = root["nparts"][my_halos]
+    reals = root["real_flag"][my_halos]
+    halo_ids = root["halo_IDs"][my_halos]
+    mean_poss = root["mean_positions"][my_halos, :]
+    mean_vels = root["mean_velocities"][my_halos, :]
     nhalos = reals.size
     start_index = {}
     stride = {}
 
     # Set up arrays to store link halo objects and pid information
     halos = np.empty(nhalos, dtype=object)
-    min_pids = np.zeros(nhalos, dtype=int)
-    max_pids = np.zeros(nhalos, dtype=int)
 
     # Loop over particle types and collect data for this particle type
     for part_type in meta.part_types:
         part_root = root["PartType%d" % part_type]
 
         # Get the start pointer and length for halos on this rank
-        start_index[part_type] = part_root["start_index"][meta.rank::meta.nranks]
-        stride[part_type] = part_root["stride"][meta.rank::meta.nranks]
+        start_index[part_type] = part_root["start_index"][my_halos]
+        stride[part_type] = part_root["stride"][my_halos]
 
     # Loop over the start indices and strides for this rank's halos
     for myihalo in range(nhalos):
@@ -418,6 +529,8 @@ def read_current_data(tictoc, meta, density_rank):
         real = reals[myihalo]
         npart = nparts[myihalo, :]
         halo_id = halo_ids[myihalo]
+        mean_pos = mean_poss[myihalo, :]
+        mean_vel = mean_vels[myihalo, :]
 
         # Set up lists for particle informaton
         pids = []
@@ -437,11 +550,10 @@ def read_current_data(tictoc, meta, density_rank):
             masses.extend(part_root["PartMasses"][b:b + l])
 
         # Instantiate this link halo
-        halos[myihalo] = Halo(pids, types, masses, npart, real, halo_id, meta)
-        min_pids[myihalo] = halos[myihalo].min_pid
-        max_pids[myihalo] = halos[myihalo].max_pid
+        halos[myihalo] = Halo(pids, types, masses, npart, mean_pos, mean_vel,
+                              real, halo_id, meta)
 
-    return halos, min_pids, max_pids, nhalo_tot
+    return halos, nhalo_tot
 
 
 @timer("Writing")

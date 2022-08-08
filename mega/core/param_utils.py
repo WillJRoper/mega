@@ -4,7 +4,7 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.constants as const
 import astropy.units as u
 
-from mega.core.serial_io import read_metadata
+from mega.core.serial_io import read_metadata, read_link_metadata
 
 
 # TODO: would be cleaner the future to have separate meta objects for
@@ -87,6 +87,9 @@ class Metadata:
         self.U_E = self.U_M * u.km**2 / u.s**2
         self.U_EperM = self.U_E / self.U_M
 
+        # Unit conversions
+        self.U_v_conv = (u.km / u.s).to(u.Mpc / u.Gyr)
+
         # MPI information (given value if needed)
         self.rank = None
         self.nranks = None
@@ -164,11 +167,15 @@ class Metadata:
 
         # Let"s get the progenitor and descendent snapshots
         self.prog_snap = None
+        self.prog_z = None
         self.desc_snap = None
+        self.desc_z = None
         if snap_ind - 1 >= 0:
             self.prog_snap = snaplist[snap_ind - 1]
+            self.prog_z = read_link_metadata(self, self.prog_snap)
         if snap_ind + 1 < len(snaplist):
             self.desc_snap = snaplist[snap_ind + 1]
+            self.desc_z = read_link_metadata(self, self.desc_snap)
 
         # Define booleans for snapshot handling
         self.isfinal = self.desc_snap is None
@@ -221,6 +228,7 @@ class Metadata:
         # Domain decomp
         self.cdim = int(params["N_cells"])
         self.ncells = self.cdim ** 3
+        self.cell_width = np.min(self.boxsize / self.cdim)
 
         # Tasks
         self.spatial_task_size = params["spatial_task_size"]
@@ -233,6 +241,20 @@ class Metadata:
 
         # Timer object
         self.tictoc = None
+
+        # If we're running the linking we need to make sure
+        # the cells are big enough!
+        if self.prog_snap is not None:
+
+            # Compute time between steps
+            self.prog_delta_t = (self.cosmo.age(self.z)
+                                 - self.cosmo.age(self.prog_z))
+
+        if self.desc_snap is not None:
+
+            # Compute time between steps
+            self.desc_delta_t = (self.cosmo.age(self.z)
+                                 - self.cosmo.age(self.prog_z))
 
     def check_verbose(self):
         """

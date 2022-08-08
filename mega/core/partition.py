@@ -1,6 +1,6 @@
 import numpy as np
 
-from mega.core.serial_io import read_range
+from mega.core.serial_io import read_range, read_halo_range
 import mega.core.utilities as utils
 
 
@@ -28,6 +28,41 @@ def get_parts_in_cell(npart, meta, part_type):
     pos = read_range(meta.tictoc, meta,
                      key="PartType%d/Coordinates" % part_type,
                      low=low_lim, high=high_lim)
+
+    # Loop over particles and place them in their cell
+    for pind in range(pos.shape[0]):
+
+        # Get position
+        xyz = pos[pind, :]
+
+        # Get cell indices
+        i, j, k = (int(xyz[0] / cell_width),
+                   int(xyz[1] / cell_width),
+                   int(xyz[2] / cell_width))
+
+        # Store the result for this particle in the dictionary
+        cells.setdefault((i, j, k), []).append(pind + low_lim)
+
+    return cells, high_lim - low_lim
+
+
+def get_halo_in_cell(nhalo, meta, density_rank, snap):
+
+    # Get the initial domain decomp
+    low_lim, high_lim = initial_partition(nhalo, meta.nranks, meta.rank)
+
+    # Define cell width
+    l = np.max(meta.boxsize)
+    cell_width = l / meta.cdim
+
+    # Initialise cell dictionary
+    cells = {}
+
+    # Get the particles on this rank in the initial domain decomp
+    pos = read_halo_range(meta.tictoc, meta,
+                          key="mean_positions",
+                          low=low_lim, high=high_lim,
+                          density_rank=density_rank, snap=snap)
 
     # Loop over particles and place them in their cell
     for pind in range(pos.shape[0]):

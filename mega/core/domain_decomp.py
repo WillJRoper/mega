@@ -3,6 +3,7 @@ import h5py
 
 import mega.core.utilities as utils
 from mega.core.partition import stripe_cells, get_parts_in_cell
+from mega.core.partition import get_halo_in_cell
 from mega.core.talking_utils import message
 from mega.core.timing import timer
 
@@ -159,6 +160,186 @@ def cell_domain_decomp(tictoc, meta, comm, part_type, cell_ranks=None):
 
 
 @timer("Domain-Decomp")
+def halo_cell_domain_decomp(tictoc, meta, comm, nhalo, nprog, ndesc,
+                            density_rank):
+    """
+
+    :param tictoc:
+    :param meta:
+    :param comm:
+    :return:
+    """
+
+    # Get the cell structure
+    cdim = meta.cdim
+
+    # Find the cell each halo belongs to
+    cells, nhalo_on_rank = get_halo_in_cell(nhalo, meta, density_rank,
+                                            meta.snap)
+
+    if not meta.isfirst:
+        prog_cells, nprog_on_rank = get_halo_in_cell(nprog, meta, density_rank,
+                                                     meta.prog_snap)
+    else:
+        prog_cells, nprog_on_rank = None, None
+    if not meta.isfinal:
+        desc_cells, ndesc_on_rank = get_halo_in_cell(ndesc, meta, density_rank,
+                                                     meta.desc_snap)
+    else:
+        desc_cells, ndesc_on_rank = None, None
+
+    # Stripe the cells over the ranks
+    cell_ranks, cell_rank_dict = stripe_cells(meta)
+
+    # Ensure we haven't lost any halos (lets assume progenitors
+    # and descendants are fine if halos are fine)
+    if meta.debug:
+
+        collected_cells = comm.gather(cells, root=0)
+
+        if meta.rank == 0:
+
+            count_halos = 0
+            for cs in collected_cells:
+                for c in cs:
+                    count_halos += len(cs[c])
+
+            assert count_halos == nhalo, \
+                "Found an incompatible number of particles " \
+                "in cells (found=%d, npart=%d)" % (count_halos,
+                                                   nhalo)
+
+    # Sort the cells and particles that I have
+    # NOTE: we have to distinguish between particles in adjacent cells
+    # and particles in my cells since we only need to query halos in my cells
+    rank_halos = {r: set() for r in range(meta.nranks)}
+    rank_progs = {r: set() for r in range(meta.nranks)}
+    rank_descs = {r: set() for r in range(meta.nranks)}
+    cells_done = set()
+    for i in range(cdim):
+        for j in range(cdim):
+            for k in range(cdim):
+
+                # Define cell coordinate tuple
+                c_ijk = (i, j, k)
+
+                # Get the rank for this cell
+                other_rank, ind = get_cell_rank(cell_ranks, meta, i, j, k)
+
+                # Include this cells current information if we have it
+                if c_ijk in cells:
+
+                    # Get the halos and store them in the corresponding
+                    # place
+                    cells_done.update({ind})
+                    rank_halos[other_rank].update(set(cells[c_ijk]))
+
+                # Loop over the adjacent cells
+                for ii in range(-1, 2, 1):
+                    iii = i + ii
+                    if not meta.periodic and (iii < 0 or iii > meta.cdim):
+                        continue
+                    iii %= meta.cdim
+                    for jj in range(-1, 2, 1):
+                        jjj = j + jj
+                        if not meta.periodic and (jjj < 0 or jjj > meta.cdim):
+                            continue
+                        jjj %= meta.cdim
+                        for kk in range(-1, 2, 1):
+                            kkk = k + kk
+                            if not meta.periodic and (kkk < 0 or kkk > meta.cdim):
+                                continue
+                            kkk %= meta.cdim
+
+                            # Define ijk tuple
+                            adj_ijk = (iii, jjj, kkk)
+                            ind = utils.get_cellid(meta.cdim, iii, jjj, kkk)
+
+                            # Get the particles for the adjacent cells
+                            if adj_ijk in prog_cells:
+                                cells_done.update({ind})
+                                if prog_cells is not None:
+                                    rank_progs[other_rank].update(
+                                        set(prog_cells[adj_ijk])
+                                    )
+                            if adj_ijk in desc_cells:
+                                cells_done.update({ind})
+                                if desc_cells is not None:
+                                    rank_descs[other_rank].update(
+                                        set(desc_cells[adj_ijk])
+                                    )
+
+    # Ensure we have got all halos allocated and we have done all cells
+    if meta.debug:
+
+        # All cells have been included
+        assert len(cells_done) == len(set(cells.keys())), \
+            "We have missed cells in the domain decompistion! " \
+            "(found=%d, total=%d" % (len(cells_done),
+                                     len(set(cells.keys())))
+        found_halos_on_rank = set()
+        for key in rank_halos:
+            found_halos_on_rank.update(rank_halos[key])
+        assert len(found_halos_on_rank) == nhalo_on_rank, \
+            "Particles missing on rank %d (found=%d, " \
+            "npart_on_rank=%d)" % (meta.rank, len(found_halos_on_rank),
+                                   nhalo_on_rank)
+
+    # We now need to exchange the particle indices
+    for other_rank in range(meta.nranks):
+        rank_halos[other_rank] = comm.gather(rank_halos[other_rank],
+                                             root=other_rank)
+        if not meta.isfirst:
+            rank_progs[other_rank] = comm.gather(rank_progs[other_rank],
+                                                 root=other_rank)
+        if not meta.isfinal:
+            rank_descs[other_rank] = comm.gather(rank_descs[other_rank],
+                                                 root=other_rank)
+        if rank_halos[other_rank] is None:
+            rank_halos[other_rank] = set()
+            rank_progs[other_rank] = set()
+            rank_descs[other_rank] = set()
+
+    my_halos = set()
+    my_progs = set()
+    my_descs = set()
+    for s in rank_halos[meta.rank]:
+        my_halos.update(s)
+    if not meta.isfirst:
+        for s in rank_progs[meta.rank]:
+            my_progs.update(s)
+    if not meta.isfinal:
+        for s in rank_descs[meta.rank]:
+            my_descs.update(s)
+
+    comm.Barrier()
+
+    message(meta.rank,
+            "I have %d halos, %d progenitors, and %d descendants"
+            % (len(my_halos), len(my_progs), len(my_descs)))
+
+    if meta.debug:
+
+        all_halos = comm.gather(my_halos, root=0)
+        if meta.rank == 0:
+            found_halos = len({i for s in all_halos for i in s})
+            assert found_halos == nhalo, \
+                "There are particles missing on rank %d " \
+                "after exchange! (found=%d, npart=%d)" % (meta.rank,
+                                                          found_halos,
+                                                          nhalo)
+
+    # Convert to lists and sort so the particles can index the hdf5 files
+    my_halos = np.sort(np.array(list(my_halos), dtype=int))
+    if not meta.isfirst:
+        my_progs = np.sort(np.array(list(my_progs), dtype=int))
+    if not meta.isfinal:
+        my_descs = np.sort(np.array(list(my_descs), dtype=int))
+
+    return my_halos, my_progs, my_descs
+
+
+@timer("Domain-Decomp")
 def hydro_cell_domain_decomp(tictoc, meta, comm, cell_ranks):
     """
 
@@ -262,3 +443,69 @@ def halo_decomp(tictoc, meta, halo_tasks, comm):
     my_halo_parts = np.array(my_halo_parts, copy=False, dtype=int)
 
     return my_halo_parts, start_index, stride
+
+
+@timer("Domain-Decomp")
+def construct_cells(tictoc, halos, progs, descs, meta):
+
+    # Define cell width
+    l = np.max(meta.boxsize)
+    cell_width = l / meta.cdim
+
+    # Initialise cell dictionaries
+    halo_cells = {(i, j, k): []
+                  for i in range(meta.cdim)
+                  for j in range(meta.cdim)
+                  for k in range(meta.cdim)}
+    prog_cells = {(i, j, k): []
+                  for i in range(meta.cdim)
+                  for j in range(meta.cdim)
+                  for k in range(meta.cdim)}
+    desc_cells = {(i, j, k): []
+                  for i in range(meta.cdim)
+                  for j in range(meta.cdim)
+                  for k in range(meta.cdim)}
+
+    # Loop over halos and store them in their cell
+    for halo in halos:
+
+        # Get position
+        xyz = halo.mean_pos
+
+        # Get cell indices
+        i, j, k = (int(xyz[0] / cell_width),
+                   int(xyz[1] / cell_width),
+                   int(xyz[2] / cell_width))
+
+        # Store the result for this particle in the dictionary
+        halo_cells[(i, j, k)].append(halo)
+
+    # Loop over progenitors and store them in their cell
+    for prog in progs:
+
+        # Get position
+        xyz = prog.mean_pos
+
+        # Get cell indices
+        i, j, k = (int(xyz[0] / cell_width),
+                   int(xyz[1] / cell_width),
+                   int(xyz[2] / cell_width))
+
+        # Store the result for this particle in the dictionary
+        prog_cells[(i, j, k)].append(prog)
+
+    # Loop over descendants and store them in their cell
+    for desc in descs:
+
+        # Get position
+        xyz = desc.mean_pos
+
+        # Get cell indices
+        i, j, k = (int(xyz[0] / cell_width),
+                   int(xyz[1] / cell_width),
+                   int(xyz[2] / cell_width))
+
+        # Store the result for this particle in the dictionary
+        desc_cells[(i, j, k)].append(desc)
+
+    return halo_cells, prog_cells, desc_cells

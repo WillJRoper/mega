@@ -9,14 +9,14 @@ class Halo:
 
     # Predefine possible attributes to avoid overhead
     __slots__ = ["memory", "pids", "part_types", "part_masses",
-                 "npart", "mass", "real",  "halo_id", "min_pid", "max_pid",
+                 "npart", "mass", "mean_pos", "mean_vel", "real",  "halo_id",
                  "nprog", "prog_haloids", "prog_npart", "prog_npart_cont",
                  "prog_npart_cont_type", "prog_mass", "prog_mass_cont",
                  "ndesc",  "desc_haloids", "desc_npart", "desc_npart_cont",
                  "desc_npart_cont_type", "desc_mass", "desc_mass_cont", ]
 
-    def __init__(self, pids, part_types, part_masses, npart, real, halo_id,
-                 meta):
+    def __init__(self, pids, part_types, part_masses, npart, mean_pos,
+                 mean_vel, real, halo_id,  meta):
 
         # Profiling variables
         self.memory = None
@@ -30,12 +30,10 @@ class Halo:
         self.npart = npart
         self.mass = np.array([np.sum(part_masses[part_types == ptype])
                               for ptype in range(len(meta.npart))])
+        self.mean_pos = mean_pos
+        self.mean_vel = mean_vel
         self.real = real
         self.halo_id = halo_id
-
-        # Include min and max pid for quick exit
-        self.min_pid = np.min(pids)
-        self.max_pid = np.max(pids)
 
         # Progenitor properties
         self.nprog = 0
@@ -194,16 +192,17 @@ class Halo:
         del self.pids
         del self.part_types
         del self.part_masses
+        del self.mean_pos
 
 
 class LinkHalo:
 
     # Predefine possible attributes to avoid overhead
     __slots__ = ["memory", "pids", "part_types", "part_masses", "npart",
-                 "mass", "real", "halo_id", "min_pid", "max_pid"]
+                 "mass", "mean_pos", "real", "halo_id"]
 
-    def __init__(self, pids, part_types, part_masses, npart, real, halo_id,
-                 meta):
+    def __init__(self, pids, part_types, part_masses, npart, mean_pos, real,
+                 halo_id, meta):
 
         # Profiling variables
         self.memory = None
@@ -217,12 +216,9 @@ class LinkHalo:
         self.npart = npart
         self.mass = np.array([np.sum(part_masses[part_types == ptype])
                               for ptype in range(len(meta.npart))])
+        self.mean_pos = mean_pos
         self.real = real
         self.halo_id = halo_id
-
-        # Include min and max pid for quick exit
-        self.min_pid = np.min(pids)
-        self.max_pid = np.max(pids)
 
 
 class Janitor_Halo:

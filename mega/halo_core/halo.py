@@ -21,7 +21,7 @@ class Halo:
                  "vlcoeff", "mb_part", "cop"]
 
     def __init__(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
-                 masses, int_nrg, vlcoeff, meta, parent=None):
+                 masses, int_nrg, vlcoeff, meta, parent=None, calc_energy=True):
         """
         :param pids:
         :param sim_pids:
@@ -66,10 +66,10 @@ class Halo:
                 self.set_attrs_from_parent(parent)
             else:
                 self.set_attrs(tictoc, pids, shifted_pids, sim_pids, pos, vel,
-                               types, masses, int_nrg, meta)
+                               types, masses, int_nrg, meta, calc_energy)
         else:  # we have a brand new halo
-            self.set_attrs(tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
-                           masses, int_nrg, meta)
+            self.set_attrs(tictoc, pids, shifted_pids, sim_pids, pos, vel,
+                           types, masses, int_nrg, meta, calc_energy)
 
     def __str__(self):
 
@@ -91,18 +91,18 @@ class Halo:
         return pstr
 
     def set_attrs(self, tictoc, pids, shifted_pids, sim_pids, pos, vel, types,
-                  masses, int_nrg, meta):
+                  masses, int_nrg, meta, calc_energy):
 
         # Particle information
         self.pids = np.array(pids, dtype=int)
         self.shifted_inds = shifted_pids
         self.sim_pids = sim_pids
         self.pos = pos
-        self.true_pos = pos
+        self.true_pos = pos.copy()
         if meta.periodic:
             self.wrap_pos(meta.boxsize)
         self.vel = vel
-        self.true_vel = vel
+        self.true_vel = vel.copy()
         self.types = types
         self.masses = masses
         self.int_nrg = int_nrg
@@ -131,13 +131,19 @@ class Halo:
         self.vel -= self.mean_vel
 
         # Energy properties (energies are in per unit mass units)
-        self.KE = kinetic(tictoc,
-                          self.vel,
-                          self.masses)
-        self.therm_nrg = 0  # np.sum(self.int_nrg)
-        self.GE = grav(tictoc, meta, self.pos, self.npart, meta.soft,
-                       self.masses)
-        self.real = ((self.KE + self.therm_nrg) / self.GE) <= 1
+        if calc_energy:
+            self.KE = kinetic(tictoc,
+                              self.vel,
+                              self.masses)
+            self.therm_nrg = 0  # np.sum(self.int_nrg)
+            self.GE = grav(tictoc, meta, self.pos, self.npart, meta.soft,
+                           self.masses)
+            self.real = ((self.KE + self.therm_nrg) / self.GE) <= 1
+        else:
+            self.KE = 0
+            self.therm_nrg = 0  # np.sum(self.int_nrg)
+            self.GE = 0
+            self.real = True
 
     def set_attrs_from_parent(self, parent):
 
