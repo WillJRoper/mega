@@ -244,6 +244,7 @@ class Metadata:
 
         # If we're running the linking we need to make sure
         # the cells are big enough!
+        if flags['graphdirect'] or flags['subgraphdirect']:
         if self.prog_snap is not None:
 
             # Compute time between steps
