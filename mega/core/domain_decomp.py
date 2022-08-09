@@ -570,8 +570,9 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
     # Work out the maximum extent
     max_dim = np.max(dim)
 
-    # Let add some padding for safetys sake (Yes, hardcoded magic number!)
-    padded_dim = max_dim * 1.2
+    # Let add half cells padding for safetys sake
+    padded_dim = max_dim
+    padded_dim += (padded_dim / meta.cdim) / 2
 
     # Find the mid point of the high resolution region
     mid_point = np.array([bounds[0] + (dim[0] / 2),
