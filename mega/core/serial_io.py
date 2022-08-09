@@ -440,11 +440,11 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
         # Loop over particle types and collect data for this particle type
         for part_type in meta.part_types:
 
-            # Skipping missing particle types
-            if meta.npart[part_type] == 0:
+            # Open particle root group if it exists
+            try:
+                part_root = root["PartType%d" % part_type]
+            except KeyError:
                 continue
-
-            part_root = root["PartType%d" % part_type]
 
             # Get the start pointer and length for halos on this rank
             start_index[part_type] = part_root["start_index"][link_halos]
@@ -467,16 +467,17 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
             # Loop over particle types and collect data for this halo
             for part_type in meta.part_types:
 
-                # Skipping missing particle types
-                if meta.npart[part_type] == 0:
-                    continue
-
                 # Get start pointer and stride
                 b = start_index[part_type][myihalo]
                 l = stride[part_type][myihalo]
 
+                # Open particle root group if it exists
+                try:
+                    part_root = root["PartType%d" % part_type]
+                except KeyError:
+                    continue
+
                 # Store this particle species
-                part_root = root["PartType%d" % part_type]
                 pids.extend(part_root["SimPartIDs"][b:b + l])
                 types.extend([part_type, ] * npart[part_type])
                 masses.extend(part_root["PartMasses"][b:b + l])
@@ -484,6 +485,8 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
             # Instantiate this link halo
             link_objs[myihalo] = LinkHalo(pids, types, masses, npart, mean_pos,
                                           real, halo_id, meta)
+
+        hdf.close()
 
     else:
         link_objs = {}
@@ -524,11 +527,11 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
     # Loop over particle types and collect data for this particle type
     for part_type in meta.part_types:
 
-        # Skipping missing particle types
-        if meta.npart[part_type] == 0:
+        # Open particle root group if it exists
+        try:
+            part_root = root["PartType%d" % part_type]
+        except KeyError:
             continue
-
-        part_root = root["PartType%d" % part_type]
 
         # Get the start pointer and length for halos on this rank
         start_index[part_type] = part_root["start_index"][my_halos]
@@ -559,8 +562,13 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
             # Get start pointer and stride
             b, l = start_index[part_type][myihalo], stride[part_type][myihalo]
 
+            # Open particle root group if it exists
+            try:
+                part_root = root["PartType%d" % part_type]
+            except KeyError:
+                continue
+
             # Store this particle species
-            part_root = root["PartType%d" % part_type]
             pids.extend(part_root["SimPartIDs"][b:b + l])
             types.extend([part_type, ] * npart[part_type])
             masses.extend(part_root["PartMasses"][b:b + l])
@@ -568,6 +576,8 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
         # Instantiate this link halo
         halos[myihalo] = Halo(pids, types, masses, npart, mean_pos, mean_vel,
                               real, halo_id, meta)
+
+    hdf.close()
 
     return halos, nhalo_tot
 
