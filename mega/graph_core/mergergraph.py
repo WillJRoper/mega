@@ -93,6 +93,10 @@ def graph_main(density_rank, meta):
         message(rank, pad_print_middle("nDescendant:",
                                        "%d" % ndesc,
                                        length=meta.table_width))
+        if meta.zoom:
+            message(rank, pad_print_middle("Zoom Bounds:",
+                                           "[", *meta.bounds, "]",
+                                           length=meta.table_width))
         message(meta.rank, "=" * meta.table_width)
 
     tictoc.stop_func_time()
@@ -117,10 +121,16 @@ def graph_main(density_rank, meta):
                 max_vel = vel
 
     # Work out how far we have to walk
-    prog_d = int(np.ceil((vel * meta.prog_delta_t).value
-                         / meta.cell_width)) + 2
-    desc_d = int(np.ceil((vel * meta.desc_delta_t).value
-                         / meta.cell_width)) + 2
+    if not meta.isfirst:
+        prog_d = int(np.ceil((vel * meta.prog_delta_t).value
+                             / meta.cell_width)) + 2
+    else:
+        prog_d = 0
+    if not meta.isfinal:
+        desc_d = int(np.ceil((vel * meta.desc_delta_t).value
+                             / meta.cell_width)) + 2
+    else:
+        desc_d = 0
     d = np.max((prog_d, desc_d))
 
     # For safetys sake, ensure we are walking a reasonable distance
