@@ -545,18 +545,21 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
 
             # Update bounds
             for ijk in range(3):
-                if bounds[ijk] > xyz[ijk]:
-                    bounds[ijk] = xyz[ijk]
-                if bounds[ijk * 2] < xyz[ijk]:
+                if bounds[ijk * 2] > xyz[ijk]:
                     bounds[ijk * 2] = xyz[ijk]
+                if bounds[(ijk * 2) + 1] < xyz[ijk]:
+                    bounds[(ijk * 2) + 1] = xyz[ijk]
 
     # Communicate what we have found
-    comm.Allreduce(MPI.IN_PLACE, bounds[0], op=MPI.MIN)
-    comm.Allreduce(MPI.IN_PLACE, bounds[1], op=MPI.MAX)
-    comm.Allreduce(MPI.IN_PLACE, bounds[2], op=MPI.MIN)
-    comm.Allreduce(MPI.IN_PLACE, bounds[3], op=MPI.MAX)
-    comm.Allreduce(MPI.IN_PLACE, bounds[4], op=MPI.MIN)
-    comm.Allreduce(MPI.IN_PLACE, bounds[5], op=MPI.MAX)
+    min_buffer = bounds.copy()
+    max_buffer = bounds.copy()
+    comm.Allreduce(MPI.IN_PLACE, min_buffer, op=MPI.MIN)
+    comm.Allreduce(MPI.IN_PLACE, max_buffer, op=MPI.MAX)
+
+    # Reconsturct communicated bounds
+    for ijk in range(3):
+        bounds[ijk * 2] = min_buffer[ijk * 2]
+        bounds[(ijk * 2) + 1] = max_buffer[(ijk * 2) + 1]
 
     # Get the dimension of the high resolution region
     dim = np.array([bounds[1] - bounds[0],
@@ -578,8 +581,8 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
 
     # Update the bounds
     for ijk in range(3):
-        bounds[ijk] = mid_point[ijk] - (padded_dim / 2)
-        bounds[ijk * 2] = mid_point[ijk] + (padded_dim / 2)
+        bounds[ijk * 2] = mid_point[ijk] - (padded_dim / 2)
+        bounds[(ijk * 2) + 1] = mid_point[ijk] + (padded_dim / 2)
 
     # Update the bounds of the cell structure
     meta.bounds = bounds
