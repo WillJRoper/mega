@@ -484,7 +484,7 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = halo.mean_pos
 
         # Get cell indices
-        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
+        i, j, k = get_cell_from_pos(xyz, meta)
 
         # Store the result for this particle in the dictionary
         halo_cells[(i, j, k)].append(halo)
@@ -496,7 +496,7 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = prog.mean_pos
 
         # Get cell indices
-        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
+        i, j, k = get_cell_from_pos(xyz, meta)
 
         # Store the result for this particle in the dictionary
         prog_cells[(i, j, k)].append(prog)
@@ -508,7 +508,7 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = desc.mean_pos
 
         # Get cell indices
-        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
+        i, j, k = get_cell_from_pos(xyz, meta)
 
         # Store the result for this particle in the dictionary
         desc_cells[(i, j, k)].append(desc)

@@ -12,12 +12,12 @@ def initial_partition(npart, nranks, rank):
     return rank_bins[rank], rank_bins[rank + 1]
 
 
-def get_cell_from_pos(xyz, cell_width, meta):
+def get_cell_from_pos(xyz, meta):
 
     # Get cell indices
-    i, j, k = (int((xyz[0] - meta.bounds[0]) / cell_width),
-               int((xyz[1] - meta.bounds[2]) / cell_width),
-               int((xyz[2] - meta.bounds[4]) / cell_width))
+    i, j, k = (int((xyz[0] - meta.bounds[0]) / meta.cell_width),
+               int((xyz[1] - meta.bounds[2]) / meta.cell_width),
+               int((xyz[2] - meta.bounds[4]) / meta.cell_width))
 
     return i, j, k
 
@@ -26,10 +26,6 @@ def get_parts_in_cell(npart, meta, part_type):
 
     # Get the initial domain decomp
     low_lim, high_lim = initial_partition(npart, meta.nranks, meta.rank)
-
-    # Define cell width
-    l = meta.dim
-    cell_width = l / meta.cdim
 
     # Initialise cell dictionary
     cells = {}
@@ -46,7 +42,7 @@ def get_parts_in_cell(npart, meta, part_type):
         xyz = pos[pind, :]
 
         # Get cell indices
-        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
+        i, j, k = get_cell_from_pos(xyz, meta)
 
         # Store the result for this particle in the dictionary
         cells.setdefault((i, j, k), []).append(pind + low_lim)
@@ -58,10 +54,6 @@ def get_halo_in_cell(nhalo, meta, density_rank, snap):
 
     # Get the initial domain decomp
     low_lim, high_lim = initial_partition(nhalo, meta.nranks, meta.rank)
-
-    # Define cell width
-    l = meta.dim
-    cell_width = l / meta.cdim
 
     # Initialise cell dictionary
     cells = {}
@@ -79,7 +71,7 @@ def get_halo_in_cell(nhalo, meta, density_rank, snap):
         xyz = pos[pind, :]
 
         # Get cell indices
-        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
+        i, j, k = get_cell_from_pos(xyz, meta)
 
         # Store the result for this particle in the dictionary
         cells.setdefault((i, j, k), []).append(pind + low_lim)
