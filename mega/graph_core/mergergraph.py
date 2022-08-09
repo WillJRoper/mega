@@ -132,12 +132,12 @@ def graph_main(density_rank, meta):
 
     # Work out how far we have to walk
     if not meta.isfirst:
-        prog_d = int(np.ceil((vel * meta.prog_delta_t).value
+        prog_d = int(np.ceil((max_vel * meta.prog_delta_t).value
                              / meta.cell_width)) + 2
     else:
         prog_d = 0
     if not meta.isfinal:
-        desc_d = int(np.ceil((vel * meta.desc_delta_t).value
+        desc_d = int(np.ceil((max_vel * meta.desc_delta_t).value
                              / meta.cell_width)) + 2
     else:
         desc_d = 0
@@ -145,7 +145,7 @@ def graph_main(density_rank, meta):
 
     # For safetys sake, ensure we are walking a reasonable distance
     if d * meta.cell_width < 2:
-        d = int(np.ceil(4 / meta.cell_width))
+        d = int(np.ceil(2 / meta.cell_width))
 
     if meta.verbose:
         message(meta.rank, "Walking %d cells away looking for links" % d)
