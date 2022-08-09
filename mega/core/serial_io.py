@@ -439,6 +439,11 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
 
         # Loop over particle types and collect data for this particle type
         for part_type in meta.part_types:
+
+            # Skipping missing particle types
+            if meta.npart[part_type] == 0:
+                continue
+
             part_root = root["PartType%d" % part_type]
 
             # Get the start pointer and length for halos on this rank
@@ -461,6 +466,10 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
 
             # Loop over particle types and collect data for this halo
             for part_type in meta.part_types:
+
+                # Skipping missing particle types
+                if meta.npart[part_type] == 0:
+                    continue
 
                 # Get start pointer and stride
                 b = start_index[part_type][myihalo]
@@ -514,6 +523,11 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
 
     # Loop over particle types and collect data for this particle type
     for part_type in meta.part_types:
+
+        # Skipping missing particle types
+        if meta.npart[part_type] == 0:
+            continue
+
         part_root = root["PartType%d" % part_type]
 
         # Get the start pointer and length for halos on this rank
@@ -537,6 +551,10 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
 
         # Loop over particle types and collect data for this halo
         for part_type in meta.part_types:
+
+            # Skipping missing particle types
+            if meta.npart[part_type] == 0:
+                continue
 
             # Get start pointer and stride
             b, l = start_index[part_type][myihalo], stride[part_type][myihalo]
