@@ -127,6 +127,9 @@ def graph_main(density_rank, meta):
             if vel > max_vel:
                 max_vel = vel
 
+    # Communicate the max velocity we've found
+    comm.allreduce(max_vel, op=MPI.MAX)
+
     # Work out how far we have to walk
     if not meta.isfirst:
         prog_d = int(np.ceil((vel * meta.prog_delta_t).value
