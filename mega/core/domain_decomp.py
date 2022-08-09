@@ -525,6 +525,9 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
     for snap, n in zip([meta.prog_snap, meta.snap, meta.desc_snap],
                        [nprog, nhalo, ndesc]):
 
+        if snap is None:
+            continue
+
         # Get the initial domain decomp
         low_lim, high_lim = initial_partition(n, meta.nranks, meta.rank)
 
