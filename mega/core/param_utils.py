@@ -254,8 +254,8 @@ class Metadata:
             if self.desc_snap is not None:
 
                 # Compute time between steps
-                self.desc_delta_t = (self.cosmo.age(self.z)
-                                     - self.cosmo.age(self.prog_z))
+                self.desc_delta_t = (self.cosmo.age(self.desc_z)
+                                     - self.cosmo.age(self.z))
 
     def check_verbose(self):
         """
