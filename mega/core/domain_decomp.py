@@ -565,7 +565,7 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
     dim = np.array([bounds[1] - bounds[0],
                     bounds[3] - bounds[2],
                     bounds[5] - bounds[4]],
-                   dtype=float)
+                   dtype=np.float64)
 
     # Work out the maximum extent
     max_dim = np.max(dim)
@@ -575,9 +575,9 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
 
     # Find the mid point of the high resolution region
     mid_point = np.array([bounds[0] + (dim[0] / 2),
-                          bounds[2] + (dim[0] / 2),
-                          bounds[4] + (dim[0] / 2)],
-                         dtype=float)
+                          bounds[2] + (dim[1] / 2),
+                          bounds[4] + (dim[2] / 2)],
+                         dtype=np.float64)
 
     # Update the bounds
     for ijk in range(3):
@@ -586,5 +586,7 @@ def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
 
     # Update the bounds of the cell structure
     meta.bounds = bounds
+    meta.dim = padded_dim
+    meta.cell_width = padded_dim / meta.cdim
 
     return meta

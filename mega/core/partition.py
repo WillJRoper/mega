@@ -28,7 +28,7 @@ def get_parts_in_cell(npart, meta, part_type):
     low_lim, high_lim = initial_partition(npart, meta.nranks, meta.rank)
 
     # Define cell width
-    l = np.max(meta.boxsize)
+    l = meta.dim
     cell_width = l / meta.cdim
 
     # Initialise cell dictionary
@@ -60,7 +60,7 @@ def get_halo_in_cell(nhalo, meta, density_rank, snap):
     low_lim, high_lim = initial_partition(nhalo, meta.nranks, meta.rank)
 
     # Define cell width
-    l = np.max(meta.boxsize)
+    l = meta.dim
     cell_width = l / meta.cdim
 
     # Initialise cell dictionary

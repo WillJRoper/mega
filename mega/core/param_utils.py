@@ -263,6 +263,7 @@ class Metadata:
         self.bounds = [0, self.boxsize[0],
                        0, self.boxsize[1],
                        0, self.boxsize[2]]
+        self.dim = self.boxsize
 
     def check_verbose(self):
         """
