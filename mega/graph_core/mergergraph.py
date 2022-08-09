@@ -35,10 +35,10 @@ def graph_main(density_rank, meta):
     nhalo, nprog, ndesc = io.count_halos(tictoc, meta, density_rank)
 
     # Decomp the halos, progenitors and descendants
-    my_halos, my_progs, my_descs = dd.halo_cell_domain_decomp(tictoc, meta,
-                                                              comm, nhalo,
-                                                              nprog, ndesc,
-                                                              density_rank)
+    my_halos, my_progs, my_descs, meta = dd.halo_cell_domain_decomp(
+        tictoc, meta, comm, nhalo, nprog, ndesc, density_rank
+    )
+
     if meta.verbose:
         tictoc.report("Splitting halos, progenitors and descendants")
 

@@ -257,6 +257,14 @@ class Metadata:
                 self.desc_delta_t = (self.cosmo.age(self.desc_z)
                                      - self.cosmo.age(self.z))
 
+        # Add functionality for zooms where we only want to build the
+        # cell structure for the high resolution region.
+        self.zoom = simulation["zoom"]
+        self.bounds = [0, self.boxsize[0],
+                       0, self.boxsize[1],
+                       0, self.boxsize[2]]
+        if self.zoom:
+
     def check_verbose(self):
         """
 
