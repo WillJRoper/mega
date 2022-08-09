@@ -3,9 +3,13 @@ import h5py
 
 import mega.core.utilities as utils
 from mega.core.partition import stripe_cells, get_parts_in_cell
-from mega.core.partition import get_halo_in_cell
+from mega.core.partition import get_halo_in_cell, initial_partition
+from mega.core.partition import get_cell_from_pos
 from mega.core.talking_utils import message
 from mega.core.timing import timer
+import mega.core.serial_io as io
+
+from mpi4py import MPI
 
 
 def get_cell_rank(cell_ranks, meta, i, j, k):
@@ -170,6 +174,11 @@ def halo_cell_domain_decomp(tictoc, meta, comm, nhalo, nprog, ndesc,
     :return:
     """
 
+    # If we're doing a zoom lets find the bounds
+    if meta.zoom:
+        meta = find_zoom_region(tictoc, meta, density_rank,
+                                nhalo, nprog, ndesc, comm)
+
     # Get the cell structure
     cdim = meta.cdim
 
@@ -190,6 +199,8 @@ def halo_cell_domain_decomp(tictoc, meta, comm, nhalo, nprog, ndesc,
 
     # Stripe the cells over the ranks
     cell_ranks, cell_rank_dict = stripe_cells(meta)
+
+    # Label non-empty cells
 
     # Ensure we haven't lost any halos (lets assume progenitors
     # and descendants are fine if halos are fine)
@@ -336,7 +347,7 @@ def halo_cell_domain_decomp(tictoc, meta, comm, nhalo, nprog, ndesc,
     if not meta.isfinal:
         my_descs = np.sort(np.array(list(my_descs), dtype=int))
 
-    return my_halos, my_progs, my_descs
+    return my_halos, my_progs, my_descs, meta
 
 
 @timer("Domain-Decomp")
@@ -473,9 +484,7 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = halo.mean_pos
 
         # Get cell indices
-        i, j, k = (int(xyz[0] / cell_width),
-                   int(xyz[1] / cell_width),
-                   int(xyz[2] / cell_width))
+        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
 
         # Store the result for this particle in the dictionary
         halo_cells[(i, j, k)].append(halo)
@@ -487,9 +496,7 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = prog.mean_pos
 
         # Get cell indices
-        i, j, k = (int(xyz[0] / cell_width),
-                   int(xyz[1] / cell_width),
-                   int(xyz[2] / cell_width))
+        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
 
         # Store the result for this particle in the dictionary
         prog_cells[(i, j, k)].append(prog)
@@ -501,11 +508,77 @@ def construct_cells(tictoc, halos, progs, descs, meta):
         xyz = desc.mean_pos
 
         # Get cell indices
-        i, j, k = (int(xyz[0] / cell_width),
-                   int(xyz[1] / cell_width),
-                   int(xyz[2] / cell_width))
+        i, j, k = get_cell_from_pos(xyz, cell_width, meta)
 
         # Store the result for this particle in the dictionary
         desc_cells[(i, j, k)].append(desc)
 
     return halo_cells, prog_cells, desc_cells
+
+
+def find_zoom_region(tictoc, meta, density_rank, nhalo, nprog, ndesc, comm):
+
+    # Initialise bounds
+    bounds = np.array([np.inf, 0, np.inf, 0, np.inf, 0], dtype=np.float64)
+
+    # Loop over snapshots
+    for snap, n in zip([meta.prog_snap, meta.snap, meta.desc_snap],
+                       [nprog, nhalo, ndesc]):
+
+        # Get the initial domain decomp
+        low_lim, high_lim = initial_partition(n, meta.nranks, meta.rank)
+
+        # Get the halo positions in the current snapshot
+        pos = io.read_halo_range(meta.tictoc, meta,
+                                 key="mean_positions",
+                                 low=low_lim, high=high_lim,
+                                 density_rank=density_rank, snap=snap)
+
+        # Loop over particles and place them in their cell
+        for pind in range(pos.shape[0]):
+
+            # Get position
+            xyz = pos[pind, :]
+
+            # Update bounds
+            for ijk in range(3):
+                if bounds[ijk] > xyz[ijk]:
+                    bounds[ijk] = xyz[ijk]
+                if bounds[ijk * 2] < xyz[ijk]:
+                    bounds[ijk * 2] = xyz[ijk]
+
+    # Communicate what we have found
+    comm.Allreduce(MPI.IN_PLACE, bounds[0], op=MPI.MIN)
+    comm.Allreduce(MPI.IN_PLACE, bounds[1], op=MPI.MAX)
+    comm.Allreduce(MPI.IN_PLACE, bounds[2], op=MPI.MIN)
+    comm.Allreduce(MPI.IN_PLACE, bounds[3], op=MPI.MAX)
+    comm.Allreduce(MPI.IN_PLACE, bounds[4], op=MPI.MIN)
+    comm.Allreduce(MPI.IN_PLACE, bounds[5], op=MPI.MAX)
+
+    # Get the dimension of the high resolution region
+    dim = np.array([bounds[1] - bounds[0],
+                    bounds[3] - bounds[2],
+                    bounds[5] - bounds[4]],
+                   dtype=float)
+
+    # Work out the maximum extent
+    max_dim = np.max(dim)
+
+    # Let add some padding for safetys sake (Yes, hardcoded magic number!)
+    padded_dim = max_dim * 1.2
+
+    # Find the mid point of the high resolution region
+    mid_point = np.array([bounds[0] + (dim[0] / 2),
+                          bounds[2] + (dim[0] / 2),
+                          bounds[4] + (dim[0] / 2)],
+                         dtype=float)
+
+    # Update the bounds
+    for ijk in range(3):
+        bounds[ijk] = mid_point[ijk] - (padded_dim / 2)
+        bounds[ijk * 2] = mid_point[ijk] + (padded_dim / 2)
+
+    # Update the bounds of the cell structure
+    meta.bounds = bounds
+
+    return meta
