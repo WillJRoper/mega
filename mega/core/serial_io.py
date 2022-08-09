@@ -477,9 +477,7 @@ def read_link_data(tictoc, meta, density_rank, snap, link_halos):
                                           real, halo_id, meta)
 
     else:
-        link_objs = None
-        min_pids = None
-        max_pids = None
+        link_objs = {}
 
     return link_objs
 
