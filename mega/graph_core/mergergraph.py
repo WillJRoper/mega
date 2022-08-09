@@ -100,7 +100,9 @@ def graph_main(density_rank, meta):
         if meta.zoom:
             message(rank, pad_print_middle("Zoom Bounds:",
                                            "[%.2f-%.2f, %.2f-%.2f, %.2f-%.2f]"
-                                           % (*meta.bounds),
+                                           % (meta.bounds[0], meta.bounds[1],
+                                              meta.bounds[2], meta.bounds[3],
+                                              meta.bounds[4], meta.bounds[5]),
                                            length=meta.table_width))
         message(meta.rank, "=" * meta.table_width)
 
