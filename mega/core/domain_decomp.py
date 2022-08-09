@@ -190,12 +190,12 @@ def halo_cell_domain_decomp(tictoc, meta, comm, nhalo, nprog, ndesc,
         prog_cells, nprog_on_rank = get_halo_in_cell(nprog, meta, density_rank,
                                                      meta.prog_snap)
     else:
-        prog_cells, nprog_on_rank = None, None
+        prog_cells, nprog_on_rank = {}, 0
     if not meta.isfinal:
         desc_cells, ndesc_on_rank = get_halo_in_cell(ndesc, meta, density_rank,
                                                      meta.desc_snap)
     else:
-        desc_cells, ndesc_on_rank = None, None
+        desc_cells, ndesc_on_rank = {}, 0
 
     # Stripe the cells over the ranks
     cell_ranks, cell_rank_dict = stripe_cells(meta)
