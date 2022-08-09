@@ -84,6 +84,10 @@ def graph_main(density_rank, meta):
                                                        meta.snap,
                                                        meta.desc_snap),
                                        length=meta.table_width))
+        message(rank, pad_print_middle("cdim", "%d" % meta.cdim,
+                                       length=meta.table_width))
+        message(rank, pad_print_middle("cell_width", "%f" % meta.cell_width,
+                                       length=meta.table_width))
         message(rank, pad_print_middle("nHalo:",
                                        "%d" % nhalo,
                                        length=meta.table_width))
@@ -95,7 +99,8 @@ def graph_main(density_rank, meta):
                                        length=meta.table_width))
         if meta.zoom:
             message(rank, pad_print_middle("Zoom Bounds:",
-                                           "[", *meta.bounds, "]",
+                                           "[%.2f-%.2f, %.2f-%.2f, %.2f-%.2f]"
+                                           % (*meta.bounds),
                                            length=meta.table_width))
         message(meta.rank, "=" * meta.table_width)
 
