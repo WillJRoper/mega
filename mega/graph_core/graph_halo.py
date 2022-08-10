@@ -24,12 +24,14 @@ class Halo:
         # Particle information
         self.pids = np.array(pids, dtype=int)
         self.part_types = np.array(part_types, dtype=int)
-        self.part_masses = np.array(pids, dtype=np.float64)
+        self.part_masses = np.array(part_masses, dtype=np.float64)
 
         # Halo properties
         self.npart = npart
-        self.mass = np.array([np.sum(part_masses[part_types == ptype])
-                              for ptype in range(len(meta.npart))])
+        self.mass = np.array(
+            [np.sum(self.part_masses[self.part_types == ptype])
+             for ptype in range(len(meta.npart))]
+        )
         self.mean_pos = mean_pos
         self.mean_vel = mean_vel
         self.real = real
@@ -63,8 +65,8 @@ class Halo:
         # Define the number of particles contributed
         ncont = pids_common.size
 
-        # If we have found no particles in common exit early
-        if ncont == 0:
+        # If we have found too few particles in common don't link it!
+        if ncont < meta.link_thresh:
             return
 
         # Otherwise lets include this progenitor
@@ -96,8 +98,8 @@ class Halo:
         # Define the number of particles contributed
         ncont = pids_common.size
 
-        # If we have found no particles in common exit early
-        if ncont == 0:
+        # If we have found too few particles in common don't link it!
+        if ncont < meta.link_thresh:
             return
 
         # Otherwise lets include this progenitor
@@ -149,9 +151,9 @@ class Halo:
         self.prog_haloids = self.prog_haloids[sinds]
         self.prog_npart_cont = self.prog_npart_cont[sinds]
         self.prog_npart_cont_type = self.prog_npart_cont_type[sinds, :]
-        self.prog_mass = self.prog_mass[sinds]
+        self.prog_mass = self.prog_mass[sinds, :]
         self.prog_mass_cont = self.prog_mass_cont[sinds, :]
-        self.prog_npart = self.prog_npart[sinds]
+        self.prog_npart = self.prog_npart[sinds, :]
 
     def clean_descs(self, meta):
 
@@ -183,9 +185,9 @@ class Halo:
         self.desc_haloids = self.desc_haloids[sinds]
         self.desc_npart_cont = self.desc_npart_cont[sinds]
         self.desc_npart_cont_type = self.desc_npart_cont_type[sinds, :]
-        self.desc_mass = self.desc_mass[sinds]
+        self.desc_mass = self.desc_mass[sinds, :]
         self.desc_mass_cont = self.desc_mass_cont[sinds, :]
-        self.desc_npart = self.desc_npart[sinds]
+        self.desc_npart = self.desc_npart[sinds, :]
 
     def clean_halo(self):
 
@@ -210,12 +212,14 @@ class LinkHalo:
         # Particle information
         self.pids = np.array(pids, dtype=int)
         self.part_types = np.array(part_types, dtype=int)
-        self.part_masses = np.array(pids, dtype=np.float64)
+        self.part_masses = np.array(part_masses, dtype=np.float64)
 
         # Halo properties
         self.npart = npart
-        self.mass = np.array([np.sum(part_masses[part_types == ptype])
-                              for ptype in range(len(meta.npart))])
+        self.mass = np.array(
+            [np.sum(self.part_masses[self.part_types == ptype])
+             for ptype in range(len(meta.npart))]
+        )
         self.mean_pos = mean_pos
         self.real = real
         self.halo_id = halo_id

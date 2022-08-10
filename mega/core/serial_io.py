@@ -596,8 +596,6 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
     :return:
     """
 
-    # TODO: Add particle masses and types to output
-
     # Initialise particle halo id arrays
     phase_part_haloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
     phase_part_subhaloids = np.full(np.sum(meta.npart), -2, dtype=np.int32)
@@ -1032,7 +1030,8 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     while len(results) > 0:
 
         # Extract a halo to store
-        ihalo, halo = results.popitem()
+        _, halo = results.popitem()
+        ihalo = halo.halo_id
 
         assert (len(set(halo.prog_haloids)) == len(halo.prog_haloids)), \
             "Not all progenitors are unique"
