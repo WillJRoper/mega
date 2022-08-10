@@ -66,7 +66,7 @@ def main():
     comm.barrier()
 
     # If we are at the final snapshot we have to clean up all links
-    if meta.isfinal:
+    if meta.isfinal and flags["clean_real_flags"]:
         walk_and_purge(tictoc, meta, comm, snaplist)
 
     tictoc.end()

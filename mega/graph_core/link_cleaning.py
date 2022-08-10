@@ -30,8 +30,8 @@ def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
     desc_mass_cont = hdf["DescMassContribution"][...]
     prog_npart = hdf["ProgNPart"][...]
     desc_npart = hdf["DescNPart"][...]
-    prog_masses = hdf["ProgMass"][...]
-    desc_masses = hdf["DescMass"][...]
+    prog_masses = hdf["ProgMasses"][...]
+    desc_masses = hdf["DescMasses"][...]
     reals = hdf["real_flag"][...]
 
     hdf.close()
@@ -80,7 +80,7 @@ def clean_snap(tictoc, meta, comm, snap, density_rank, prog_reals, out_hdf):
             this_descs = desc_haloids[this_dstart: this_dstart + ndesc]
             this_dcont = desc_cont[this_dstart: this_dstart + ndesc]
             this_dmcont = desc_mass_cont[this_dstart: this_dstart + ndesc]
-            this_dmass = prog_masses[this_pstart: this_pstart + nprog, :]
+            this_dmass = desc_masses[this_dstart: this_dstart + ndesc, :]
             this_dnpart = desc_npart[this_dstart: this_dstart + ndesc]
         else:
             this_descs = np.array([], dtype=int)
