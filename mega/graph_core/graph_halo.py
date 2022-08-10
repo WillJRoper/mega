@@ -133,6 +133,8 @@ class Halo:
 
         # Handle array shape for 2D arrays with no progentiors
         if self.nprog == 0:
+            self.prog_npart = np.empty((0, len(meta.npart)))
+            self.prog_mass = np.empty((0, len(meta.npart)))
             self.prog_npart_cont_type = np.empty((0, len(meta.npart)))
             self.prog_mass_cont = np.empty((0, len(meta.npart)))
 
@@ -142,7 +144,7 @@ class Halo:
         self.prog_npart_cont = self.prog_npart_cont[okinds]
         self.prog_npart_cont_type = self.prog_npart_cont_type[okinds, :]
         self.prog_npart = self.prog_npart[okinds]
-        self.prog_mass = self.prog_mass[okinds]
+        self.prog_mass = self.prog_mass[okinds, :]
         self.prog_mass_cont = self.prog_mass_cont[okinds, :]
         self.nprog = len(self.prog_haloids)
 
@@ -167,6 +169,8 @@ class Halo:
 
         # Handle array shape for 2D arrays with no progentiors
         if self.ndesc == 0:
+            self.desc_npart = np.empty((0, len(meta.npart)))
+            self.desc_mass = np.empty((0, len(meta.npart)))
             self.desc_npart_cont_type = np.empty((0, len(meta.npart)))
             self.desc_mass_cont = np.empty((0, len(meta.npart)))
 
