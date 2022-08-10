@@ -1220,7 +1220,7 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
 
         # If this halo has no progenitors and is less than 20 particle
         # it is by definition not a halo
-        if nprog == 0 and npart < 20:
+        if nprog == 0 and np.sum(npart) < 20:
             notreals += 1
 
         # If the halo has neither descendants or progenitors it is not a halo
