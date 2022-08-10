@@ -293,5 +293,5 @@ class Janitor_Halo:
         # realness flag
         if self.nprog > 0:
             self.real = True
-        elif self.npart < 20 and self.nprog == 0:
+        elif np.sum(self.npart) < 20 and self.nprog == 0:
             self.real = False
