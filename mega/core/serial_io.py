@@ -1010,7 +1010,7 @@ def write_dgraph_data(tictoc, meta, all_results, density_rank):
     # Set up arrays to store host results
     nhalo = len(results)
     halo_nparts = np.full((nhalo, len(meta.npart)), -2, dtype=int)
-    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=int)
+    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=np.float64)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
     prog_start_index = np.full(nhalo, -2, dtype=int)
@@ -1172,7 +1172,7 @@ def write_cleaned_dgraph_data(tictoc, meta, hdf, all_results,
     # Set up arrays to store host results
     nhalo = len(results)
     halo_nparts = np.full((nhalo, len(meta.npart)), -2, dtype=int)
-    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=int)
+    halo_masses = np.full((nhalo, len(meta.npart)), -2, dtype=np.float64)
     nprogs = np.zeros(nhalo, dtype=int)
     ndescs = np.zeros(nhalo, dtype=int)
     reals = np.zeros(nhalo, dtype=bool)
