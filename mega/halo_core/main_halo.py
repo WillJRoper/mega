@@ -41,7 +41,8 @@ def main():
 
     if meta.rank == 0:
         say_hello(meta)
-        print("Running on snapshot:", snaplist[snap_ind])
+        print("Running on snapshot %s with %d ranks" % (snaplist[snap_ind],
+                                                        meta.nranks))
 
     # Lets check what sort of verbosity we are running with
     meta.check_verbose()

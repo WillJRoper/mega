@@ -6,7 +6,7 @@ from mega.halo_core.halo import Halo
 from mega.core.timing import timer
 
 
-def find_phase_space_halos(halo_phases):
+def find_phase_space_halos(meta, halo_phases):
     """
 
     :param halo_phases:
@@ -30,7 +30,8 @@ def find_phase_space_halos(halo_phases):
     halo_tree = cKDTree(halo_phases, leafsize=16, compact_nodes=True,
                         balanced_tree=True)
 
-    query = halo_tree.query_ball_point(halo_phases, r=np.sqrt(2))
+    query = halo_tree.query_ball_point(halo_phases, r=np.sqrt(2),
+                                       workers=meta.nthreads)
 
     # Loop through query results assigning initial halo IDs
     for query_part_inds in iter(query):
@@ -132,88 +133,6 @@ def find_phase_space_halos(halo_phases):
     return phase_part_haloids, phase_assigned_parts
 
 
-def get_real_halos_recurse(tictoc, halo, vlinkl_halo_indp, linkl, meta):
-    """
-
-    :param halo:
-    :param boxsize:
-    :param vlinkl_halo_indp:
-    :param linkl:
-    :param decrement:
-    :param redshift:
-    :param G:
-    :param soft:
-    :param min_vlcoeff:
-    :param cosmo:
-    :return:
-    """
-
-    # Initialise list to store finished halos
-    results = []
-
-    # Define the phase space linking length
-    vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
-
-    # Define the phase space vectors for this halo
-    halo_phases = np.concatenate((halo.pos / linkl,
-                                  halo.vel_with_hubflow / vlinkl),
-                                 axis=1)
-
-    # Query these particles in phase space to find distinct bound halos
-    part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
-
-    # Loop over the halos found in phase space
-    while len(assigned_parts) > 0:
-
-        # Get the next halo from the dictionary and ensure
-        # it has more than 10 particles
-        key, val = assigned_parts.popitem()
-        if len(val) < 10:
-            continue
-
-        # Extract halo particle data
-        this_pids = list(val)
-
-        # Instantiate halo object (auto calculates energy)
-        new_halo = Halo(tictoc, halo.pids[this_pids],
-                        halo.shifted_inds[this_pids],
-                        halo.sim_pids[this_pids],
-                        halo.pos[this_pids, :],
-                        halo.vel[this_pids, :],
-                        halo.types[this_pids],
-                        halo.masses[this_pids],
-                        halo.vlcoeff, meta)
-
-        if new_halo.real or new_halo.vlcoeff <= meta.min_vlcoeff:
-
-            # Compute the halo properties
-            new_halo.compute_props(meta.G)
-
-            # Get and store the memory footprint of this halo
-            new_halo.memory = utils.get_size(new_halo)
-
-            # Limit memory footprint of stored halo
-            new_halo.clean_halo()
-
-            # Store the resulting halo
-            results.append(new_halo)
-
-        else:
-
-            # Decrement the velocity space linking length coefficient
-            new_halo.decrement(meta.decrement)
-
-            # We need to run this halo again
-            temp_res = get_real_halos(tictoc, new_halo, vlinkl_halo_indp,
-                                      linkl, meta)
-
-            # Include these results
-            for h in temp_res:
-                results.append(h)
-
-    return results
-
-
 def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
     """
 
@@ -246,12 +165,13 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
         vlinkl = halo.vlcoeff * vlinkl_halo_indp * halo.mass ** (1 / 3)
 
         # Define the phase space vectors for this halo
-        halo_phases = np.concatenate((halo.pos / linkl,
-                                      halo.vel_with_hubflow / vlinkl),
+        halo_phases = np.concatenate((halo.pos / linkl * 2,
+                                      halo.vel / vlinkl),
                                      axis=1)
 
         # Query these particles in phase space to find distinct bound halos
-        part_haloids, assigned_parts = find_phase_space_halos(halo_phases)
+        part_haloids, assigned_parts = find_phase_space_halos(meta,
+                                                              halo_phases)
 
         # Loop over the halos found in phase space
         while len(assigned_parts) > 0:
@@ -269,22 +189,23 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
             new_halo = Halo(tictoc, halo.pids[this_pids],
                             halo.shifted_inds[this_pids],
                             halo.sim_pids[this_pids],
-                            halo.pos[this_pids, :],
-                            halo.vel[this_pids, :],
+                            halo.true_pos[this_pids, :],
+                            halo.true_vel[this_pids, :],
                             halo.types[this_pids],
                             halo.masses[this_pids],
-                            halo.vlcoeff, meta)
+                            halo.int_nrg[this_pids],
+                            halo.vlcoeff, meta, parent=halo)
 
             if new_halo.real or new_halo.vlcoeff < meta.min_vlcoeff:
 
                 # Compute the halo properties
-                new_halo.compute_props(meta.G)
-
-                # Get the memory footprint of this halo
-                new_halo.memory = utils.get_size(new_halo)
+                new_halo.compute_props(meta)
 
                 # Limit memory footprint of stored halo
                 new_halo.clean_halo()
+
+                # Get the memory footprint of this halo
+                new_halo.memory = utils.get_size(new_halo)
 
                 # Store the resulting halo
                 results.append(new_halo)
@@ -304,40 +225,36 @@ def get_real_halos(tictoc, halo, vlinkl_halo_indp, linkl, meta):
 def get_real_host_halos(tictoc, halo, meta):
     """
 
+        NOTE: We use the maximum spatial linking length in the eventuality of
+        multiple options since the virialisation and energy considerations
+        are what allow a halo to exit the iteration not the spatial
+        linking length itself.
+
     :param tictoc:
     :param halo:
-    :param boxsize:
-    :param vlinkl_halo_indp:
-    :param linkl:
-    :param decrement:
-    :param redshift:
-    :param G:
-    :param soft:
-    :param min_vlcoeff:
-    :param cosmo:
+    :param meta:
+
     :return:
     """
 
-    return get_real_halos(tictoc, halo, meta.vlinkl_indp, meta.linkl, meta)
+    return get_real_halos(tictoc, halo, meta.vlinkl_indp, np.max(meta.linkl),
+                          meta)
 
 
 @timer("Sub-Phase")
 def get_real_sub_halos(tictoc, halo, meta):
     """
 
+        NOTE: We use the maximum spatial linking length in the eventuality of
+        multiple options since the virialisation and energy considerations
+        are what allow a halo to exit the iteration not the spatial
+        linking length itself.
+
     :param tictoc:
     :param halo:
-    :param boxsize:
-    :param vlinkl_halo_indp:
-    :param linkl:
-    :param decrement:
-    :param redshift:
-    :param G:
-    :param soft:
-    :param min_vlcoeff:
-    :param cosmo:
+    :param meta:
+
     :return:
     """
     return get_real_halos(tictoc, halo, meta.sub_vlinkl_indp,
-                          meta.sub_linkl, meta)
-
+                          np.max(meta.sub_linkl), meta)

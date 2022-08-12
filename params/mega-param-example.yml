@@ -5,7 +5,8 @@ inputs:
   basename:            <basename>                       # The filename that preceeds the snapshot string in input files
   data:                input/                           # The filepath containing particle data
   snapList:            params/example_snaplist.txt      # The filepath pointing to the snapshot list file
-  halo_basename:       halos                            # The basename for halo output files
+  halo_basename:       halos_                           # The basename for halo output files
+  graph_basename:      graph_
   haloSavePath:        data/halos/                      # The filepath and basename for halo outputs
   directgraphSavePath: data/dgraph/                     # The filepath and basename for graph direct progenitor and descendant outputs
   graphSavePath:       data/graph/mega_graph            # The filepath and basename for graph output
@@ -25,12 +26,14 @@ cosmology:
 simulation:
 
   # The softening length
-  comoving_DM_softening: 0.015625        # Comoving softening length
+  comoving_DM_softening:     0.015625    # Comoving softening length
   max_physical_DM_softening: 0.004222    # Max physical softening length
 
   # Simulation flags
-  periodic: 1                            # Is the simulation periodic? (Should we wrap?)
+  periodic:                  1           # Is the simulation periodic? (Should we wrap?)
 
+  # Ignore particle species with IDs equal to or above this ID (automatically ignores types 2 and 3)
+  ignored_species_lim:       6
 
 flags:
 

@@ -8,7 +8,7 @@ from mega.halo_core.halo_stitching import add_halo
 from mega.core.talking_utils import count_and_report_halos
 
 
-def find_halos(tree, pos, linkl, npart):
+def find_halos(meta, tree, pos, linkl, npart):
     """
 
     :param tree:
@@ -34,24 +34,16 @@ def find_halos(tree, pos, linkl, npart):
     # Final halo ID of linked halos (index is initial halo ID)
     final_halo_ids = np.full(npart, -1, dtype=np.int32)
 
-    # Define a dictionary to hold timings for halo weighting
-    weights = {}
-
     # Initialise the halo ID counter (IDs start at 0)
     ihaloid = -1
 
     # =============== Assign Particles To Initial Halos ===============
 
     # Query the tree returning a list of lists
-    query_start = time.time()
-    query = tree.query_ball_point(pos, r=linkl)
-    query_time = time.time() - query_start
+    query = tree.query_ball_point(pos, r=linkl, workers=meta.nthreads)
 
     # Loop through query results assigning initial halo IDs
     for query_part_inds in iter(query):
-        
-        # Start timer
-        mung_start = time.time()
 
         # Convert the particle index list to an array for ease of use
         query_part_inds = np.array(query_part_inds, copy=False, dtype=int)
@@ -80,9 +72,6 @@ def find_halos(tree, pos, linkl, npart):
             # Assign the final halo ID to be the newly assigned halo ID
             final_halo_ids[ihaloid] = ihaloid
             linked_halos_dict[ihaloid] = {ihaloid}
-            
-            # Include weight (time taken for operations)
-            weights[ihaloid] = time.time() - mung_start
 
         else:
 
@@ -131,9 +120,6 @@ def find_halos(tree, pos, linkl, npart):
 
             # Assign the new particles to the final ID in halo dictionary entry
             assigned_parts[final_ID].update(new_parts)
-            
-            # Include weight (time taken for operations)
-            weights[ihaloid] = time.time() - mung_start
 
     # =============== Reassign All Halos To Their Final Halo ID ===============
 
@@ -146,19 +132,15 @@ def find_halos(tree, pos, linkl, npart):
         # Assign this final ID to all the particles in the initial halo ID
         part_haloids[list(assigned_parts[halo_id])] = final_ID
         assigned_parts[final_ID].update(assigned_parts[halo_id])
-        
-        # Combine weights
-        weights[final_ID] += weights[halo_id]
 
         # Remove non final ID entry from dictionary to save memory
         if halo_id != final_ID:
             del assigned_parts[halo_id]
-            del weights[halo_id]
 
-    return part_haloids, assigned_parts, weights, query_time
+    return part_haloids, assigned_parts
 
 
-def find_subhalos(halo_pos, sub_linkl):
+def find_subhalos(meta, halo_pos, sub_linkl):
     """
 
     :param halo_pos:
@@ -187,7 +169,7 @@ def find_subhalos(halo_pos, sub_linkl):
     tree = cKDTree(halo_pos, leafsize=32, compact_nodes=True,
                    balanced_tree=True)
 
-    query = tree.query_ball_point(halo_pos, r=sub_linkl)
+    query = tree.query_ball_point(halo_pos, r=sub_linkl, workers=meta.nthreads)
 
     # Loop through query results
     for query_part_inds in iter(query):
@@ -199,13 +181,15 @@ def find_subhalos(halo_pos, sub_linkl):
         new_parts = query_part_inds[
             np.where(part_subhaloids[query_part_inds] == -1)]
 
-        # If only one particle is returned by the query and it is new it is a 'single particle subhalo'
+        # If only one particle is returned by the query and it is new
+        # it is a 'single particle subhalo'
         if new_parts.size == query_part_inds.size == 1:
 
             # Assign the 'single particle subhalo' subhalo ID to the particle
             part_subhaloids[new_parts] = -2
 
-        # If all particles are new increment the subhalo ID and assign a new subhalo ID
+        # If all particles are new increment the subhalo ID and assign
+        # a new subhalo ID
         elif new_parts.size == query_part_inds.size:
 
             # Increment the subhalo ID by 1 (initialise new halo)
@@ -229,22 +213,22 @@ def find_subhalos(halo_pos, sub_linkl):
             # Return only the unique subhalo IDs
             uni_cont_subhalos = np.unique(contained_subhalos)
 
-            # # Assure no single particles are returned by the query
-            # assert any(uni_cont_subhalos != -2), 'Single particle halos should never be found'
-
             # Remove any unassigned subhalos
             uni_cont_subhalos = uni_cont_subhalos[
-                np.where(uni_cont_subhalos != -1)]
+                np.where(uni_cont_subhalos != -1)[0]]
 
-            # If there is only one subhalo ID returned avoid the slower code to combine IDs
+            # If there is only one subhalo ID returned avoid the slower
+            # code to combine IDs
             if uni_cont_subhalos.size == 1:
 
-                # Get the list of linked subhalos linked to the current subhalo from the linked subhalo dictionary
+                # Get the list of linked subhalos linked to the current
+                # subhalo from the linked subhalo dictionary
                 linked_subhalos = linked_subhalos_dict[uni_cont_subhalos[0]]
 
             else:
 
-                # Get all linked subhalos from the dictionary so as to not miss out any subhalos IDs that are linked
+                # Get all linked subhalos from the dictionary so as to not
+                # miss out any subhalos IDs that are linked
                 # but not returned by this particular query
                 linked_subhalos_set = set()  # initialise linked subhalo set
                 linked_subhalos = linked_subhalos_set.union(
@@ -254,7 +238,8 @@ def find_subhalos(halo_pos, sub_linkl):
             # Find the minimum subhalo ID to make the final subhalo ID
             final_ID = min(linked_subhalos)
 
-            # Assign the linked subhalos to all the entries in the linked subhalos dict
+            # Assign the linked subhalos to all the entries in the linked
+            # subhalos dict
             linked_subhalos_dict.update(
                 dict.fromkeys(list(linked_subhalos), linked_subhalos))
 
@@ -264,10 +249,11 @@ def find_subhalos(halo_pos, sub_linkl):
             # Assign new parts to the subhalo IDs with the final ID
             part_subhaloids[new_parts] = final_ID
 
-            # Assign the new particles to the final ID particles in subhalo dictionary entry
+            # Assign the new particles to the final ID particles in subhalo
+            # dictionary entry
             assignedsub_parts[final_ID].update(new_parts)
 
-    # =============== Reassign All Subhalos To Their Final Subhalo ID ===============
+    # ============ Reassign All Subhalos To Their Final Subhalo ID ============
 
     # Loop over initial subhalo IDs reassigning them to the final subhalo ID
     for subhalo_id in list(assignedsub_parts.keys()):
@@ -288,7 +274,7 @@ def find_subhalos(halo_pos, sub_linkl):
 
 @timer("Host-Spatial")
 def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
-                      pos, tree):
+                      pos, tree, part_type=1):
     """
 
     :param tictoc:
@@ -313,38 +299,37 @@ def spatial_node_task(tictoc, meta, rank_parts, rank_tree_parts,
     # Loop over spatial search bins
     ihalo = 0  # counter for halo dictionary key
     halo_pids = {}  # store the halos we have found
-    qtime_dict = {}  # store time taking on each query for weighting
-    combined_weights = {}  # dictionary storing the weighting information
     for ind in range(part_bins.size - 1):
 
         # Get the edges of this spatial search bin
         low, high = part_bins[ind], part_bins[ind + 1]
 
         # Run the host halo finder to get the spatial catalog
-        res_tup = find_halos(tree, pos[low: high, :], meta.linkl,
+        res_tup = find_halos(meta, tree, pos[low: high, :], meta.linkl[part_type],
                              rank_tree_parts.shape[0])
-        task_part_haloids, task_assigned_parts, task_weights, q_time = res_tup
+        task_part_haloids, task_assigned_parts = res_tup
 
         # Combine all the intial halos and store each particles halo id
         while len(task_assigned_parts) > 0:
             item = task_assigned_parts.popitem()
             halo, part_inds = item
-            (ihalo, rank_part_haloids, halo_pids,
-             combined_weights, qtime_dict) = add_halo(ihalo, part_inds,
-                                                      rank_part_haloids,
-                                                      halo_pids,
-                                                      combined_weights,
-                                                      task_weights[halo],
-                                                      qtime_dict,
-                                                      q_time)
+            (ihalo, rank_part_haloids, halo_pids) = add_halo(ihalo, part_inds,
+                                                             rank_part_haloids,
+                                                             halo_pids)
 
     if meta.debug:
 
-        count_and_report_halos(rank_part_haloids, meta,
-                               halo_type="Rank %d Spatial Host Halos"
-                                         % meta.rank)
+        if part_type == 1:
+            count_and_report_halos(rank_part_haloids, meta,
+                                   halo_type="Rank %d Spatial Host Halos"
+                                             % meta.rank)
+        else:
+            count_and_report_halos(rank_part_haloids, meta,
+                                   halo_type="Rank %d Baryonic "
+                                             "Spatial Host Halos"
+                                             % meta.rank)
 
-    return halo_pids, combined_weights, qtime_dict, rank_part_haloids
+    return halo_pids
 
 
 @timer("Sub-Spatial")
@@ -359,8 +344,8 @@ def get_sub_halos(tictoc, halo_pids, halo_pos, meta):
     """
 
     # Do a spatial search for subhalos
-    part_subhaloids, assignedsub_parts = find_subhalos(halo_pos,
-                                                       meta.sub_linkl)
+    part_subhaloids, assignedsub_parts = find_subhalos(meta, halo_pos,
+                                                       meta.sub_linkl[1])
 
     # Get the true indices for these particles
     subhalo_pids = {}

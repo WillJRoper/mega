@@ -1,10 +1,11 @@
 import pickle
+import numpy as np
+import astropy.units as u
 
 import mega.core.serial_io as io
 import mega.graph_core.prog_desc_find as pdfind
-from mega.core.domain_decomp import graph_halo_decomp
+import mega.core.domain_decomp as dd
 from mega.core.talking_utils import message, pad_print_middle
-from mega.core.timing import TicToc
 
 import mpi4py
 from mpi4py import MPI
@@ -18,10 +19,6 @@ rank = comm.rank  # rank of this process
 status = MPI.Status()  # get MPI status object
 
 
-# TODO: All mentions of mass need to be converted to Npart and mass arrays
-#  need to be introduced
-
-
 def graph_main(density_rank, meta):
     """
 
@@ -29,28 +26,48 @@ def graph_main(density_rank, meta):
     :return:
     """
 
-    # Instantiate timer
-    tictoc = TicToc(meta)
-    tictoc.start()
+    # Get the timer instance
+    tictoc = meta.tictoc
 
     # ======================= Set up everything we need =======================
 
-    # Lets read the initial data we need to hand off the work
-    (prog_npart, proghalo_nparts, prog_rank_partbins, rank_part_progids,
-     prog_reals, rank_prog_pids,
-     prog_rank_pidbins) = io.read_prog_data(tictoc, meta, density_rank, comm)
-    if meta.verbose:
-        tictoc.report("Reading progenitor data")
-    (nhalo, rank_partbins, reals, rank_part_haloids, halo_nparts,
-     rank_pidbins) = io.read_current_data(tictoc, meta, density_rank, comm)
-    if meta.verbose:
-        tictoc.report("Reading halo data")
-    (desc_npart, deschalo_nparts, desc_rank_partbins,
-     rank_part_descids, rank_desc_pids,
-     desc_rank_pidbins) = io.read_desc_data(tictoc, meta, density_rank, comm)
+    # Count halos, progenitors and descendants
+    nhalo, nprog, ndesc = io.count_halos(tictoc, meta, density_rank)
+
+    # Decomp the halos, progenitors and descendants
+    my_halos, my_progs, my_descs, meta = dd.halo_cell_domain_decomp(
+        tictoc, meta, comm, nhalo, nprog, ndesc, density_rank
+    )
 
     if meta.verbose:
+        tictoc.report("Splitting halos, progenitors and descendants")
+
+    # Lets read the initial data we need to hand off the work
+    prog_objs = io.read_link_data(
+        tictoc, meta, density_rank, meta.prog_snap, my_progs
+    )
+    if meta.verbose:
+        tictoc.report("Reading progenitor data")
+    halo_objs, nhalo = io.read_current_data(
+        tictoc, meta, density_rank, my_halos
+    )
+    if meta.verbose:
+        tictoc.report("Reading halo data")
+    desc_objs = io.read_link_data(
+        tictoc, meta, density_rank, meta.desc_snap, my_descs
+    )
+    if meta.verbose:
         tictoc.report("Reading descendant data")
+
+    # And now construct the cell structure to house our halos
+    halo_cells, prog_cells, desc_cells = dd.construct_cells(tictoc,
+                                                            halo_objs,
+                                                            prog_objs,
+                                                            desc_objs,
+                                                            meta)
+
+    if meta.verbose:
+        tictoc.report("Constructing cell structure")
 
     comm.Barrier()
 
@@ -67,56 +84,129 @@ def graph_main(density_rank, meta):
                                                        meta.snap,
                                                        meta.desc_snap),
                                        length=meta.table_width))
+        message(rank, pad_print_middle("cdim", "%d" % meta.cdim,
+                                       length=meta.table_width))
+        message(rank, pad_print_middle("cell_width", "%f" % meta.cell_width,
+                                       length=meta.table_width))
         message(rank, pad_print_middle("nHalo:",
                                        "%d" % nhalo,
                                        length=meta.table_width))
+        message(rank, pad_print_middle("nProgenitor:",
+                                       "%d" % nprog,
+                                       length=meta.table_width))
+        message(rank, pad_print_middle("nDescendant:",
+                                       "%d" % ndesc,
+                                       length=meta.table_width))
+        if meta.zoom:
+            message(rank, pad_print_middle("Zoom Bounds:",
+                                           "[%.2f-%.2f, %.2f-%.2f, %.2f-%.2f]"
+                                           % (meta.bounds[0], meta.bounds[1],
+                                              meta.bounds[2], meta.bounds[3],
+                                              meta.bounds[4], meta.bounds[5]),
+                                           length=meta.table_width))
         message(meta.rank, "=" * meta.table_width)
 
     tictoc.stop_func_time()
 
-    # Get the halos we have to work on
-    my_halos = graph_halo_decomp(tictoc, nhalo, meta, comm,
-                                 density_rank, rank_pidbins)
+    tictoc.start_func_time("Linking")
+
+    # Define the maximal travel distance
+    max_vel = 0
+
+    # Loop over cells finding the maximum velocity on this rank
+    for ijk, chalos in halo_cells.items():
+
+        # Loop over cell's halos
+        for halo in chalos:
+
+            # Extract the velocity of this halo and get it's magnitude
+            vel = np.sqrt(halo.mean_vel[0] ** 2
+                          + halo.mean_vel[1] ** 2
+                          + halo.mean_vel[2] ** 2) * meta.U_v_conv
+
+            if vel > max_vel:
+                max_vel = vel
+
+    # Communicate the max velocity we've found
+    comm.allreduce(max_vel, op=MPI.MAX)
+
+    # Work out how far we have to walk
+    if not meta.isfirst:
+        prog_d = int(np.ceil((max_vel * meta.prog_delta_t).value
+                             / meta.cell_width)) + 2
+    else:
+        prog_d = 0
+    if not meta.isfinal:
+        desc_d = int(np.ceil((max_vel * meta.desc_delta_t).value
+                             / meta.cell_width)) + 2
+    else:
+        desc_d = 0
+    d = np.max((prog_d, desc_d))
+
+    # For safetys sake, ensure we are walking a reasonable distance
+    if d * meta.cell_width < 2:
+        d = int(np.ceil(2 / meta.cell_width))
 
     if meta.verbose:
-        tictoc.report("Splitting halos across ranks")
+        message(meta.rank, "Walking %d cells away looking for links" % d)
 
-    # Find the progenitors and descendants of particles on this rank
-    (results, other_rank_prog_parts,
-     other_rank_desc_parts) = pdfind.sort_prog_desc(tictoc, meta, my_halos,
-                                                    rank_prog_pids,
-                                                    rank_desc_pids)
+    # Now loop over the cells containing halos at the current snapshot
+    for ijk, chalos in halo_cells.items():
 
-    if meta.verbose:
-        tictoc.report("Sorting local halos")
+        # Extract individual coordinates
+        i, j, k = ijk
+
+        # Loop over cell's halos
+        for halo in chalos:
+
+            # Loop over all surrounding cells and this one searching for
+            # progenitors and descendants
+            for ii in range(-d, d + 1, 1):
+                iii = i + ii
+                if (not meta.periodic) and (iii < 0 or iii > meta.cdim):
+                    continue
+                iii %= meta.cdim
+                for jj in range(-d, d + 1, 1):
+                    jjj = j + jj
+                    if (not meta.periodic) and (jjj < 0 or jjj > meta.cdim):
+                        continue
+                    jjj %= meta.cdim
+                    for kk in range(-d, d + 1, 1):
+                        kkk = k + kk
+                        if (not meta.periodic) and (kkk < 0 or kkk > meta.cdim):
+                            continue
+                        kkk %= meta.cdim
+
+                        # Define cell key
+                        key = (iii, jjj, kkk)
+
+                        # Check for progenitors
+                        if not meta.isfirst:
+
+                            # Loop over the progenitors testing each one
+                            for prog in prog_cells[key]:
+
+                                # Compare this halo and progenitor
+                                halo.compare_prog(prog, meta)
+
+                        # Check for descendants
+                        if not meta.isfinal:
+
+                            # Loop over the descendants testing each one
+                            for desc in desc_cells[key]:
+
+                                # Compare this halo and progenitor
+                                halo.compare_desc(desc, meta)
 
     comm.Barrier()
 
-    # Now we need to send all of our requests to other ranks to get the
-    # particles they have that I need
-    forn_prog_parts, forn_desc_parts = pdfind.linking_loop(tictoc,
-                                                           meta, comm,
-                                                           other_rank_prog_parts,
-                                                           other_rank_desc_parts,
-                                                           rank_part_progids,
-                                                           proghalo_nparts,
-                                                           rank_part_descids,
-                                                           prog_reals,
-                                                           deschalo_nparts,
-                                                           rank_prog_pids,
-                                                           rank_desc_pids)
-
-    # Combine the results from other ranks with our own
-    results = pdfind.update_halos(tictoc, meta, results, forn_prog_parts,
-                                  forn_desc_parts)
+    tictoc.stop_func_time()
 
     if meta.verbose:
-        tictoc.report("Updating foreign links")
+        tictoc.report("Linking progenitors and descendants")
 
-    comm.Barrier()
-
-    # Clean up results
-    results = pdfind.clean_halos(tictoc, meta, results)
+    # Clean up results removing halos that don't meet the linking criteria
+    results = pdfind.clean_halos(tictoc, meta, halo_cells)
 
     if meta.verbose:
         tictoc.report("Cleaning up progenitors and descendants")
@@ -135,30 +225,8 @@ def graph_main(density_rank, meta):
     if meta.rank == 0:
 
         # Write the data and get the reals arrays
-        reals, desc_reals = io.write_dgraph_data(tictoc, meta, all_results,
-                                                 density_rank, reals)
+        io.write_dgraph_data(tictoc, meta, all_results,
+                             density_rank)
 
         if meta.verbose:
             tictoc.report("Writing")
-
-        # Clean up real flags in halo files
-        if meta.clean_snaps:
-            io.clean_real_flags(tictoc, meta, density_rank, reals, meta.snap)
-
-            if not meta.isfinal:
-                io.clean_real_flags(tictoc, meta, density_rank, desc_reals,
-                                    meta.desc_snap)
-
-            if meta.verbose:
-                tictoc.report("Cleaning real flags")
-
-    tictoc.end()
-
-    if meta.profile:
-        tictoc.end_report(comm)
-
-        with open(
-                meta.profile_path + "Graph_" + str(
-                    rank) + '_' + meta.snap + '.pck',
-                'wb') as pfile:
-            pickle.dump(tictoc.task_time, pfile)

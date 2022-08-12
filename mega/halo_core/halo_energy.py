@@ -31,27 +31,27 @@ def kinetic(tictoc, v, masses):
     # Compute kinetic energy of the halo
     v2 = v ** 2
     vel2 = np.sum([v2[:, 0], v2[:, 1], v2[:, 2]], axis=0)
-    KE_part = 0.5 * masses * vel2
+    KE = np.sum(0.5 * vel2)
 
-    return KE_part
+    return KE
 
 
 @timer("Grav-Energy")
-def grav(tictoc, halo_poss, halo_npart, soft, masses, redshift, G):
+def grav(tictoc, meta, halo_poss, halo_npart, soft, masses):
 
-    GE_part = np.zeros(halo_poss.shape[0])
+    GE = 0
 
     # Compute gravitational potential energy
     for i in range(1, halo_npart):
         pos_i = np.array([halo_poss[i, :], ])
         dists = cdist(pos_i, halo_poss[:i, :], metric="sqeuclidean")
-        GE_part[i] = np.sum(masses[i] * masses[:i]
-                            / np.sqrt(dists + soft ** 2))
+        GE += np.sum(masses[:i]
+                     / np.sqrt(dists + soft ** 2))
 
     # Convert GE to be in the same units as KE (M_sun km^2 s^-2)
-    GE_part = G * np.float64(GE_part) * (1 + redshift) * 1 / 3.086e+19
+    GE = meta.G * GE * (1 + meta.z) * 1 / 3.086e+19 * 10 ** 10
 
-    return GE_part
+    return GE
 
 
 def halo_energy_calc_exact(halo_poss, halo_vels, halo_npart, masses, redshift,

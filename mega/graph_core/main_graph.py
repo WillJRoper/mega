@@ -4,6 +4,8 @@ import mega.core.build_graph_mpi as bgmpi
 import mega.core.param_utils as p_utils
 import mega.graph_core.mergergraph as mgmpi
 from mega.core.talking_utils import say_hello
+from mega.core.timing import TicToc
+from mega.graph_core.link_cleaning import walk_and_purge
 
 import mpi4py
 import numpy as np
@@ -47,6 +49,11 @@ def main():
     # Lets check what sort of verbosity we are running with
     meta.check_verbose()
 
+    # Instantiate timer
+    tictoc = TicToc(meta)
+    tictoc.start()
+    meta.tictoc = tictoc
+
     # ============== Find Direct Progenitors and Descendents ==============
     if flags['graphdirect']:
         mgmpi.graph_main(0, meta)
@@ -56,12 +63,16 @@ def main():
     if flags['subgraphdirect']:
         mgmpi.graph_main(1, meta)
 
-    if flags["graph"]:
-        bgmpi.main_get_graph_members(treepath=inputs['directgraphSavePath'],
-                                     graphpath=inputs['graphSavePath'],
-                                     snaplist=snaplist,
-                                     verbose=flags['verbose'],
-                                     halopath=inputs['haloSavePath'])
+    comm.barrier()
+
+    # If we are at the final snapshot we have to clean up all links
+    if meta.isfinal and flags["clean_real_flags"]:
+        walk_and_purge(tictoc, meta, comm, snaplist)
+
+    tictoc.end()
+
+    if meta.profile:
+        tictoc.end_report(comm)
 
 
 if __name__ == "__main__":
