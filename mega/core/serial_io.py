@@ -580,7 +580,7 @@ def read_current_data(tictoc, meta, density_rank, my_halos):
 
 @timer("Writing")
 def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
-               sub_results_dict, sim_pids=None, basename_mod="",
+               sub_results_dict, basename_mod="",
                extra_data=None):
     """
 
