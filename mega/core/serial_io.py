@@ -825,22 +825,6 @@ def write_data(tictoc, meta, nhalo, nsubhalo, results_dict,
         for key, val in extra_data.items():
             hdf5_write_dataset(snap, key, val)
 
-    # Do we have an outside input for the sim pids?
-    if sim_pids is None:
-
-        # Initialise array to store all particle IDs
-        sim_pids = np.zeros(np.sum(meta.npart), dtype=int)
-
-        # Read particle IDs to store combined particle ids array
-        for part_type in meta.part_types:
-            offset = meta.part_ind_offset[part_type]
-            sim_part_ids = read_pids(tictoc, meta.inputpath, meta.snap,
-                                     "PartType%d" % part_type)
-            sim_pids[offset: offset + meta.npart[part_type]] = sim_part_ids
-
-    # Write out the particle ID array
-    hdf5_write_dataset(snap, "all_sim_part_ids", sim_pids)
-
     # Now we can set the correct halo_ids
     for (halo_id, b), l in zip(enumerate(start_index), stride):
         parts = all_halo_pids[b: b + l]

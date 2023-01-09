@@ -24,6 +24,7 @@ mega/core/timing.py
 mega/core/utilities.py
 mega/graph_core/__init__.py
 mega/graph_core/graph_halo.py
+mega/graph_core/link_cleaning.py
 mega/graph_core/main_graph.py
 mega/graph_core/mergergraph.py
 mega/graph_core/prog_desc_find.py
